@@ -195,9 +195,10 @@ export function drawProjectiles(
   emoteCache: Record<string, HTMLImageElement>
 ): void {
   for (const proj of projectiles) {
-    if (proj.emoteUrl && emoteCache[proj.emoteUrl] && emoteCache[proj.emoteUrl].complete) {
+    const img = proj.emoteUrl ? emoteCache[proj.emoteUrl] : null;
+    if (img && img.complete && img.naturalWidth > 0) {
       ctx.shadowBlur = 0;
-      ctx.drawImage(emoteCache[proj.emoteUrl], proj.x - 7, proj.y - 7, 14, 14);
+      ctx.drawImage(img, proj.x - 7, proj.y - 7, 14, 14);
     } else {
       ctx.fillStyle = '#00ffcc';
       ctx.shadowBlur = 10;

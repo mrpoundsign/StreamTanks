@@ -144,10 +144,14 @@ function executeActions(): void {
       const vy = -Math.sin(rad) * powerScaled;
       const shotId = `${stateRef?.roundId ?? 0}_${name}`;
 
+      const muzzleDist = 25;
+      const spawnX = p.x + Math.cos(rad) * muzzleDist;
+      const spawnY = p.y - 10 - Math.sin(rad) * muzzleDist;
+
       projectiles.push({
         id: shotId,
-        x: p.x,
-        y: p.y - 15,
+        x: spawnX,
+        y: spawnY,
         vx,
         vy,
         owner: name,
@@ -260,34 +264,60 @@ function updatePhysics(dtScale: number): void {
 
     let hit = false;
 
-    // Out of bounds (side or bottom)
-    if (proj.y > HEIGHT) {
-      hit = true;
-    } else if (proj.x < 0) {
+    // Ceiling bounce (top of screen)
+    if (proj.y < 0) {
       if (bouncyWalls) {
-        proj.x = 0;
-        proj.vx = -proj.vx * 1.1; // +10% speed boost
-        proj.vy *= 1.1;
+        proj.y = 0;
+        proj.vy = Math.abs(proj.vy) * 1.1; // +10% speed boost downward
+        proj.vx *= 1.1;
         proj.bounces = (proj.bounces ?? 0) + 1;
-        createWallSpark(0, proj.y);
+        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), 0);
         if (proj.bounces > 15) hit = true;
-      } else {
-        hit = true;
       }
-    } else if (proj.x > WIDTH) {
+      // When not bouncyWalls: bullet arcs above screen and returns via gravity
+    } else if (proj.y > HEIGHT) {
+      // Bottom of screen
       if (bouncyWalls) {
-        proj.x = WIDTH;
-        proj.vx = -proj.vx * 1.1; // +10% speed boost
-        proj.vy *= 1.1;
+        proj.y = HEIGHT;
+        proj.vy = -Math.abs(proj.vy) * 1.1; // +10% speed boost upward
+        proj.vx *= 1.1;
         proj.bounces = (proj.bounces ?? 0) + 1;
-        createWallSpark(WIDTH, proj.y);
+        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), HEIGHT);
         if (proj.bounces > 15) hit = true;
       } else {
         hit = true;
       }
     }
+
+    // Side walls bounce (left and right of screen)
+    if (!hit) {
+      if (proj.x < 0) {
+        if (bouncyWalls) {
+          proj.x = 0;
+          proj.vx = Math.abs(proj.vx) * 1.1; // +10% speed boost rightward
+          proj.vy *= 1.1;
+          proj.bounces = (proj.bounces ?? 0) + 1;
+          createWallSpark(0, Math.max(0, Math.min(HEIGHT, proj.y)));
+          if (proj.bounces > 15) hit = true;
+        } else {
+          hit = true;
+        }
+      } else if (proj.x > WIDTH) {
+        if (bouncyWalls) {
+          proj.x = WIDTH;
+          proj.vx = -Math.abs(proj.vx) * 1.1; // +10% speed boost leftward
+          proj.vy *= 1.1;
+          proj.bounces = (proj.bounces ?? 0) + 1;
+          createWallSpark(WIDTH, Math.max(0, Math.min(HEIGHT, proj.y)));
+          if (proj.bounces > 15) hit = true;
+        } else {
+          hit = true;
+        }
+      }
+    }
+
     // Terrain collision
-    else if (proj.y >= getTerrainHeight(terrain, proj.x)) {
+    if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(terrain, proj.x)) {
       hit = true;
       if (currentPhase === PhaseCelebration) {
         explosions.push({ x: proj.x, y: proj.y, radius: 0, maxRadius: EXPLOSION_RADIUS, alpha: 1 });
@@ -296,8 +326,9 @@ function updatePhysics(dtScale: number): void {
         checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
       }
     }
+
     // Direct tank collision
-    else {
+    if (!hit) {
       for (const name in players) {
         if (name === proj.owner) continue;
         const p = players[name];
@@ -413,15 +444,19 @@ function updateLeaderboard(lb: Record<string, number>): void {
 
   leaderboardList.innerHTML = sorted
     .map(
-      ([name, wins]) => `
+      ([name, wins]) => {
+        const hasUrl = avatarCache[name] && avatarCache[name] !== 'fetching';
+        const avatarUrl = hasUrl ? avatarCache[name] : '';
+        return `
         <li>
             <div class="lb-player">
-                <img id="lb-avatar-${name}" class="lb-avatar" src="${avatarCache[name] || ''}" style="${avatarCache[name] ? '' : 'display:none;'}">
+                <img id="lb-avatar-${name}" class="lb-avatar" src="${avatarUrl}" style="${hasUrl ? '' : 'display:none;'}">
                 <span>${name}</span>
             </div>
             <span>${wins}</span>
         </li>
-    `
+    `;
+      }
     )
     .join('');
 

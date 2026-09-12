@@ -140,7 +140,7 @@ func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 	gameState.Players["TargetBot"] = &Player{
 		Name:      "TargetBot",
 		Emote:     "PogChamp",
-		EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/2.0",
+		EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/2.0",
 		LastAngle: 135,
 		LastPower: 50,
 	}
