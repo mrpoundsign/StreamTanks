@@ -115,6 +115,16 @@ func loadSettings() {
 					case "1", "true", "on":
 						gameState.BouncyWalls = true
 					}
+				case "terrain_min":
+					var tMin int
+					if _, err := fmt.Sscanf(v, "%d", &tMin); err == nil && tMin >= 10 && tMin <= 80 {
+						gameState.TerrainMin = tMin
+					}
+				case "terrain_max":
+					var tMax int
+					if _, err := fmt.Sscanf(v, "%d", &tMax); err == nil && tMax >= 20 && tMax <= 90 {
+						gameState.TerrainMax = tMax
+					}
 				}
 			}
 		}

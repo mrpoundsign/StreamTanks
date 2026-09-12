@@ -112,15 +112,21 @@ function checkTankCollisions(cx: number, cy: number, radius: number, owner: stri
   }
 }
 
-function destroyTerrain(cx: number, cy: number, radius: number, broadcast = true): void {
+const appliedCraterIds = new Set<string>();
+
+function destroyTerrain(cx: number, cy: number, radius: number, shotId?: string): void {
+  if (shotId) {
+    if (appliedCraterIds.has(shotId)) {
+      return;
+    }
+    appliedCraterIds.add(shotId);
+  }
   applyCrater(terrain, cx, cy, radius);
   explosions.push({ x: cx, y: cy, radius: 0, maxRadius: radius, alpha: 1 });
-  if (broadcast) {
-    net.send({
-      type: MsgTerrainCrater,
-      payload: { x: cx, y: cy, radius },
-    });
-  }
+  net.send({
+    type: MsgTerrainCrater,
+    payload: { id: shotId, x: cx, y: cy, radius },
+  });
 }
 
 function executeActions(): void {
@@ -134,8 +140,10 @@ function executeActions(): void {
       const powerScaled = (p.power ?? 50) / 5;
       const vx = Math.cos(rad) * powerScaled;
       const vy = -Math.sin(rad) * powerScaled;
+      const shotId = `${stateRef?.roundId ?? 0}_${name}`;
 
       projectiles.push({
+        id: shotId,
         x: p.x,
         y: p.y - 15,
         vx,
@@ -279,8 +287,12 @@ function updatePhysics(dtScale: number): void {
     // Terrain collision
     else if (proj.y >= getTerrainHeight(terrain, proj.x)) {
       hit = true;
-      destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS);
-      checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
+      if (currentPhase === PhaseCelebration) {
+        explosions.push({ x: proj.x, y: proj.y, radius: 0, maxRadius: EXPLOSION_RADIUS, alpha: 1 });
+      } else {
+        destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS, proj.id);
+        checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
+      }
     }
     // Direct tank collision
     else {
@@ -290,7 +302,7 @@ function updatePhysics(dtScale: number): void {
         if (p.isDead) continue;
         if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
           hit = true;
-          destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS);
+          destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS, proj.id);
           checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
           break;
         }
@@ -495,6 +507,11 @@ function renderConfigModal(prefix: string): void {
       value: bouncyDisplay,
       cmd: `<span class="config-cmd">${prefix}bouncywalls <span class="cmd-param">&lt;on|off&gt;</span></span>`,
     },
+    {
+      label: 'Terrain Bounds',
+      value: `<span class="config-val">${stateRef?.terrainMin ?? 20}% - ${stateRef?.terrainMax ?? 75}%</span>`,
+      cmd: `<span class="config-cmd">${prefix}terrain <span class="cmd-param">&lt;min%&gt; &lt;max%&gt;</span></span>`,
+    },
   ];
 
   configTableBody.innerHTML = rows
@@ -687,6 +704,7 @@ net.onMessage((msg: WSMessage) => {
     }
     projectiles = [];
     explosions.length = 0;
+    appliedCraterIds.clear();
     celebrationStartTime = 0;
     celebrationSentComplete = false;
     for (const name in players) {
@@ -702,9 +720,15 @@ net.onMessage((msg: WSMessage) => {
   } else if (msg.type === MsgTerrainCrater) {
     const crater = msg.payload as CraterPayload;
     if (crater && typeof crater.x === 'number') {
+      if (crater.id && appliedCraterIds.has(crater.id)) {
+        return;
+      }
+      if (crater.id) {
+        appliedCraterIds.add(crater.id);
+      }
       applyCrater(terrain, crater.x, crater.y, crater.radius);
       const hasExplosion = explosions.some(
-        (e) => Math.hypot(e.x - crater.x, e.y - crater.y) < 20
+        (e) => Math.hypot(e.x - crater.x, e.y - crater.y) < crater.radius
       );
       if (!hasExplosion) {
         explosions.push({ x: crater.x, y: crater.y, radius: 0, maxRadius: crater.radius, alpha: 1 });

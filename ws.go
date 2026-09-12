@@ -12,9 +12,22 @@ import (
 var (
 	clientsMu     sync.RWMutex
 	activeClients = make(map[*websocket.Conn]bool)
+
+	appliedCratersMu sync.Mutex
+	appliedCraters   = make(map[string]bool)
 )
 
+func clearAppliedCraters() {
+	appliedCratersMu.Lock()
+	defer appliedCratersMu.Unlock()
+	appliedCraters = make(map[string]bool)
+}
+
 func broadcast(msgType string, payload interface{}) {
+	broadcastExcept(nil, msgType, payload)
+}
+
+func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interface{}) {
 	payloadCopy := payload
 
 	if payload == &gameState {
@@ -44,6 +57,9 @@ func broadcast(msgType string, payload interface{}) {
 			IdleMessage:   gameState.IdleMessage,
 			BouncyWalls:   gameState.BouncyWalls,
 			Terrain:       terrainCopy,
+			TerrainMin:    gameState.TerrainMin,
+			TerrainMax:    gameState.TerrainMax,
+			RoundID:       gameState.RoundID,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -54,7 +70,9 @@ func broadcast(msgType string, payload interface{}) {
 	clientsMu.RLock()
 	conns := make([]*websocket.Conn, 0, len(activeClients))
 	for conn := range activeClients {
-		conns = append(conns, conn)
+		if conn != exceptConn {
+			conns = append(conns, conn)
+		}
 	}
 	clientsMu.RUnlock()
 
@@ -97,18 +115,26 @@ func handleWebSocket(ws *websocket.Conn) {
 
 		switch msg.Type {
 		case msgActionComplete:
-			startInputPhase()
+			gameState.mu.Lock()
+			if gameState.Phase == phaseAction {
+				gameState.mu.Unlock()
+				startInputPhase()
+			} else {
+				gameState.mu.Unlock()
+			}
 		case msgPlayerDied:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
 				var deadPlayer string
 				if err := json.Unmarshal(payloadBytes, &deadPlayer); err == nil {
 					gameState.mu.Lock()
-					if p, exists := gameState.Players[deadPlayer]; exists {
+					if p, exists := gameState.Players[deadPlayer]; exists && !p.IsDead {
 						p.IsDead = true
+						gameState.mu.Unlock()
+						broadcast(msgStateUpdate, &gameState)
+					} else {
+						gameState.mu.Unlock()
 					}
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
 				}
 			}
 		case msgGameOver:
@@ -117,6 +143,10 @@ func handleWebSocket(ws *websocket.Conn) {
 				var winner string
 				if err := json.Unmarshal(payloadBytes, &winner); err == nil {
 					gameState.mu.Lock()
+					if gameState.Phase == phaseCelebration {
+						gameState.mu.Unlock()
+						break
+					}
 					gameState.Phase = phaseCelebration
 					if winner != "" {
 						gameState.Leaderboard[winner]++
@@ -133,16 +163,31 @@ func handleWebSocket(ws *websocket.Conn) {
 				}
 			}
 		case msgCelebrationComplete:
-			resetMatchState()
+			gameState.mu.Lock()
+			if gameState.Phase == phaseCelebration {
+				gameState.mu.Unlock()
+				resetMatchState()
+			} else {
+				gameState.mu.Unlock()
+			}
 		case msgTerrainCrater:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
 				var crater CraterPayload
 				if err := json.Unmarshal(payloadBytes, &crater); err == nil {
+					if crater.ID != "" {
+						appliedCratersMu.Lock()
+						if appliedCraters[crater.ID] {
+							appliedCratersMu.Unlock()
+							break
+						}
+						appliedCraters[crater.ID] = true
+						appliedCratersMu.Unlock()
+					}
 					gameState.mu.Lock()
 					applyCrater(gameState.Terrain, crater.X, crater.Y, crater.Radius)
 					gameState.mu.Unlock()
-					broadcast(msgTerrainCrater, crater)
+					broadcastExcept(ws, msgTerrainCrater, crater)
 				}
 			}
 		case msgChatCommand, msgDebugCommand:

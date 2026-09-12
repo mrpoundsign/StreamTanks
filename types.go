@@ -64,10 +64,14 @@ type GameState struct {
 	IdleMessage   bool               `json:"idleMessage"`
 	BouncyWalls   bool               `json:"bouncyWalls"`
 	Terrain       []float64          `json:"terrain"`
+	TerrainMin    int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
+	TerrainMax    int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)
+	RoundID       int                `json:"roundId"`
 }
 
 // CraterPayload carries crater coordinates and radius for terrain deformation
 type CraterPayload struct {
+	ID     string  `json:"id,omitempty"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	Radius float64 `json:"radius"`

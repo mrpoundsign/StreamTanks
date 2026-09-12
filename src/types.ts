@@ -74,9 +74,13 @@ export interface GameState {
   idleMessage: boolean;
   bouncyWalls: boolean;
   terrain?: number[];
+  terrainMin?: number;
+  terrainMax?: number;
+  roundId?: number;
 }
 
 export interface Projectile {
+  id?: string;
   x: number;
   y: number;
   vx: number;
@@ -96,6 +100,7 @@ export interface Explosion {
 }
 
 export interface CraterPayload {
+  id?: string;
   x: number;
   y: number;
   radius: number;

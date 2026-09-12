@@ -79,6 +79,7 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - `%bouncywalls on|off`: Toggles bouncy screen walls (+10% bullet speed, +50% tank speed).
 - `%roundtime <seconds>`: Configures the input phase timer duration (e.g. `%roundtime 15`).
 - `%autoround <minutes>`: Configures automated round starts (`-1` for immediate, `> 0` for scheduled minutes, `0` or `off` to disable).
+- `%terrain <min%> <max%>`: Configures vertical screen height percentage bounds for terrain generation (e.g. `%terrain 30 80` or `%terrain reset`).
 
 ---
 
