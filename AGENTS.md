@@ -25,14 +25,30 @@
 
 ```
 StreamTanks/
-├── main.go               # Go server, Twitch IRC bot, WebSocket state sync, game loop & CLI flags
+├── main.go               # Entrypoint, CLI flags, asset server, graceful lifecycle
+├── types.go              # GameState, Player, WSMessage structs & typed constants
+├── game.go               # Phase state machine, timers, commands processor
+├── storage.go            # SQLite database schema, settings & leaderboard persistence
+├── ws.go                 # WebSocket client pool, message pump, thread-safe broadcast
+├── bot.go                # Twitch IRC anonymous client listener
+├── main_test.go          # Go test suite covering commands, config, bots, and concurrency
+├── build.ps1             # PowerShell script: TypeScript build, Go tests, lint, compilation
+├── build.bat             # Batch launcher for build.ps1
 ├── go.mod                # Go module definitions
 ├── go.sum                # Checksums
 ├── streamtanks.db        # SQLite database storing player win statistics (ignored from git)
+├── src/                  # TypeScript source files (bundled to public/game.js)
+│   ├── game.ts           # Game loop, physics updates, command dispatching, debug controls
+│   ├── network.ts        # WebSocket client with auto-reconnect polling
+│   ├── renderer.ts       # Canvas rendering: terrain, protractor, tanks, projectiles, sparks
+│   ├── terrain.ts        # Heightmap generation, slope calculation, crater deformation
+│   └── types.ts          # Frontend TypeScript types and exported constants
 ├── public/               # Frontend overlay files served via HTTP and OBS browser source
 │   ├── index.html        # HTML layout with canvas, HUD layers, leaderboard & cache-control tags
-│   ├── game.js           # Physics engine, terrain destruction, WebSocket sync, rendering loop
+│   ├── game.js           # Production bundled JavaScript (compiled from src/)
 │   └── style.css         # Neon cyberpunk styling, transparent OBS background, animations
+├── package.json          # Frontend build tooling (TypeScript, esbuild)
+├── tsconfig.json         # Strict TypeScript configuration (ES2022)
 ├── AGENTS.md             # Coding standards, architecture documentation, agent instructions
 └── .gitignore            # Ignores .exe binaries, .db files, and IDE state
 ```
@@ -68,11 +84,18 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 
 ## 6. Build, Run, and Testing Guidelines
 
-1. **Running the Server**:
-   ```bash
-   go run main.go -channel <channel_name> -addr :8102
+1. **One-Command Build & Test Pipeline**:
+   ```cmd
+   .\build.bat
    ```
-2. **Overlay Access**:
+   Runs TypeScript build (`npm run build:prod`), Go unit test suite (`go test -v ./...`), linter (`golangci-lint-v2 run ./...`), and binary compilation (`go build -o streamtanks.exe .`).
+2. **Running the Server**:
+   ```bash
+   go run . -channel <channel_name> -addr :8102
+   # or with debug mode enabled:
+   go run . -debug -addr :8102
+   ```
+3. **Overlay Access**:
    Open `http://localhost:8102` in a browser or add as an OBS Browser Source (Width: 1920, Height: 1080).
-3. **Connection Resilience**:
+4. **Connection Resilience**:
    The frontend automatically detects server disconnects, hides the overlay transparently, polls the server, and triggers a full page reload when the server comes back online.
