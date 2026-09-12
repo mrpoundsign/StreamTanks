@@ -23,6 +23,7 @@ func resetGameStateForTest() {
 	gameState.Debug = false
 	gameState.Prefix = "%"
 	gameState.PhysicsSpeed = 0.5
+	gameState.ShowConfig = false
 
 	if inputCancel != nil {
 		close(inputCancel)
@@ -281,4 +282,85 @@ func TestSpeedConfiguration(t *testing.T) {
 		t.Errorf("expected PhysicsSpeed clamped to 3.0, got %f", gameState.PhysicsSpeed)
 	}
 	gameState.mu.Unlock()
+}
+
+func TestConfigCommand(t *testing.T) {
+	resetGameStateForTest()
+
+	// Default ShowConfig should be false
+	gameState.mu.Lock()
+	if gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to default to false")
+	}
+	gameState.mu.Unlock()
+
+	// %config toggles ShowConfig on
+	processCommand("Admin", "%config", nil)
+	gameState.mu.Lock()
+	if !gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to be true after %%config toggle")
+	}
+	gameState.mu.Unlock()
+
+	// Repeating %config toggles ShowConfig off
+	processCommand("Admin", "%config", nil)
+	gameState.mu.Lock()
+	if gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to be false after second %%config toggle")
+	}
+	gameState.mu.Unlock()
+
+	// %config on explicitly turns it on
+	processCommand("Admin", "%config on", nil)
+	gameState.mu.Lock()
+	if !gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to be true after %%config on")
+	}
+	gameState.mu.Unlock()
+
+	// %config off explicitly turns it off
+	processCommand("Admin", "%config off", nil)
+	gameState.mu.Lock()
+	if gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to be false after %%config off")
+	}
+	gameState.mu.Unlock()
+
+	// %settings alias works identically
+	processCommand("Admin", "%settings", nil)
+	gameState.mu.Lock()
+	if !gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to be true after %%settings toggle")
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Admin", "%settings hide", nil)
+	gameState.mu.Lock()
+	if gameState.ShowConfig {
+		t.Errorf("expected ShowConfig to be false after %%settings hide")
+	}
+	gameState.mu.Unlock()
+
+	// Verify ShowConfig is copied when broadcasting STATE_UPDATE
+	processCommand("Admin", "%config on", nil)
+	ts := httptest.NewServer(websocket.Handler(handleWebSocket))
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
+	wsConn, err := websocket.Dial(wsURL, "", ts.URL)
+	if err != nil {
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer func() { _ = wsConn.Close() }()
+
+	var initMsg struct {
+		Type    string    `json:"type"`
+		Payload GameState `json:"payload"`
+	}
+	if err := websocket.JSON.Receive(wsConn, &initMsg); err != nil {
+		t.Fatalf("failed to receive initial STATE_UPDATE: %v", err)
+	}
+	if !initMsg.Payload.ShowConfig {
+		t.Errorf("expected ShowConfig to be true in broadcasted STATE_UPDATE payload, got false")
+	}
 }

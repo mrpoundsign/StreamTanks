@@ -47,6 +47,7 @@ type GameState struct {
 	Debug         bool               `json:"debug"`
 	Prefix        string             `json:"prefix"`
 	PhysicsSpeed  float64            `json:"physicsSpeed"`
+	ShowConfig    bool               `json:"showConfig"`
 }
 
 var gameState = GameState{
@@ -135,6 +136,7 @@ func broadcast(msgType string, payload interface{}) {
 			Debug:         gameState.Debug,
 			Prefix:        gameState.Prefix,
 			PhysicsSpeed:  gameState.PhysicsSpeed,
+			ShowConfig:    gameState.ShowConfig,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -457,6 +459,22 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 				return
 			}
 		}
+
+	case "config", "settings":
+		if len(parts) > 1 {
+			arg := strings.ToLower(parts[1])
+			if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
+				gameState.ShowConfig = false
+			} else {
+				gameState.ShowConfig = true
+			}
+		} else {
+			// Toggle config modal
+			gameState.ShowConfig = !gameState.ShowConfig
+		}
+		gameState.mu.Unlock()
+		broadcast("STATE_UPDATE", &gameState)
+		return
 
 	case "join":
 		player := gameState.Players[username]

@@ -7,6 +7,9 @@ const killFeed = document.getElementById('kill-feed');
 const emotesLayer = document.getElementById('emotes-layer');
 const celebrationDisplay = document.getElementById('celebration-display');
 const celebrationText = document.getElementById('celebration-text');
+const configModal = document.getElementById('config-modal');
+const configTableBody = document.getElementById('config-table-body');
+const configDismissHint = document.getElementById('config-dismiss-hint');
 
 const WIDTH = 1920;
 const HEIGHT = 1080;
@@ -307,8 +310,66 @@ function updateUI() {
         debugInput.placeholder = `Type command (${prefix}startgame, ${prefix}fire 45 60, ${prefix}left, etc.)...`;
     }
 
+    renderConfigModal(prefix);
+
     previousPhase = currentPhase;
 }
+
+function renderConfigModal(prefix) {
+    if (!configModal || !configTableBody) return;
+
+    const isVisible = !!(stateRef && stateRef.showConfig);
+    if (!isVisible) {
+        configModal.style.display = 'none';
+        return;
+    }
+
+    configModal.style.display = 'flex';
+
+    if (configDismissHint) {
+        configDismissHint.innerText = `${prefix}config off`;
+    }
+
+    const speedVal = (stateRef && typeof stateRef.physicsSpeed === 'number') ? stateRef.physicsSpeed : 0.5;
+    const roundDuration = (stateRef && stateRef.inputDuration) ? stateRef.inputDuration : 20;
+
+    const rows = [
+        {
+            label: "Command Prefix",
+            value: `<span class="config-val">"${prefix}"</span>`,
+            cmd: `<span class="config-cmd">${prefix}prefix <span class="cmd-param">&lt;str&gt;</span></span>`
+        },
+        {
+            label: "Physics / Speed",
+            value: `<span class="config-val">${speedVal}x</span>`,
+            cmd: `<span class="config-cmd">${prefix}speed <span class="cmd-param">&lt;0.1 - 3.0&gt;</span></span>`
+        },
+        {
+            label: "Input Round Timer",
+            value: `<span class="config-val">${roundDuration}s</span>`,
+            cmd: `<span class="config-cmd">${prefix}roundtime <span class="cmd-param">&lt;seconds&gt;</span></span>`
+        },
+        {
+            label: "Auto Round",
+            value: `<span class="config-val badge-off">Off</span>`,
+            cmd: `<span class="config-cmd">${prefix}autoround <span class="cmd-param">&lt;minutes|-1|off&gt;</span></span>`
+        },
+        {
+            label: "Idle Message",
+            value: `<span class="config-val badge-on">On</span>`,
+            cmd: `<span class="config-cmd">${prefix}idlemessage <span class="cmd-param">&lt;on|off&gt;</span></span>`
+        }
+    ];
+
+    configTableBody.innerHTML = rows.map(r => `
+        <tr>
+            <td class="config-label">${r.label}</td>
+            <td>${r.value}</td>
+            <td>${r.cmd}</td>
+        </tr>
+    `).join('');
+}
+
 
 function updateLeaderboard(lb) {
     const list = document.getElementById('leaderboard-list');
