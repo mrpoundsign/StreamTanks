@@ -1010,3 +1010,38 @@ func TestPermissionCommands(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
+func TestFirePowerAndAngleClamping(t *testing.T) {
+	resetGameStateForTest()
+
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("Alice", "%startgame", nil)
+
+	// Fire with power > 100 and angle > 180
+	processCommand("Alice", "%fire 250 999", nil)
+	gameState.mu.Lock()
+	alice := gameState.Players["Alice"]
+	if alice.Power != 100 {
+		t.Errorf("expected power clamped to 100, got %d", alice.Power)
+	}
+	if alice.Angle != 180 {
+		t.Errorf("expected angle clamped to 180, got %d", alice.Angle)
+	}
+	gameState.mu.Unlock()
+
+	// Reset to input phase for second test
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	alice.Fired = false
+	gameState.mu.Unlock()
+
+	// Fire with power < 1 and angle < 0
+	processCommand("Alice", "%fire -45 -50", nil)
+	gameState.mu.Lock()
+	if alice.Power != 1 {
+		t.Errorf("expected power clamped to 1, got %d", alice.Power)
+	}
+	if alice.Angle != 0 {
+		t.Errorf("expected angle clamped to 0, got %d", alice.Angle)
+	}
+	gameState.mu.Unlock()
+}

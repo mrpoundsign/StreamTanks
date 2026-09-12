@@ -647,6 +647,18 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 					_, _ = fmt.Sscanf(parts[1], "%d", &angle)
 					_, _ = fmt.Sscanf(parts[2], "%d", &power)
 
+					if angle < 0 {
+						angle = 0
+					} else if angle > 180 {
+						angle = 180
+					}
+
+					if power < 1 {
+						power = 1
+					} else if power > 100 {
+						power = 100
+					}
+
 					player.Angle = angle
 					player.Power = power
 					player.LastAngle = angle

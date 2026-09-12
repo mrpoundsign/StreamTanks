@@ -137,7 +137,8 @@ function executeActions(): void {
 
     if (p.actionType === ActionFire) {
       const rad = ((p.angle ?? 45) * Math.PI) / 180;
-      const powerScaled = (p.power ?? 50) / 5;
+      const powerClamped = Math.min(Math.max(p.power ?? 50, 1), 100);
+      const powerScaled = powerClamped / 5;
       const vx = Math.cos(rad) * powerScaled;
       const vy = -Math.sin(rad) * powerScaled;
       const shotId = `${stateRef?.roundId ?? 0}_${name}`;
