@@ -2,6 +2,8 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const phaseBadge = document.getElementById('phase-badge');
 const hudInstructions = document.getElementById('hud-instructions');
+const hudTop = document.getElementById('hud-top');
+const leaderboardEl = document.getElementById('leaderboard');
 const timerDisplay = document.getElementById('timer-display');
 const killFeed = document.getElementById('kill-feed');
 const emotesLayer = document.getElementById('emotes-layer');
@@ -249,6 +251,10 @@ function updateUI() {
     const prefix = (stateRef && stateRef.prefix) || '%';
 
     if (currentPhase === 'IDLE') {
+        const showIdle = (stateRef && stateRef.idleMessage !== undefined) ? stateRef.idleMessage : true;
+        if (hudTop) {
+            hudTop.style.display = showIdle ? 'flex' : 'none';
+        }
         if (phaseBadge) {
             phaseBadge.innerText = "WAITING FOR PLAYERS";
             phaseBadge.className = "hud-badge idle";
@@ -258,8 +264,13 @@ function updateUI() {
         }
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'none';
-        document.getElementById('leaderboard').style.display = 'block';
+        if (leaderboardEl) {
+            leaderboardEl.style.display = showIdle ? 'block' : 'none';
+        }
     } else if (currentPhase === 'INPUT') {
+        if (hudTop) {
+            hudTop.style.display = 'flex';
+        }
         if (phaseBadge) {
             phaseBadge.innerText = "INPUT PHASE";
             phaseBadge.className = "hud-badge input";
@@ -341,6 +352,11 @@ function renderConfigModal(prefix) {
         autoRoundDisplay = `<span class="config-val badge-on">${autoRoundVal} min</span>`;
     }
 
+    const idleMessageVal = (stateRef && stateRef.idleMessage !== undefined) ? stateRef.idleMessage : true;
+    const idleMessageDisplay = idleMessageVal 
+        ? `<span class="config-val badge-on">On</span>` 
+        : `<span class="config-val badge-off">Off</span>`;
+
     const rows = [
         {
             label: "Command Prefix",
@@ -364,7 +380,7 @@ function renderConfigModal(prefix) {
         },
         {
             label: "Idle Message",
-            value: `<span class="config-val badge-on">On</span>`,
+            value: idleMessageDisplay,
             cmd: `<span class="config-cmd">${prefix}idlemessage <span class="cmd-param">&lt;on|off&gt;</span></span>`
         }
     ];

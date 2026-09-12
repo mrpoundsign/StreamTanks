@@ -26,6 +26,7 @@ func resetGameStateForTest() {
 	gameState.PhysicsSpeed = 0.5
 	gameState.ShowConfig = false
 	gameState.AutoRound = 0
+	gameState.IdleMessage = true
 
 	cancelAutoRoundTimer()
 
@@ -428,11 +429,12 @@ func TestSettingsPersistence(t *testing.T) {
 	processCommand("Admin", "!speed 0.8", nil)
 	processCommand("Admin", "!commandtime 25", nil)
 	processCommand("Admin", "!autoround -1", nil)
+	processCommand("Admin", "!idlemessage off", nil)
 
 	// Reset in-memory gameState
 	resetGameStateForTest()
 	gameState.mu.Lock()
-	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 {
+	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage {
 		gameState.mu.Unlock()
 		t.Fatalf("expected reset state")
 	}
@@ -453,6 +455,9 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if gameState.AutoRound != -1 {
 		t.Errorf("expected loaded AutoRound -1, got %d", gameState.AutoRound)
+	}
+	if gameState.IdleMessage {
+		t.Errorf("expected loaded IdleMessage to be false")
 	}
 	gameState.mu.Unlock()
 }
@@ -504,6 +509,49 @@ func TestAutoRoundConfiguration(t *testing.T) {
 	gameState.mu.Lock()
 	if gameState.AutoRound != 60 {
 		t.Errorf("expected AutoRound clamped to 60, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestIdleMessageConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	// Default is true
+	gameState.mu.Lock()
+	if !gameState.IdleMessage {
+		t.Errorf("expected default IdleMessage to be true")
+	}
+	gameState.mu.Unlock()
+
+	// %idlemessage off
+	processCommand("Admin", "%idlemessage off", nil)
+	gameState.mu.Lock()
+	if gameState.IdleMessage {
+		t.Errorf("expected IdleMessage false after %%idlemessage off")
+	}
+	gameState.mu.Unlock()
+
+	// %idlemessage on
+	processCommand("Admin", "%idlemessage on", nil)
+	gameState.mu.Lock()
+	if !gameState.IdleMessage {
+		t.Errorf("expected IdleMessage true after %%idlemessage on")
+	}
+	gameState.mu.Unlock()
+
+	// %idlemessage toggle
+	processCommand("Admin", "%idlemessage", nil)
+	gameState.mu.Lock()
+	if gameState.IdleMessage {
+		t.Errorf("expected IdleMessage false after %%idlemessage toggle")
+	}
+	gameState.mu.Unlock()
+
+	// Second toggle
+	processCommand("Admin", "%idlemessage", nil)
+	gameState.mu.Lock()
+	if !gameState.IdleMessage {
+		t.Errorf("expected IdleMessage true after second %%idlemessage toggle")
 	}
 	gameState.mu.Unlock()
 }

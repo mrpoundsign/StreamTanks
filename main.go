@@ -50,6 +50,7 @@ type GameState struct {
 	PhysicsSpeed  float64            `json:"physicsSpeed"`
 	ShowConfig    bool               `json:"showConfig"`
 	AutoRound     int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
+	IdleMessage   bool               `json:"idleMessage"`
 }
 
 var gameState = GameState{
@@ -60,6 +61,7 @@ var gameState = GameState{
 	Leaderboard:   make(map[string]int),
 	Prefix:        "%",
 	PhysicsSpeed:  0.5,
+	IdleMessage:   true,
 }
 
 var (
@@ -148,6 +150,13 @@ func loadSettings() {
 					if _, err := fmt.Sscanf(v, "%d", &ar); err == nil && (ar >= -1 && ar <= 60) {
 						gameState.AutoRound = ar
 					}
+				case "idle_message":
+					switch v {
+					case "0", "false", "off":
+						gameState.IdleMessage = false
+					case "1", "true", "on":
+						gameState.IdleMessage = true
+					}
 				}
 			}
 		}
@@ -189,6 +198,7 @@ func broadcast(msgType string, payload interface{}) {
 			PhysicsSpeed:  gameState.PhysicsSpeed,
 			ShowConfig:    gameState.ShowConfig,
 			AutoRound:     gameState.AutoRound,
+			IdleMessage:   gameState.IdleMessage,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -634,6 +644,29 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			}
 			return
 		}
+
+	case "idlemessage":
+		var val bool
+		if len(parts) > 1 {
+			arg := strings.ToLower(parts[1])
+			if arg == "off" || arg == "false" || arg == "0" || arg == "hide" {
+				val = false
+			} else {
+				val = true
+			}
+		} else {
+			val = !gameState.IdleMessage
+		}
+
+		gameState.IdleMessage = val
+		gameState.mu.Unlock()
+		dbVal := "0"
+		if val {
+			dbVal = "1"
+		}
+		saveSetting("idle_message", dbVal)
+		broadcast("STATE_UPDATE", &gameState)
+		return
 
 	case "join":
 		player := gameState.Players[username]
