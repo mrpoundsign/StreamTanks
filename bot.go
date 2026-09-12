@@ -14,7 +14,7 @@ func startTwitchBot(channel string) {
 
 	client := twitch.NewAnonymousClient()
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		processCommand(message.User.Name, message.Message, message.Emotes)
+		processCommand(message.User.Name, message.Message, message.Emotes, &message.User)
 	})
 	client.Join(channel)
 

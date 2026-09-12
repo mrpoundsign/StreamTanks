@@ -22,6 +22,41 @@ var gameState = GameState{
 	IdleMessage:   true,
 	TerrainMin:    20,
 	TerrainMax:    75,
+	StartPerm:     "broadcaster",
+	ConfigPerm:    "broadcaster",
+}
+
+func hasPermission(user *twitch.User, requiredRole string) bool {
+	if user == nil {
+		return true
+	}
+	if user.IsBroadcaster || (channelFlag != nil && *channelFlag != "" && strings.EqualFold(user.Name, *channelFlag)) {
+		return true
+	}
+
+	switch strings.ToLower(requiredRole) {
+	case "broadcaster":
+		return false
+	case "mod":
+		return user.IsMod
+	case "vip":
+		return user.IsMod || user.IsVip
+	case "sub", "subscriber":
+		if user.IsMod || user.IsVip {
+			return true
+		}
+		if _, ok := user.Badges["subscriber"]; ok {
+			return true
+		}
+		if _, ok := user.Badges["founder"]; ok {
+			return true
+		}
+		return false
+	case "all", "everyone", "anyone":
+		return true
+	default:
+		return false
+	}
 }
 
 func init() {
@@ -232,7 +267,12 @@ func executeActionPhase() {
 	broadcast(msgExecuteActions, nil)
 }
 
-func processCommand(username string, msg string, emotes []*twitch.Emote) {
+func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt ...*twitch.User) {
+	var user *twitch.User
+	if len(userOpt) > 0 {
+		user = userOpt[0]
+	}
+
 	gameState.mu.Lock()
 
 	// Ensure player exists in state
@@ -284,6 +324,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 
 	switch cmd {
 	case "prefix":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if len(parts) > 1 {
 			newPrefix := parts[1]
 			gameState.Prefix = newPrefix
@@ -294,6 +338,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		}
 
 	case "speed", "physicsspeed":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if len(parts) > 1 {
 			var spd float64
 			if _, err := fmt.Sscanf(parts[1], "%f", &spd); err == nil {
@@ -311,6 +359,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		}
 
 	case "config", "settings":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
 			if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
@@ -326,7 +378,11 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		broadcast(msgStateUpdate, &gameState)
 		return
 
-	case "commandtime":
+	case "commandtime", "roundtime":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if len(parts) > 1 {
 			var dur int
 			if _, err := fmt.Sscanf(parts[1], "%d", &dur); err == nil {
@@ -344,6 +400,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		}
 
 	case "autoround":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
 			var ar int
@@ -374,6 +434,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		}
 
 	case "idlemessage":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		var val bool
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
@@ -397,6 +461,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		return
 
 	case "bouncywalls", "bouncy":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		var val bool
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
@@ -420,6 +488,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		return
 
 	case "terrain":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if len(parts) > 1 {
 			arg1 := strings.ToLower(parts[1])
 			switch {
@@ -473,6 +545,64 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			return
 		}
 
+	case "startperm":
+		if !hasPermission(user, "broadcaster") {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			role := strings.ToLower(parts[1])
+			if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+				gameState.StartPerm = role
+				gameState.mu.Unlock()
+				saveSetting("start_perm", role)
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+
+	case "configperm":
+		if !hasPermission(user, "broadcaster") {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			role := strings.ToLower(parts[1])
+			if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+				gameState.ConfigPerm = role
+				gameState.mu.Unlock()
+				saveSetting("config_perm", role)
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+
+	case "perm", "perms", "permission", "permissions":
+		if !hasPermission(user, "broadcaster") {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) >= 3 {
+			target := strings.ToLower(parts[1])
+			role := strings.ToLower(parts[2])
+			if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+				switch target {
+				case "start", "startgame":
+					gameState.StartPerm = role
+					gameState.mu.Unlock()
+					saveSetting("start_perm", role)
+					broadcast(msgStateUpdate, &gameState)
+					return
+				case "config", "settings":
+					gameState.ConfigPerm = role
+					gameState.mu.Unlock()
+					saveSetting("config_perm", role)
+					broadcast(msgStateUpdate, &gameState)
+					return
+				}
+			}
+		}
+
 	case "join":
 		player := gameState.Players[username]
 		if len(parts) > 1 {
@@ -497,7 +627,11 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		broadcast(msgStateUpdate, &gameState)
 		return
 
-	case "startgame":
+	case "startgame", "start":
+		if !hasPermission(user, gameState.StartPerm) {
+			gameState.mu.Unlock()
+			return
+		}
 		if gameState.Phase == phaseIdle {
 			gameState.mu.Unlock()
 			startInputPhase()

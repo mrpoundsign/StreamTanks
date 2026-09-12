@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -124,6 +125,16 @@ func loadSettings() {
 					var tMax int
 					if _, err := fmt.Sscanf(v, "%d", &tMax); err == nil && tMax >= 20 && tMax <= 90 {
 						gameState.TerrainMax = tMax
+					}
+				case "start_perm":
+					clean := strings.ToLower(v)
+					if clean == "broadcaster" || clean == "mod" || clean == "vip" || clean == "sub" || clean == "all" {
+						gameState.StartPerm = clean
+					}
+				case "config_perm":
+					clean := strings.ToLower(v)
+					if clean == "broadcaster" || clean == "mod" || clean == "vip" || clean == "sub" || clean == "all" {
+						gameState.ConfigPerm = clean
 					}
 				}
 			}

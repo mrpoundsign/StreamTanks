@@ -60,6 +60,8 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 			TerrainMin:    gameState.TerrainMin,
 			TerrainMax:    gameState.TerrainMax,
 			RoundID:       gameState.RoundID,
+			StartPerm:     gameState.StartPerm,
+			ConfigPerm:    gameState.ConfigPerm,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -195,7 +197,7 @@ func handleWebSocket(ws *websocket.Conn) {
 			if err == nil {
 				var cmdStr string
 				if err := json.Unmarshal(payloadBytes, &cmdStr); err == nil {
-					processCommand(getDebugUsername(), cmdStr, nil)
+					processCommand(getDebugUsername(), cmdStr, nil, nil)
 				}
 			}
 		}
