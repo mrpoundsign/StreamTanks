@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http/httptest"
 	"strings"
@@ -364,3 +365,89 @@ func TestConfigCommand(t *testing.T) {
 		t.Errorf("expected ShowConfig to be true in broadcasted STATE_UPDATE payload, got false")
 	}
 }
+
+func TestCommandtimeConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	// Default InputDuration in test helper is 2
+	gameState.mu.Lock()
+	if gameState.InputDuration != 2 {
+		t.Errorf("expected InputDuration 2, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+
+	// Test %commandtime 30
+	processCommand("Admin", "%commandtime 30", nil)
+	gameState.mu.Lock()
+	if gameState.InputDuration != 30 {
+		t.Errorf("expected InputDuration 30, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+
+	// Test clamping below minimum (5)
+	processCommand("Admin", "%commandtime 2", nil)
+	gameState.mu.Lock()
+	if gameState.InputDuration != 5 {
+		t.Errorf("expected InputDuration clamped to 5, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+
+	// Test clamping above maximum (120)
+	processCommand("Admin", "%commandtime 500", nil)
+	gameState.mu.Lock()
+	if gameState.InputDuration != 120 {
+		t.Errorf("expected InputDuration clamped to 120, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestSettingsPersistence(t *testing.T) {
+	resetGameStateForTest()
+
+	// Create an in-memory SQLite database
+	testDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test sqlite db: %v", err)
+	}
+	defer func() { _ = testDB.Close() }()
+
+	_, err = testDB.Exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create test settings table: %v", err)
+	}
+
+	oldDB := db
+	db = testDB
+	defer func() { db = oldDB }()
+
+	// Save settings via processCommand
+	processCommand("Admin", "%prefix !", nil)
+	processCommand("Admin", "!speed 0.8", nil)
+	processCommand("Admin", "!commandtime 25", nil)
+
+	// Reset in-memory gameState
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected reset state")
+	}
+	gameState.mu.Unlock()
+
+	// Load settings from DB
+	loadSettings()
+
+	gameState.mu.Lock()
+	if gameState.Prefix != "!" {
+		t.Errorf("expected loaded Prefix '!', got %s", gameState.Prefix)
+	}
+	if gameState.PhysicsSpeed != 0.8 {
+		t.Errorf("expected loaded PhysicsSpeed 0.8, got %f", gameState.PhysicsSpeed)
+	}
+	if gameState.InputDuration != 25 {
+		t.Errorf("expected loaded InputDuration 25, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+}
+
+

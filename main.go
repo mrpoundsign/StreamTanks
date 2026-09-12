@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -110,6 +111,50 @@ func incrementWin(username string) {
 	_, err := db.Exec(`INSERT INTO leaderboard (username, wins) VALUES (?, 1) ON CONFLICT(username) DO UPDATE SET wins = wins + 1`, username)
 	if err != nil {
 		log.Println("DB error:", err)
+	}
+}
+
+func loadSettings() {
+	if db == nil {
+		return
+	}
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	rows, err := db.Query(`SELECT key, value FROM settings`)
+	if err == nil {
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var k, v string
+			if err := rows.Scan(&k, &v); err == nil {
+				switch k {
+				case "prefix":
+					if v != "" {
+						gameState.Prefix = v
+					}
+				case "physics_speed":
+					var spd float64
+					if _, err := fmt.Sscanf(v, "%f", &spd); err == nil && spd >= 0.1 && spd <= 3.0 {
+						gameState.PhysicsSpeed = spd
+					}
+				case "command_time":
+					var dur int
+					if _, err := fmt.Sscanf(v, "%d", &dur); err == nil && dur >= 5 && dur <= 120 {
+						gameState.InputDuration = dur
+					}
+				}
+			}
+		}
+	}
+}
+
+func saveSetting(key, value string) {
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	if err != nil {
+		log.Println("DB saveSetting error:", err)
 	}
 }
 
@@ -440,6 +485,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			newPrefix := parts[1]
 			gameState.Prefix = newPrefix
 			gameState.mu.Unlock()
+			saveSetting("prefix", newPrefix)
 			broadcast("STATE_UPDATE", &gameState)
 			return
 		}
@@ -455,6 +501,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 				}
 				gameState.PhysicsSpeed = spd
 				gameState.mu.Unlock()
+				saveSetting("physics_speed", fmt.Sprintf("%.2f", spd))
 				broadcast("STATE_UPDATE", &gameState)
 				return
 			}
@@ -475,6 +522,23 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		gameState.mu.Unlock()
 		broadcast("STATE_UPDATE", &gameState)
 		return
+
+	case "commandtime":
+		if len(parts) > 1 {
+			var dur int
+			if _, err := fmt.Sscanf(parts[1], "%d", &dur); err == nil {
+				if dur < 5 {
+					dur = 5
+				} else if dur > 120 {
+					dur = 120
+				}
+				gameState.InputDuration = dur
+				gameState.mu.Unlock()
+				saveSetting("command_time", strconv.Itoa(dur))
+				broadcast("STATE_UPDATE", &gameState)
+				return
+			}
+		}
 
 	case "join":
 		player := gameState.Players[username]
@@ -559,10 +623,17 @@ func main() {
 		_ = db.Close()
 		log.Fatal(err)
 	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
+	if err != nil {
+		_ = db.Close()
+		log.Fatal(err)
+	}
 	defer func() { _ = db.Close() }()
 
-	// Load leaderboard
+	// Load leaderboard and settings from DB
 	loadLeaderboard()
+	loadSettings()
 
 	if *debugMode {
 		localPlayer := getDebugUsername()

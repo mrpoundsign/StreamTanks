@@ -345,9 +345,9 @@ function renderConfigModal(prefix) {
             cmd: `<span class="config-cmd">${prefix}speed <span class="cmd-param">&lt;0.1 - 3.0&gt;</span></span>`
         },
         {
-            label: "Input Round Timer",
+            label: "Command Time",
             value: `<span class="config-val">${roundDuration}s</span>`,
-            cmd: `<span class="config-cmd">${prefix}roundtime <span class="cmd-param">&lt;seconds&gt;</span></span>`
+            cmd: `<span class="config-cmd">${prefix}commandtime <span class="cmd-param">&lt;seconds&gt;</span></span>`
         },
         {
             label: "Auto Round",
