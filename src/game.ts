@@ -19,6 +19,7 @@ import {
   MsgResetTerrain,
   MsgActionComplete,
   MsgPlayerDied,
+  PlayerDiedPayload,
   MsgGameOver,
   MsgCelebrationComplete,
   MsgChatCommand,
@@ -104,7 +105,7 @@ function checkTankCollisions(cx: number, cy: number, radius: number, owner: stri
     if (dist < radius + 20) {
       p.isDead = true;
       showKillMessage(`${owner} destroyed ${name}!`);
-      net.send({ type: MsgPlayerDied, payload: name });
+      net.send({ type: MsgPlayerDied, payload: { victim: name, killer: owner } as PlayerDiedPayload });
 
       const imgEl = document.getElementById('emote-' + name);
       if (imgEl) imgEl.style.display = 'none';
@@ -244,7 +245,7 @@ function updatePhysics(dtScale: number): void {
     if (p.y >= HEIGHT) {
       p.isDead = true;
       showKillMessage(`${name} fell into the abyss!`);
-      net.send({ type: MsgPlayerDied, payload: name });
+      net.send({ type: MsgPlayerDied, payload: { victim: name } as PlayerDiedPayload });
       const imgEl = document.getElementById('emote-' + name);
       if (imgEl) imgEl.style.display = 'none';
     }

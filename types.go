@@ -44,8 +44,9 @@ type Player struct {
 	Angle      int     `json:"angle"`
 	Power      int     `json:"power"`
 	IsDead     bool    `json:"isDead"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
+	X               float64 `json:"x"`
+	Y               float64 `json:"y"`
+	LastActiveRound int     `json:"lastActiveRound"`
 }
 
 // GameState holds all synchronized state for active players, phases, and settings
@@ -77,6 +78,12 @@ type CraterPayload struct {
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	Radius float64 `json:"radius"`
+}
+
+// PlayerDiedPayload conveys death event information including the killer for point attribution
+type PlayerDiedPayload struct {
+	Victim string `json:"victim"`
+	Killer string `json:"killer,omitempty"`
 }
 
 // WSMessage is the generic envelope sent over WebSocket

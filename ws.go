@@ -127,15 +127,31 @@ func handleWebSocket(ws *websocket.Conn) {
 		case msgPlayerDied:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
-				var deadPlayer string
-				if err := json.Unmarshal(payloadBytes, &deadPlayer); err == nil {
+				var death PlayerDiedPayload
+				if err := json.Unmarshal(payloadBytes, &death); err == nil && death.Victim != "" {
 					gameState.mu.Lock()
-					if p, exists := gameState.Players[deadPlayer]; exists && !p.IsDead {
+					if p, exists := gameState.Players[death.Victim]; exists && !p.IsDead {
 						p.IsDead = true
+						if death.Killer != "" && death.Killer != death.Victim {
+							gameState.Leaderboard[death.Killer]++
+							incrementWin(death.Killer)
+						}
 						gameState.mu.Unlock()
 						broadcast(msgStateUpdate, &gameState)
 					} else {
 						gameState.mu.Unlock()
+					}
+				} else {
+					var victim string
+					if err := json.Unmarshal(payloadBytes, &victim); err == nil && victim != "" {
+						gameState.mu.Lock()
+						if p, exists := gameState.Players[victim]; exists && !p.IsDead {
+							p.IsDead = true
+							gameState.mu.Unlock()
+							broadcast(msgStateUpdate, &gameState)
+						} else {
+							gameState.mu.Unlock()
+						}
 					}
 				}
 			}
@@ -150,10 +166,6 @@ func handleWebSocket(ws *websocket.Conn) {
 						break
 					}
 					gameState.Phase = phaseCelebration
-					if winner != "" {
-						gameState.Leaderboard[winner]++
-						incrementWin(winner)
-					}
 					gameState.mu.Unlock()
 					broadcast(msgStateUpdate, &gameState)
 

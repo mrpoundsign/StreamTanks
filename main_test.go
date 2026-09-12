@@ -20,6 +20,7 @@ func resetGameStateForTest() {
 	defer gameState.mu.Unlock()
 
 	gameState.Phase = phaseIdle
+	gameState.RoundID = 0
 	gameState.Players = make(map[string]*Player)
 	gameState.InputDuration = 2
 	gameState.MoveDistance = 100
@@ -38,11 +39,18 @@ func resetGameStateForTest() {
 	gameState.ConfigPerm = "broadcaster"
 
 	cancelAutoRoundTimer()
+	cancelFastForward()
 
 	if inputCancel != nil {
 		close(inputCancel)
 		inputCancel = nil
 	}
+	if minWaitTimer != nil {
+		minWaitTimer.Stop()
+		minWaitTimer = nil
+	}
+	fastForwardScheduled = false
+	prevRoundHadCommands = false
 }
 
 func TestProcessCommand_JoinAndFire(t *testing.T) {
@@ -595,8 +603,9 @@ func TestEmbeddedPublicAssets(t *testing.T) {
 func TestInactivePlayerRandomDirection(t *testing.T) {
 	leftCount := 0
 	rightCount := 0
+	fireCount := 0
 
-	for trial := 0; trial < 100; trial++ {
+	for trial := 0; trial < 150; trial++ {
 		resetGameStateForTest()
 
 		gameState.mu.Lock()
@@ -611,21 +620,56 @@ func TestInactivePlayerRandomDirection(t *testing.T) {
 		if !p1.Fired {
 			t.Errorf("expected P1 to be marked fired after action phase")
 		}
-		if p1.ActionType != actionLeft && p1.ActionType != actionRight {
-			t.Errorf("expected ActionType to be LEFT or RIGHT, got %s", p1.ActionType)
+		if p1.ActionType != actionLeft && p1.ActionType != actionRight && p1.ActionType != actionFire {
+			t.Errorf("expected ActionType to be LEFT, RIGHT, or FIRE, got %s", p1.ActionType)
 		}
 		switch p1.ActionType {
 		case actionLeft:
 			leftCount++
 		case actionRight:
 			rightCount++
+		case actionFire:
+			fireCount++
+			if p1.Angle < 20 || p1.Angle > 150 {
+				t.Errorf("expected uncommanded fire angle in [20, 150], got %d", p1.Angle)
+			}
+			if p1.Power < 40 || p1.Power > 80 {
+				t.Errorf("expected uncommanded fire power in [40, 80], got %d", p1.Power)
+			}
 		}
 		gameState.mu.Unlock()
 	}
 
-	if leftCount == 0 || rightCount == 0 {
-		t.Errorf("expected both LEFT and RIGHT to be selected across 100 trials, got left=%d, right=%d", leftCount, rightCount)
+	if leftCount == 0 || rightCount == 0 || fireCount == 0 {
+		t.Errorf("expected LEFT, RIGHT, and FIRE to all be selected across trials, got left=%d, right=%d, fire=%d", leftCount, rightCount, fireCount)
 	}
+}
+
+func TestInactivePlayerNotWaitedOn(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.RoundID = 1
+	// Alice was active in Round 1
+	gameState.Players["Alice"] = &Player{Name: "Alice", LastActiveRound: 1, Fired: false}
+	// Bob was idle in Round 1 (LastActiveRound = 0)
+	gameState.Players["Bob"] = &Player{Name: "Bob", LastActiveRound: 0, Fired: false}
+	gameState.mu.Unlock()
+
+	startInputPhase()
+
+	// Alice fires
+	processCommand("Alice", "%fire 45 50", nil)
+
+	// Since Bob was inactive last round, we do not wait on Bob!
+	// Alice firing should immediately trigger executeActionPhase within 700ms
+	time.Sleep(700 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		t.Errorf("expected phaseAction after sole active player Alice fired, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
 }
 
 func TestBouncyWallsConfiguration(t *testing.T) {
@@ -1045,3 +1089,198 @@ func TestFirePowerAndAngleClamping(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestScoringPerKill(t *testing.T) {
+	resetGameStateForTest()
+
+	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, err := websocket.Dial(wsURL, "", server.URL)
+	if err != nil {
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	// Drain initial state message
+	var initMsg WSMessage
+	_ = websocket.JSON.Receive(conn, &initMsg)
+
+	// Setup players
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("Bob", "%join LUL", nil)
+
+	// 1. Alice kills Bob
+	deathMsg := WSMessage{
+		Type: msgPlayerDied,
+		Payload: PlayerDiedPayload{
+			Victim: "Bob",
+			Killer: "Alice",
+		},
+	}
+	if err := websocket.JSON.Send(conn, deathMsg); err != nil {
+		t.Fatalf("failed to send deathMsg: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if !gameState.Players["Bob"].IsDead {
+		t.Errorf("expected Bob to be dead")
+	}
+	if gameState.Leaderboard["Alice"] != 1 {
+		t.Errorf("expected Alice score to be 1, got %d", gameState.Leaderboard["Alice"])
+	}
+	gameState.mu.Unlock()
+
+	// 2. Duplicate kill report from another client: score should remain 1
+	if err := websocket.JSON.Send(conn, deathMsg); err != nil {
+		t.Fatalf("failed to send duplicate deathMsg: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Leaderboard["Alice"] != 1 {
+		t.Errorf("expected Alice score to remain 1 after duplicate report, got %d", gameState.Leaderboard["Alice"])
+	}
+	gameState.mu.Unlock()
+
+	// 3. Environmental death (abyss): Charlie dies with no killer
+	processCommand("Charlie", "%join PogChamp", nil)
+	abyssMsg := WSMessage{
+		Type: msgPlayerDied,
+		Payload: PlayerDiedPayload{
+			Victim: "Charlie",
+		},
+	}
+	if err := websocket.JSON.Send(conn, abyssMsg); err != nil {
+		t.Fatalf("failed to send abyssMsg: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if !gameState.Players["Charlie"].IsDead {
+		t.Errorf("expected Charlie to be dead")
+	}
+	if gameState.Leaderboard["Charlie"] != 0 {
+		t.Errorf("expected Charlie score to be 0, got %d", gameState.Leaderboard["Charlie"])
+	}
+	gameState.mu.Unlock()
+
+	// 4. Game over does not award extra points
+	gameOverMsg := WSMessage{
+		Type:    msgGameOver,
+		Payload: "Alice",
+	}
+	if err := websocket.JSON.Send(conn, gameOverMsg); err != nil {
+		t.Fatalf("failed to send gameOverMsg: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Leaderboard["Alice"] != 1 {
+		t.Errorf("expected Alice score to remain 1 on game over (no win bonus), got %d", gameState.Leaderboard["Alice"])
+	}
+	if gameState.Phase != phaseCelebration {
+		t.Errorf("expected Phase to be CELEBRATION, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1. Join two players
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("Bob", "%join LUL", nil)
+
+	gameState.mu.Lock()
+	gameState.InputDuration = 20
+	gameState.mu.Unlock()
+
+	// Start game -> Round 1 begins (prevRoundHadCommands is false)
+	processCommand("Alice", "%startgame", nil)
+	time.Sleep(50 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput, got %s", gameState.Phase)
+	}
+	if prevRoundHadCommands {
+		gameState.mu.Unlock()
+		t.Fatalf("expected prevRoundHadCommands to be false in round 1")
+	}
+	gameState.mu.Unlock()
+
+	// 2. Alice fires at T=0. Because prevRoundHadCommands is false and Bob hasn't fired,
+	// it should NOT fast forward immediately.
+	processCommand("Alice", "%fire 45 50", nil)
+	time.Sleep(200 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput to remain active due to minimum wait window, got %s", gameState.Phase)
+	}
+	if !fastForwardScheduled {
+		gameState.mu.Unlock()
+		t.Errorf("expected fastForwardScheduled to be true")
+	}
+	gameState.mu.Unlock()
+
+	// 3. Now Bob fires too. All alive players have fired, so it should fast forward immediately!
+	processCommand("Bob", "%left", nil)
+	time.Sleep(700 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseAction after all alive players fired, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// 4. Test timer expiry with short InputDuration (simulating minDuration window reaching end)
+	resetGameStateForTest()
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("Bob", "%join LUL", nil)
+	processCommand("Alice", "%startgame", nil)
+	time.Sleep(50 * time.Millisecond)
+
+	gameState.mu.Lock()
+	gameState.InputDuration = 1 // minDuration will be clamped to 1s
+	gameState.mu.Unlock()
+
+	// Alice fires; Bob does not
+	processCommand("Alice", "%fire 45 50", nil)
+
+	// After 200ms, should still be in INPUT phase
+	time.Sleep(200 * time.Millisecond)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput at 200ms, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// After 1.5s total (> 1s minDuration + 500ms sleep), should have transitioned to ACTION phase
+	time.Sleep(1500 * time.Millisecond)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseAction after minDuration elapsed, got %s", gameState.Phase)
+	}
+	// Verify Bob received an automated uncommanded action
+	bob := gameState.Players["Bob"]
+	if bob.ActionType != actionLeft && bob.ActionType != actionRight && bob.ActionType != actionFire {
+		gameState.mu.Unlock()
+		t.Errorf("expected Bob to receive a random uncommanded action, got %q", bob.ActionType)
+	} else {
+		gameState.mu.Unlock()
+	}
+}
+

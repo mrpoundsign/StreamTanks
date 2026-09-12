@@ -77,6 +77,7 @@ func resetMatchState() {
 		p.IsDead = false
 		p.Fired = false
 		p.ActionType = ""
+		p.LastActiveRound = gameState.RoundID
 		if gameState.Debug {
 			if name == "TargetBot" {
 				p.X = float64(defaultTerrainWidth)/2.0 + 100.0
@@ -96,11 +97,37 @@ func resetMatchState() {
 	triggerAutoRound()
 }
 
-var inputCancel chan struct{}
 var (
-	autoRoundTimerMu sync.Mutex
-	autoRoundTimer   *time.Timer
+	inputCancel          chan struct{}
+	inputStartTime       time.Time
+	prevRoundHadCommands bool
+	fastForwardScheduled bool
+	minWaitTimer         *time.Timer
+	fastForwardTimerMu   sync.Mutex
+	fastForwardTimer     *time.Timer
+	autoRoundTimerMu     sync.Mutex
+	autoRoundTimer       *time.Timer
 )
+
+func cancelFastForward() {
+	fastForwardTimerMu.Lock()
+	defer fastForwardTimerMu.Unlock()
+	if fastForwardTimer != nil {
+		fastForwardTimer.Stop()
+		fastForwardTimer = nil
+	}
+}
+
+func scheduleFastForward(roundID int) {
+	fastForwardTimerMu.Lock()
+	defer fastForwardTimerMu.Unlock()
+	if fastForwardTimer != nil {
+		fastForwardTimer.Stop()
+	}
+	fastForwardTimer = time.AfterFunc(500*time.Millisecond, func() {
+		executeActionPhaseForRound(roundID)
+	})
+}
 
 func cancelAutoRoundTimer() {
 	autoRoundTimerMu.Lock()
@@ -124,8 +151,8 @@ func triggerAutoRound() {
 
 	if ar == -1 {
 		// Immediate next round
-		go func() {
-			time.Sleep(500 * time.Millisecond)
+		autoRoundTimerMu.Lock()
+		autoRoundTimer = time.AfterFunc(500*time.Millisecond, func() {
 			gameState.mu.Lock()
 			if gameState.Phase == phaseIdle {
 				gameState.mu.Unlock()
@@ -133,7 +160,8 @@ func triggerAutoRound() {
 			} else {
 				gameState.mu.Unlock()
 			}
-		}()
+		})
+		autoRoundTimerMu.Unlock()
 		return
 	}
 
@@ -154,10 +182,28 @@ func triggerAutoRound() {
 
 func startInputPhase() {
 	cancelAutoRoundTimer()
+	cancelFastForward()
 
 	gameState.mu.Lock()
 	gameState.Phase = phaseInput
 	gameState.RoundID++
+	inputStartTime = time.Now()
+	fastForwardScheduled = false
+	if minWaitTimer != nil {
+		minWaitTimer.Stop()
+		minWaitTimer = nil
+	}
+
+	prevRoundHadCommands = false
+	if gameState.RoundID > 1 {
+		for _, p := range gameState.Players {
+			if !p.IsDead && p.LastActiveRound == gameState.RoundID-1 {
+				prevRoundHadCommands = true
+				break
+			}
+		}
+	}
+
 	// Reset fired status and action for all players, ensuring valid terrain coordinates
 	for _, p := range gameState.Players {
 		p.Fired = false
@@ -181,6 +227,7 @@ func startInputPhase() {
 				gameState.mu.Lock()
 				if gameState.Phase == phaseInput && !bot.IsDead {
 					bot.Fired = true
+					bot.LastActiveRound = gameState.RoundID
 					if rand.IntN(2) == 0 {
 						bot.ActionType = actionLeft
 					} else {
@@ -200,10 +247,11 @@ func startInputPhase() {
 	broadcast(msgStateUpdate, &gameState)
 
 	// Start timer for input phase
+	roundID := gameState.RoundID
 	go func() {
 		select {
 		case <-time.After(time.Duration(gameState.InputDuration) * time.Second):
-			executeActionPhase()
+			executeActionPhaseForRound(roundID)
 		case <-cancelChan:
 			return
 		}
@@ -215,47 +263,128 @@ func checkAllPlayersFired() {
 	if gameState.Phase != phaseInput || inputCancel == nil {
 		return
 	}
-	alivePlayers := 0
+
+	aliveCount := 0
+	firedCount := 0
+	unfiredActiveCount := 0
+
 	for _, p := range gameState.Players {
 		if !p.IsDead {
-			alivePlayers++
-			if !p.Fired {
-				return
+			aliveCount++
+			if p.Fired {
+				firedCount++
+			} else if p.LastActiveRound == gameState.RoundID-1 {
+				unfiredActiveCount++
 			}
 		}
 	}
-	if alivePlayers > 0 {
+
+	if aliveCount == 0 {
+		return
+	}
+
+	roundID := gameState.RoundID
+
+	// If all alive players have fired, fast-forward immediately regardless
+	if firedCount == aliveCount {
+		if minWaitTimer != nil {
+			minWaitTimer.Stop()
+			minWaitTimer = nil
+		}
 		close(inputCancel)
 		inputCancel = nil
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			executeActionPhase()
-		}()
+		scheduleFastForward(roundID)
+		return
+	}
+
+	// If players were active in the previous round, fast-forward once all active players have fired
+	if prevRoundHadCommands {
+		if firedCount > 0 && unfiredActiveCount == 0 {
+			close(inputCancel)
+			inputCancel = nil
+			scheduleFastForward(roundID)
+		}
+		return
+	}
+
+	// If no players entered a command in the previous round, enforce a 10s minimum before fast-forwarding
+	if firedCount > 0 && !fastForwardScheduled {
+		minDuration := 10 * time.Second
+		if dur := time.Duration(gameState.InputDuration) * time.Second; dur < minDuration {
+			minDuration = dur
+		}
+
+		elapsed := time.Since(inputStartTime)
+		if elapsed >= minDuration {
+			close(inputCancel)
+			inputCancel = nil
+			scheduleFastForward(roundID)
+			return
+		}
+
+		fastForwardScheduled = true
+		remaining := minDuration - elapsed
+		cancelChan := inputCancel
+		minWaitTimer = time.AfterFunc(remaining, func() {
+			gameState.mu.Lock()
+			defer gameState.mu.Unlock()
+			select {
+			case <-cancelChan:
+				return
+			default:
+			}
+			if gameState.Phase == phaseInput && gameState.RoundID == roundID && inputCancel != nil {
+				close(inputCancel)
+				inputCancel = nil
+				scheduleFastForward(roundID)
+			}
+		})
 	}
 }
 
 func executeActionPhase() {
 	gameState.mu.Lock()
-	if gameState.Phase != phaseInput {
+	rID := gameState.RoundID
+	gameState.mu.Unlock()
+	executeActionPhaseForRound(rID)
+}
+
+func executeActionPhaseForRound(roundID int) {
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput || gameState.RoundID != roundID {
 		gameState.mu.Unlock()
 		return
 	}
+	cancelFastForward()
 	if inputCancel != nil {
 		close(inputCancel)
 		inputCancel = nil
 	}
+	if minWaitTimer != nil {
+		minWaitTimer.Stop()
+		minWaitTimer = nil
+	}
+	fastForwardScheduled = false
 	gameState.Phase = phaseAction
 
-	// Apply last known values for those who didn't fire
+	// Apply action for those who didn't command: random mix of move and fire
 	for _, p := range gameState.Players {
 		if p.IsDead {
 			continue
 		}
 		if !p.Fired || p.ActionType == "" {
-			if rand.IntN(2) == 0 {
+			actionChoice := rand.IntN(3)
+			switch actionChoice {
+			case 0:
 				p.ActionType = actionLeft
-			} else {
+			case 1:
 				p.ActionType = actionRight
+			case 2:
+				p.ActionType = actionFire
+				p.Angle = rand.IntN(131) + 20 // 20 to 150
+				p.Power = rand.IntN(41) + 40  // 40 to 80
+				p.LastAngle = p.Angle
+				p.LastPower = p.Power
 			}
 			p.Fired = true
 		}
@@ -281,14 +410,19 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		defEmote := defaultEmotes[randIdx]
 		spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
 		spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+		lastRound := 0
+		if gameState.Phase != phaseIdle {
+			lastRound = gameState.RoundID
+		}
 		gameState.Players[username] = &Player{
-			Name:      username,
-			Emote:     defEmote.Name,
-			EmoteURL:  defEmote.URL,
-			LastAngle: 45,
-			LastPower: 50,
-			X:         spawnX,
-			Y:         spawnY,
+			Name:            username,
+			Emote:           defEmote.Name,
+			EmoteURL:        defEmote.URL,
+			LastAngle:       45,
+			LastPower:       50,
+			X:               spawnX,
+			Y:               spawnY,
+			LastActiveRound: lastRound,
 		}
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
@@ -605,6 +739,9 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	case "join":
 		player := gameState.Players[username]
+		if gameState.Phase != phaseIdle {
+			player.LastActiveRound = gameState.RoundID
+		}
 		if len(parts) > 1 {
 			player.Emote = parts[1]
 			if len(emotes) > 0 {
@@ -641,6 +778,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 	case "fire", "left", "right":
 		if gameState.Phase == phaseInput {
 			player := gameState.Players[username]
+			player.LastActiveRound = gameState.RoundID
 			if cmd == "fire" {
 				if len(parts) >= 3 {
 					var angle, power int
