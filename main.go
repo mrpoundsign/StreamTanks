@@ -25,15 +25,16 @@ const (
 )
 
 type Player struct {
-	Name      string `json:"name"`
-	Emote     string `json:"emote"`
-	EmoteURL  string `json:"emoteUrl"`
-	LastAngle int    `json:"lastAngle"`
-	LastPower int    `json:"lastPower"`
-	Fired     bool   `json:"fired"`
-	Angle     int    `json:"angle"`
-	Power     int    `json:"power"`
-	IsDead    bool   `json:"isDead"`
+	Name       string `json:"name"`
+	Emote      string `json:"emote"`
+	EmoteURL   string `json:"emoteUrl"`
+	LastAngle  int    `json:"lastAngle"`
+	LastPower  int    `json:"lastPower"`
+	ActionType string `json:"actionType"`
+	Fired      bool   `json:"fired"`
+	Angle      int    `json:"angle"`
+	Power      int    `json:"power"`
+	IsDead     bool   `json:"isDead"`
 }
 
 type GameState struct {
@@ -41,6 +42,7 @@ type GameState struct {
 	Phase         string             `json:"phase"`
 	Players       map[string]*Player `json:"players"`
 	InputDuration int                `json:"inputDuration"` // in seconds
+	MoveDistance  int                `json:"moveDistance"`
 	Leaderboard   map[string]int     `json:"leaderboard"`
 	ActiveClients map[*websocket.Conn]bool `json:"-"`
 }
@@ -49,6 +51,7 @@ var gameState = GameState{
 	Phase:         PhaseIdle,
 	Players:       make(map[string]*Player),
 	InputDuration: 20,
+	MoveDistance:  100,
 	Leaderboard:   make(map[string]int),
 	ActiveClients: make(map[*websocket.Conn]bool),
 }
@@ -160,6 +163,7 @@ func handleWebSocket(ws *websocket.Conn) {
 				for _, p := range gameState.Players {
 					p.IsDead = false
 					p.Fired = false
+					p.ActionType = ""
 				}
 				gameState.mu.Unlock()
 				broadcast("STATE_UPDATE", gameState)
@@ -172,9 +176,10 @@ func handleWebSocket(ws *websocket.Conn) {
 func startInputPhase() {
 	gameState.mu.Lock()
 	gameState.Phase = PhaseInput
-	// Reset fired status for all players
+	// Reset fired status and action for all players
 	for _, p := range gameState.Players {
 		p.Fired = false
+		p.ActionType = ""
 	}
 	gameState.mu.Unlock()
 
@@ -200,18 +205,20 @@ func executeActionPhase() {
 		if p.IsDead {
 			continue
 		}
-		if !p.Fired {
-			// Auto-fire with last known config
-			p.Angle = p.LastAngle
-			p.Power = p.LastPower
+		if !p.Fired || p.ActionType == "" {
+			if time.Now().UnixNano()%2 == 0 {
+				p.ActionType = "LEFT"
+			} else {
+				p.ActionType = "RIGHT"
+			}
 			p.Fired = true
 		}
 	}
 	gameState.mu.Unlock()
 
-	// Send state update which tells frontend to execute the shots
+	// Send state update which tells frontend to execute the shots/moves
 	broadcast("STATE_UPDATE", gameState)
-	broadcast("EXECUTE_FIRE", nil)
+	broadcast("EXECUTE_ACTIONS", nil)
 }
 
 func main() {
@@ -273,33 +280,47 @@ func main() {
 			go startInputPhase()
 		}
 
-		if cmd == "!fire" && (gameState.Phase == PhaseInput || gameState.Phase == PhaseIdle) {
-			if gameState.Phase == PhaseIdle {
-				// Auto-start the game if someone fires while idle
-				gameState.Phase = PhaseInput
-				for _, p := range gameState.Players {
-					p.Fired = false
+		if cmd == "!fire" || cmd == "!left" || cmd == "!right" {
+			if gameState.Phase == PhaseIdle || gameState.Phase == PhaseInput {
+				if gameState.Phase == PhaseIdle {
+					// Auto-start the game if someone plays while idle
+					gameState.Phase = PhaseInput
+					for _, p := range gameState.Players {
+						p.Fired = false
+						p.ActionType = ""
+					}
+					go func() {
+						time.Sleep(time.Duration(gameState.InputDuration) * time.Second)
+						executeActionPhase()
+					}()
 				}
-				go func() {
-					time.Sleep(time.Duration(gameState.InputDuration) * time.Second)
-					executeActionPhase()
-				}()
-			}
 
-			if len(parts) >= 3 {
-				var angle, power int
-				fmt.Sscanf(parts[1], "%d", &angle)
-				fmt.Sscanf(parts[2], "%d", &power)
-				
 				player := gameState.Players[username]
-				player.Angle = angle
-				player.Power = power
-				player.LastAngle = angle
-				player.LastPower = power
-				player.Fired = true
 				
-				go broadcast("PLAYER_LOCKED", username)
-				go broadcast("STATE_UPDATE", gameState)
+				if cmd == "!fire" {
+					if len(parts) >= 3 {
+						var angle, power int
+						fmt.Sscanf(parts[1], "%d", &angle)
+						fmt.Sscanf(parts[2], "%d", &power)
+						
+						player.Angle = angle
+						player.Power = power
+						player.LastAngle = angle
+						player.LastPower = power
+						player.ActionType = "FIRE"
+						player.Fired = true
+						
+						go broadcast("PLAYER_LOCKED", username)
+						go broadcast("STATE_UPDATE", gameState)
+					}
+				} else {
+					// Movement commands
+					player.ActionType = strings.ToUpper(cmd[1:])
+					player.Fired = true
+					
+					go broadcast("PLAYER_LOCKED", username)
+					go broadcast("STATE_UPDATE", gameState)
+				}
 			}
 		}
 	})

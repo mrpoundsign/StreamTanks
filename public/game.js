@@ -46,11 +46,14 @@ function initTerrain() {
 
 // WebSocket setup
 const ws = new WebSocket(`ws://${window.location.host}/ws`);
+let stateRef = null;
 
+// Websocket Handling
 ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'STATE_UPDATE') {
         const state = msg.payload;
+        stateRef = state;
         currentPhase = state.phase;
         
         if (state.leaderboard) {
@@ -85,6 +88,7 @@ ws.onmessage = (event) => {
                 players[name].emote = newPlayers[name].emote;
                 players[name].emoteUrl = newPlayers[name].emoteUrl;
                 players[name].isDead = newPlayers[name].isDead;
+                players[name].actionType = newPlayers[name].actionType;
             }
             
             // Ensure emote DOM element exists and has correct src
@@ -114,8 +118,10 @@ ws.onmessage = (event) => {
 
         updateUI();
 
-    } else if (msg.type === 'EXECUTE_FIRE') {
-        executeFire();
+    } else if (msg.type === 'EXECUTE_ACTIONS') {
+        executeActions();
+    } else if (msg.type === 'PLAYER_LOCKED') {
+        initTerrain();
     } else if (msg.type === 'RESET_TERRAIN') {
         initTerrain();
     }
@@ -123,14 +129,17 @@ ws.onmessage = (event) => {
 
 function updateUI() {
     if (currentPhase === 'IDLE') {
-        phaseDisplay.style.display = 'none';
+        phaseDisplay.style.display = 'block';
+        phaseDisplay.innerText = "WAITING FOR PLAYERS... (!fire to start)";
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'none';
+        document.getElementById('leaderboard').style.display = 'block';
     } else if (currentPhase === 'INPUT') {
         phaseDisplay.style.display = 'block';
-        phaseDisplay.innerText = "INPUT PHASE - !fire <angle> <power>";
+        phaseDisplay.innerText = "INPUT PHASE - !fire <angle> <power> | !left | !right";
         timerDisplay.style.display = 'block';
         celebrationDisplay.style.display = 'none';
+        document.getElementById('leaderboard').style.display = 'none'; // Hide for protractor
         inputTimer = 20; // 15s + 5s lag
         timerDisplay.innerText = inputTimer.toString();
         timerDisplay.style.color = "#fff";
@@ -140,6 +149,7 @@ function updateUI() {
         phaseDisplay.innerText = "ACTION PHASE";
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'none';
+        document.getElementById('leaderboard').style.display = 'block';
     } else if (currentPhase === 'CELEBRATION') {
         phaseDisplay.style.display = 'none';
         timerDisplay.style.display = 'none';
@@ -200,23 +210,36 @@ setInterval(() => {
     }
 }, 1000);
 
-function executeFire() {
+// Execute actions for all players
+function executeActions() {
     projectiles = [];
     for (const name in players) {
         const p = players[name];
         if (p.isDead) continue;
-        // Convert angle (degrees) to radians. 0 is right, 90 is up, 180 is left.
-        const rad = p.angle * Math.PI / 180;
-        // Scale power
-        const velocity = p.power * 0.15; 
         
-        projectiles.push({
-            owner: name,
-            x: p.x,
-            y: p.y - 20, // Fire from slightly above the tank
-            vx: Math.cos(rad) * velocity,
-            vy: -Math.sin(rad) * velocity // -y is up in canvas
-        });
+        if (p.actionType === "FIRE") {
+            // Convert angle (degrees) to radians. 0 is right, 90 is up, 180 is left.
+            const rad = p.angle * Math.PI / 180;
+            // Scale power
+            const powerScaled = p.power / 5; 
+            const vx = Math.cos(rad) * powerScaled;
+            const vy = -Math.sin(rad) * powerScaled; // negative because y goes down
+
+            projectiles.push({
+                x: p.x,
+                y: p.y - 15,
+                vx: vx,
+                vy: vy,
+                owner: name,
+                emoteUrl: p.emoteUrl
+            });
+        } else if (p.actionType === "LEFT") {
+            p.moveTarget = p.x - (stateRef.moveDistance || 100);
+            p.moving = true;
+        } else if (p.actionType === "RIGHT") {
+            p.moveTarget = p.x + (stateRef.moveDistance || 100);
+            p.moving = true;
+        }
     }
 }
 
@@ -267,10 +290,24 @@ function showKillMessage(msg) {
 
 function updatePhysics(dt) {
     // Player logic
+    let anyMoving = false;
     for (const name in players) {
         const p = players[name];
         if (p.isDead) continue;
         
+        // Execute Action Movement
+        if (currentPhase === 'ACTION' && p.moving) {
+            anyMoving = true;
+            const speed = 2;
+            if (p.actionType === "LEFT") {
+                p.x -= speed;
+                if (p.x <= p.moveTarget || p.x <= 0) p.moving = false;
+            } else if (p.actionType === "RIGHT") {
+                p.x += speed;
+                if (p.x >= p.moveTarget || p.x >= WIDTH) p.moving = false;
+            }
+        }
+
         // Roaming in IDLE
         if (currentPhase === 'IDLE') {
             p.x += p.dx;
@@ -363,7 +400,7 @@ function updatePhysics(dt) {
     }
 
     // Phase transition check
-    if (currentPhase === 'ACTION' && projectiles.length === 0 && explosions.length === 0) {
+    if (currentPhase === 'ACTION' && projectiles.length === 0 && explosions.length === 0 && !anyMoving) {
         // Wait a little bit for tanks to fall if needed, then end phase
         // Here we just end it immediately for simplicity
         let anyFalling = false;
@@ -443,6 +480,43 @@ function draw() {
     ctx.fillStyle = 'rgba(255, 0, 60, 0.02)';
     ctx.fill();
     ctx.shadowBlur = 0; // reset
+
+    // Draw Giant Protractor during INPUT phase
+    if (currentPhase === 'INPUT') {
+        ctx.save();
+        ctx.translate(250, 250); // Top-left position
+        
+        ctx.strokeStyle = 'rgba(0, 255, 204, 0.5)';
+        ctx.lineWidth = 10;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#00ffcc';
+        
+        // Draw giant arc
+        ctx.beginPath();
+        ctx.arc(0, 0, 150, Math.PI, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = '24px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        const angles = [0, 45, 90, 135, 180];
+        for (const deg of angles) {
+            const rad = deg * Math.PI / 180;
+            const innerR = 130;
+            const outerR = 150;
+            
+            ctx.beginPath();
+            ctx.lineWidth = 3;
+            ctx.moveTo(Math.cos(rad) * innerR, -Math.sin(rad) * innerR);
+            ctx.lineTo(Math.cos(rad) * outerR, -Math.sin(rad) * outerR);
+            ctx.stroke();
+            
+            ctx.fillText(deg.toString() + "°", Math.cos(rad) * 180, -Math.sin(rad) * 180);
+        }
+        ctx.restore();
+    }
 
     // Draw Tanks
     for (const name in players) {
