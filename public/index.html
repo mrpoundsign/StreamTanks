@@ -7,7 +7,7 @@
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StreamTanks - Twitch Artillery Overlay</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -33,6 +33,13 @@
         </div>
     </div>
     
-    <script src="game.js"></script>
+    <!-- Debug command bar (active only when debug mode is enabled, fixed to viewport) -->
+    <div id="debug-bar" style="display: none;">
+        <span class="debug-badge">DEBUG MODE</span>
+        <input type="text" id="debug-input" placeholder="Type command (%startgame, %fire 45 60, %left, etc.)..." autocomplete="off" />
+        <button id="debug-send-btn">Send</button>
+    </div>
+
+    <script src="game.js?v=2"></script>
 </body>
 </html>

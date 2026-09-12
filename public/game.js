@@ -49,7 +49,11 @@ function initTerrain() {
     
     // Parachute all players back in
     for (const name in players) {
-        players[name].x = Math.random() * (WIDTH - 100) + 50;
+        if (stateRef && stateRef.debug) {
+            players[name].x = (name === 'TargetBot') ? (WIDTH / 2 + 100) : (WIDTH / 2 - 100);
+        } else {
+            players[name].x = Math.random() * (WIDTH - 100) + 50;
+        }
         players[name].y = -50;
     }
 }
@@ -156,10 +160,16 @@ ws.onmessage = (event) => {
         for (const name in newPlayers) {
             if (!players[name]) {
                 // New player joining/roaming
+                let spawnX = Math.random() * (WIDTH - 100) + 50;
+                let moveDx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+                if (stateRef && stateRef.debug) {
+                    spawnX = (name === 'TargetBot') ? (WIDTH / 2 + 100) : (WIDTH / 2 - 100);
+                    moveDx = 0;
+                }
                 players[name] = {
-                    x: Math.random() * (WIDTH - 100) + 50,
+                    x: spawnX,
                     y: 0,
-                    dx: (Math.random() > 0.5 ? 1 : -1) * 1.5, // Roaming speed
+                    dx: moveDx,
                     ...newPlayers[name]
                 };
                 // Preload emote image for projectiles
@@ -251,6 +261,12 @@ function updateUI() {
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'block';
     }
+    
+    const debugBar = document.getElementById('debug-bar');
+    if (debugBar) {
+        debugBar.style.display = (stateRef && stateRef.debug) ? 'flex' : 'none';
+    }
+
     previousPhase = currentPhase;
 }
 
@@ -746,3 +762,27 @@ function gameLoop(time) {
 // Start
 initTerrain();
 requestAnimationFrame(gameLoop);
+
+// Debug Command Input
+const debugInput = document.getElementById('debug-input');
+const debugSendBtn = document.getElementById('debug-send-btn');
+
+function sendDebugCommand() {
+    if (!debugInput) return;
+    const cmd = debugInput.value.trim();
+    if (cmd) {
+        safeSend({ type: 'CHAT_COMMAND', payload: cmd });
+        debugInput.value = '';
+    }
+}
+
+if (debugSendBtn) {
+    debugSendBtn.addEventListener('click', sendDebugCommand);
+}
+if (debugInput) {
+    debugInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            sendDebugCommand();
+        }
+    });
+}

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
-	_ "modernc.org/sqlite"
 	"golang.org/x/net/websocket"
+	_ "modernc.org/sqlite"
 )
 
 // Game phases
@@ -44,7 +44,7 @@ type GameState struct {
 	InputDuration int                `json:"inputDuration"` // in seconds
 	MoveDistance  int                `json:"moveDistance"`
 	Leaderboard   map[string]int     `json:"leaderboard"`
-	ActiveClients map[*websocket.Conn]bool `json:"-"`
+	Debug         bool               `json:"debug"`
 }
 
 var gameState = GameState{
@@ -53,8 +53,12 @@ var gameState = GameState{
 	InputDuration: 20,
 	MoveDistance:  100,
 	Leaderboard:   make(map[string]int),
-	ActiveClients: make(map[*websocket.Conn]bool),
 }
+
+var (
+	clientsMu     sync.RWMutex
+	activeClients = make(map[*websocket.Conn]bool)
+)
 
 var db *sql.DB
 
@@ -75,6 +79,9 @@ type WSMessage struct {
 }
 
 func loadLeaderboard() {
+	if db == nil {
+		return
+	}
 	gameState.mu.Lock()
 	defer gameState.mu.Unlock()
 
@@ -92,6 +99,9 @@ func loadLeaderboard() {
 }
 
 func incrementWin(username string) {
+	if db == nil {
+		return
+	}
 	_, err := db.Exec(`INSERT INTO leaderboard (username, wins) VALUES (?, 1) ON CONFLICT(username) DO UPDATE SET wins = wins + 1`, username)
 	if err != nil {
 		log.Println("DB error:", err)
@@ -99,38 +109,87 @@ func incrementWin(username string) {
 }
 
 func broadcast(msgType string, payload interface{}) {
-	gameState.mu.Lock()
-	defer gameState.mu.Unlock()
+	payloadCopy := payload
 
-	msg := WSMessage{Type: msgType, Payload: payload}
-	for conn := range gameState.ActiveClients {
+	if payload == &gameState {
+		gameState.mu.Lock()
+		playersCopy := make(map[string]*Player, len(gameState.Players))
+		for k, v := range gameState.Players {
+			pCopy := *v
+			playersCopy[k] = &pCopy
+		}
+		lbCopy := make(map[string]int, len(gameState.Leaderboard))
+		for k, v := range gameState.Leaderboard {
+			lbCopy[k] = v
+		}
+		stateCopy := &GameState{
+			Phase:         gameState.Phase,
+			Players:       playersCopy,
+			InputDuration: gameState.InputDuration,
+			MoveDistance:  gameState.MoveDistance,
+			Leaderboard:   lbCopy,
+			Debug:         gameState.Debug,
+		}
+		gameState.mu.Unlock()
+		payloadCopy = stateCopy
+	}
+
+	msg := WSMessage{Type: msgType, Payload: payloadCopy}
+
+	clientsMu.RLock()
+	conns := make([]*websocket.Conn, 0, len(activeClients))
+	for conn := range activeClients {
+		conns = append(conns, conn)
+	}
+	clientsMu.RUnlock()
+
+	for _, conn := range conns {
 		err := websocket.JSON.Send(conn, msg)
 		if err != nil {
 			log.Printf("Error sending to client: %v", err)
+			clientsMu.Lock()
+			delete(activeClients, conn)
+			clientsMu.Unlock()
 			_ = conn.Close()
-			delete(gameState.ActiveClients, conn)
 		}
 	}
 }
 
+var (
+	channelFlag = flag.String("channel", "", "Twitch channel to join (optional)")
+	listenAddr  = flag.String("addr", ":8080", "HTTP listen address")
+	debugMode   = flag.Bool("debug", false, "Enable debug mode with a test bot for single-player testing")
+)
+
+func getDebugUsername() string {
+	if channelFlag != nil && *channelFlag != "" {
+		return *channelFlag
+	}
+	return "Player1"
+}
+
 func handleWebSocket(ws *websocket.Conn) {
-	gameState.mu.Lock()
-	gameState.ActiveClients[ws] = true
-	gameState.mu.Unlock()
+	clientsMu.Lock()
+	activeClients[ws] = true
+	clientsMu.Unlock()
+
+	defer func() {
+		clientsMu.Lock()
+		delete(activeClients, ws)
+		clientsMu.Unlock()
+		_ = ws.Close()
+	}()
 
 	log.Println("New WebSocket client connected (Overlay)")
 
 	// Send initial state
 	broadcast("STATE_UPDATE", &gameState)
 
-	// Listen for messages from frontend (e.g. ActionPhase complete)
+	// Listen for messages from frontend
 	for {
 		var msg WSMessage
 		if err := websocket.JSON.Receive(ws, &msg); err != nil {
 			log.Println("WebSocket disconnected")
-			gameState.mu.Lock()
-			delete(gameState.ActiveClients, ws)
-			gameState.mu.Unlock()
 			break
 		}
 
@@ -180,6 +239,14 @@ func handleWebSocket(ws *websocket.Conn) {
 					}()
 				}
 			}
+		case "CHAT_COMMAND":
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				var cmdStr string
+				if err := json.Unmarshal(payloadBytes, &cmdStr); err == nil {
+					processCommand(getDebugUsername(), cmdStr, nil)
+				}
+			}
 		}
 	}
 }
@@ -199,6 +266,25 @@ func startInputPhase() {
 	}
 	inputCancel = make(chan struct{})
 	cancelChan := inputCancel
+
+	// In debug mode, auto-ready the TargetBot after 1s so single player can test
+	if gameState.Debug {
+		if bot, exists := gameState.Players["TargetBot"]; exists && !bot.IsDead {
+			go func() {
+				time.Sleep(1 * time.Second)
+				gameState.mu.Lock()
+				if gameState.Phase == PhaseInput && !bot.IsDead {
+					bot.Fired = true
+					bot.ActionType = "LEFT"
+					checkAllPlayersFired()
+					gameState.mu.Unlock()
+					broadcast("STATE_UPDATE", &gameState)
+				} else {
+					gameState.mu.Unlock()
+				}
+			}()
+		}
+	}
 	gameState.mu.Unlock()
 
 	broadcast("STATE_UPDATE", &gameState)
@@ -249,7 +335,7 @@ func executeActionPhase() {
 		inputCancel = nil
 	}
 	gameState.Phase = PhaseAction
-	
+
 	// Apply last known values for those who didn't fire
 	for _, p := range gameState.Players {
 		if p.IsDead {
@@ -271,9 +357,114 @@ func executeActionPhase() {
 	broadcast("EXECUTE_ACTIONS", nil)
 }
 
+func processCommand(username string, msg string, emotes []*twitch.Emote) {
+	gameState.mu.Lock()
+
+	// Ensure player exists in state
+	if _, exists := gameState.Players[username]; !exists {
+		randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
+		if randIdx < 0 {
+			randIdx = -randIdx
+		}
+		defEmote := defaultEmotes[randIdx]
+		gameState.Players[username] = &Player{
+			Name:      username,
+			Emote:     defEmote.Name,
+			EmoteURL:  defEmote.URL,
+			LastAngle: 45,
+			LastPower: 50,
+		}
+		gameState.mu.Unlock()
+		broadcast("STATE_UPDATE", &gameState)
+		gameState.mu.Lock()
+	}
+
+	parts := strings.Fields(strings.TrimSpace(msg))
+	if len(parts) == 0 {
+		gameState.mu.Unlock()
+		return
+	}
+
+	rawCmd := strings.ToLower(parts[0])
+	// Support both % and ! prefixes seamlessly
+	if !strings.HasPrefix(rawCmd, "%") && !strings.HasPrefix(rawCmd, "!") {
+		gameState.mu.Unlock()
+		return
+	}
+
+	cmd := strings.TrimLeft(rawCmd, "%!")
+
+	switch cmd {
+	case "join":
+		player := gameState.Players[username]
+		if len(parts) > 1 {
+			player.Emote = parts[1]
+			if len(emotes) > 0 {
+				player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", emotes[0].ID)
+			} else {
+				for _, de := range defaultEmotes {
+					if strings.EqualFold(de.Name, parts[1]) {
+						player.EmoteURL = de.URL
+						break
+					}
+				}
+			}
+		}
+		if player.EmoteURL == "" {
+			randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
+			if randIdx < 0 {
+				randIdx = -randIdx
+			}
+			player.Emote = defaultEmotes[randIdx].Name
+			player.EmoteURL = defaultEmotes[randIdx].URL
+		}
+		gameState.mu.Unlock()
+		broadcast("STATE_UPDATE", &gameState)
+		return
+
+	case "startgame":
+		if gameState.Phase == PhaseIdle {
+			gameState.mu.Unlock()
+			startInputPhase()
+			return
+		}
+
+	case "fire", "left", "right":
+		if gameState.Phase == PhaseInput {
+			player := gameState.Players[username]
+			if cmd == "fire" {
+				if len(parts) >= 3 {
+					var angle, power int
+					_, _ = fmt.Sscanf(parts[1], "%d", &angle)
+					_, _ = fmt.Sscanf(parts[2], "%d", &power)
+
+					player.Angle = angle
+					player.Power = power
+					player.LastAngle = angle
+					player.LastPower = power
+				} else {
+					player.Angle = player.LastAngle
+					player.Power = player.LastPower
+				}
+				player.ActionType = "FIRE"
+				player.Fired = true
+			} else {
+				player.ActionType = strings.ToUpper(cmd)
+				player.Fired = true
+			}
+
+			checkAllPlayersFired()
+			gameState.mu.Unlock()
+			broadcast("PLAYER_LOCKED", username)
+			broadcast("STATE_UPDATE", &gameState)
+			return
+		}
+	}
+
+	gameState.mu.Unlock()
+}
+
 func main() {
-	channelName := flag.String("channel", "mrpou", "Twitch channel to join")
-	listenAddr := flag.String("addr", ":8080", "HTTP listen address")
 	flag.Parse()
 
 	var err error
@@ -292,118 +483,55 @@ func main() {
 	// Load leaderboard
 	loadLeaderboard()
 
-	// Setup Twitch Client
-	client := twitch.NewAnonymousClient()
-
-	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		msg := strings.TrimSpace(message.Message)
-		username := message.User.Name
-
+	if *debugMode {
+		localPlayer := getDebugUsername()
 		gameState.mu.Lock()
-		defer gameState.mu.Unlock()
-
-		// Idle roaming: Any active chatter is tracked, optionally with emote
-		if _, exists := gameState.Players[username]; !exists {
-			randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
-			if randIdx < 0 {
-				randIdx = -randIdx
-			}
-			defEmote := defaultEmotes[randIdx]
-			
-			gameState.Players[username] = &Player{
-				Name:      username,
-				Emote:     defEmote.Name,
-				EmoteURL:  defEmote.URL,
-				LastAngle: 45,
-				LastPower: 50,
-			}
-			// Let frontend know a new player is roaming
-			go broadcast("STATE_UPDATE", &gameState)
+		gameState.Debug = true
+		gameState.Players[localPlayer] = &Player{
+			Name:      localPlayer,
+			Emote:     "Kappa",
+			EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0",
+			LastAngle: 45,
+			LastPower: 50,
 		}
+		gameState.Players["TargetBot"] = &Player{
+			Name:      "TargetBot",
+			Emote:     "PogChamp",
+			EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/2.0",
+			LastAngle: 135,
+			LastPower: 50,
+		}
+		gameState.mu.Unlock()
+		log.Printf("Debug mode enabled: spawned %s and TargetBot", localPlayer)
+	}
 
-		parts := strings.Split(msg, " ")
-		cmd := strings.ToLower(parts[0])
-
-		if cmd == "!join" {
-			player := gameState.Players[username]
-			if len(parts) > 1 {
-				player.Emote = parts[1]
-				if len(message.Emotes) > 0 {
-					player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", message.Emotes[0].ID)
-				} else {
-					for _, de := range defaultEmotes {
-						if strings.EqualFold(de.Name, parts[1]) {
-							player.EmoteURL = de.URL
-							break
-						}
-					}
-				}
+	// Setup Twitch Client only if channel flag is provided
+	if *channelFlag != "" {
+		client := twitch.NewAnonymousClient()
+		client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+			processCommand(message.User.Name, message.Message, message.Emotes)
+		})
+		client.Join(*channelFlag)
+		go func() {
+			log.Printf("Connecting to Twitch channel: %s", *channelFlag)
+			err := client.Connect()
+			if err != nil {
+				log.Fatalf("Twitch client error: %v", err)
 			}
-			if player.EmoteURL == "" {
-				randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
-				if randIdx < 0 {
-					randIdx = -randIdx
-				}
-				player.Emote = defaultEmotes[randIdx].Name
-				player.EmoteURL = defaultEmotes[randIdx].URL
-			}
-			go broadcast("STATE_UPDATE", &gameState)
-		}
+		}()
+	} else {
+		log.Println("No Twitch channel specified; running in local overlay mode (Twitch chat disabled)")
+	}
 
-		if cmd == "!startgame" && gameState.Phase == PhaseIdle {
-			// Streamer/mod starting game
-			go startInputPhase()
-		}
-
-		if (cmd == "!fire" || cmd == "!left" || cmd == "!right") && gameState.Phase == PhaseInput {
-			player := gameState.Players[username]
-			if cmd == "!fire" {
-				if len(parts) >= 3 {
-					var angle, power int
-					_, _ = fmt.Sscanf(parts[1], "%d", &angle)
-					_, _ = fmt.Sscanf(parts[2], "%d", &power)
-					
-					player.Angle = angle
-					player.Power = power
-					player.LastAngle = angle
-					player.LastPower = power
-				} else {
-					// Use last known config
-					player.Angle = player.LastAngle
-					player.Power = player.LastPower
-				}
-				
-				player.ActionType = "FIRE"
-				player.Fired = true
-				
-				go broadcast("PLAYER_LOCKED", username)
-				go broadcast("STATE_UPDATE", &gameState)
-			} else {
-				// Movement commands
-				player.ActionType = strings.ToUpper(cmd[1:])
-				player.Fired = true
-				
-				go broadcast("PLAYER_LOCKED", username)
-				go broadcast("STATE_UPDATE", &gameState)
-			}
-
-			checkAllPlayersFired()
-		}
-	})
-
-	client.Join(*channelName)
-
-	go func() {
-		log.Printf("Connecting to Twitch channel: %s", *channelName)
-		err := client.Connect()
-		if err != nil {
-			log.Fatalf("Twitch client error: %v", err)
-		}
-	}()
-
-	// Setup HTTP server
+	// Setup WebSocket and HTTP server with no-cache headers for overlay assets
 	http.Handle("/ws", websocket.Handler(handleWebSocket))
-	http.Handle("/", http.FileServer(http.Dir("./public")))
+	fs := http.FileServer(http.Dir("./public"))
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		fs.ServeHTTP(w, r)
+	})
 
 	log.Printf("Server starting on %s", *listenAddr)
 	if err := http.ListenAndServe(*listenAddr, nil); err != nil {
