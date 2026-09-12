@@ -50,6 +50,10 @@ func main() {
 	loadLeaderboard()
 	loadSettings()
 
+	gameState.mu.Lock()
+	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
+	gameState.mu.Unlock()
+
 	if *bouncyFlag {
 		gameState.mu.Lock()
 		gameState.BouncyWalls = true

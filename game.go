@@ -20,10 +20,12 @@ var gameState = GameState{
 	Prefix:        "%",
 	PhysicsSpeed:  0.5,
 	IdleMessage:   true,
+	TerrainMin:    20,
+	TerrainMax:    75,
 }
 
 func init() {
-	gameState.Terrain = generateTerrain()
+	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 }
 
 func resetMatchState() {
@@ -33,7 +35,7 @@ func resetMatchState() {
 		return
 	}
 	gameState.Phase = phaseIdle
-	gameState.Terrain = generateTerrain()
+	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 
 	// Revive all players for next game and reposition
 	for name, p := range gameState.Players {
@@ -53,6 +55,7 @@ func resetMatchState() {
 	}
 	gameState.mu.Unlock()
 
+	clearAppliedCraters()
 	broadcast(msgStateUpdate, &gameState)
 	broadcast(msgResetTerrain, nil)
 	triggerAutoRound()
@@ -119,6 +122,7 @@ func startInputPhase() {
 
 	gameState.mu.Lock()
 	gameState.Phase = phaseInput
+	gameState.RoundID++
 	// Reset fired status and action for all players, ensuring valid terrain coordinates
 	for _, p := range gameState.Players {
 		p.Fired = false
@@ -414,6 +418,60 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		saveSetting("bouncy_walls", dbVal)
 		broadcast(msgStateUpdate, &gameState)
 		return
+
+	case "terrain":
+		if len(parts) > 1 {
+			arg1 := strings.ToLower(parts[1])
+			switch {
+			case arg1 == "reset" || arg1 == "default":
+				gameState.TerrainMin = 20
+				gameState.TerrainMax = 75
+			case len(parts) >= 3:
+				var minVal, maxVal int
+				clean1 := strings.TrimSuffix(parts[1], "%")
+				clean2 := strings.TrimSuffix(parts[2], "%")
+				_, err1 := fmt.Sscanf(clean1, "%d", &minVal)
+				_, err2 := fmt.Sscanf(clean2, "%d", &maxVal)
+				if err1 != nil || err2 != nil {
+					gameState.mu.Unlock()
+					return
+				}
+				if minVal < 10 {
+					minVal = 10
+				}
+				if maxVal > 90 {
+					maxVal = 90
+				}
+				if minVal > maxVal-10 {
+					gameState.mu.Unlock()
+					return
+				}
+				gameState.TerrainMin = minVal
+				gameState.TerrainMax = maxVal
+			default:
+				gameState.mu.Unlock()
+				return
+			}
+
+			tMin := gameState.TerrainMin
+			tMax := gameState.TerrainMax
+			saveSetting("terrain_min", strconv.Itoa(tMin))
+			saveSetting("terrain_max", strconv.Itoa(tMax))
+
+			if gameState.Phase == phaseIdle {
+				gameState.Terrain = generateTerrain(tMin, tMax)
+				for _, p := range gameState.Players {
+					p.Y = getTerrainHeight(gameState.Terrain, p.X)
+				}
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
+				broadcast(msgResetTerrain, nil)
+			} else {
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
+			}
+			return
+		}
 
 	case "join":
 		player := gameState.Players[username]

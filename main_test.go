@@ -30,7 +30,9 @@ func resetGameStateForTest() {
 	gameState.AutoRound = 0
 	gameState.IdleMessage = true
 	gameState.BouncyWalls = false
-	gameState.Terrain = generateTerrain()
+	gameState.TerrainMin = 20
+	gameState.TerrainMax = 75
+	gameState.Terrain = generateTerrain(20, 75)
 
 	cancelAutoRoundTimer()
 
@@ -435,11 +437,12 @@ func TestSettingsPersistence(t *testing.T) {
 	processCommand("Admin", "!autoround -1", nil)
 	processCommand("Admin", "!idlemessage off", nil)
 	processCommand("Admin", "!bouncywalls on", nil)
+	processCommand("Admin", "!terrain 15 45", nil)
 
 	// Reset in-memory gameState
 	resetGameStateForTest()
 	gameState.mu.Lock()
-	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage || gameState.BouncyWalls {
+	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage || gameState.BouncyWalls || gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
 		gameState.mu.Unlock()
 		t.Fatalf("expected reset state")
 	}
@@ -466,6 +469,9 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if !gameState.BouncyWalls {
 		t.Errorf("expected loaded BouncyWalls to be true")
+	}
+	if gameState.TerrainMin != 15 || gameState.TerrainMax != 45 {
+		t.Errorf("expected loaded TerrainMin=15, TerrainMax=45; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
 	}
 	gameState.mu.Unlock()
 }
@@ -663,14 +669,20 @@ func TestBouncyWallsConfiguration(t *testing.T) {
 }
 
 func TestGenerateTerrain(t *testing.T) {
-	terrain := generateTerrain()
+	terrain := generateTerrain(20, 75)
 	if len(terrain) != defaultTerrainWidth {
 		t.Fatalf("expected terrain length %d, got %d", defaultTerrainWidth, len(terrain))
 	}
 
+	// In canvas space:
+	// maxPct (75%) corresponds to minY (highest point toward top of screen)
+	// minPct (20%) corresponds to maxY (lowest point toward bottom of screen)
+	minY := float64(defaultTerrainHeight) * (1.0 - 0.75)
+	maxY := float64(defaultTerrainHeight) * (1.0 - 0.20)
+
 	for i, y := range terrain {
-		if y < 100 || y > float64(defaultTerrainHeight)-50 {
-			t.Errorf("terrain at index %d out of expected vertical bounds: %f", i, y)
+		if y < minY || y > maxY {
+			t.Errorf("terrain at index %d out of expected vertical bounds [%f, %f]: %f", i, minY, maxY, y)
 		}
 		if i > 0 {
 			diff := math.Abs(terrain[i] - terrain[i-1])
@@ -679,10 +691,20 @@ func TestGenerateTerrain(t *testing.T) {
 			}
 		}
 	}
+
+	// Test custom constrained bounds (e.g. bottom 10% to 30% of screen)
+	constrained := generateTerrain(10, 30)
+	cMinY := float64(defaultTerrainHeight) * (1.0 - 0.30)
+	cMaxY := float64(defaultTerrainHeight) * (1.0 - 0.10)
+	for i, y := range constrained {
+		if y < cMinY || y > cMaxY {
+			t.Errorf("constrained terrain at index %d out of bounds [%f, %f]: %f", i, cMinY, cMaxY, y)
+		}
+	}
 }
 
 func TestGetTerrainHeight(t *testing.T) {
-	terrain := generateTerrain()
+	terrain := generateTerrain(20, 75)
 
 	// Normal lookup
 	h := getTerrainHeight(terrain, 500)
@@ -778,7 +800,77 @@ func TestTerrainStateSync(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
+func TestTerrainCommand(t *testing.T) {
+	resetGameStateForTest()
 
+	// Default values
+	gameState.mu.Lock()
+	if gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
+		t.Errorf("expected default TerrainMin=20, TerrainMax=75; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
 
+	// %terrain 30 70
+	processCommand("Admin", "%terrain 30 70", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainMin != 30 || gameState.TerrainMax != 70 {
+		t.Errorf("expected TerrainMin=30, TerrainMax=70; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
 
+	// %terrain with percent signs: %terrain 40% 75%
+	processCommand("Admin", "%terrain 40% 75%", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainMin != 40 || gameState.TerrainMax != 75 {
+		t.Errorf("expected TerrainMin=40, TerrainMax=75; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
 
+	// Invalid range: min > max-10 should be rejected
+	processCommand("Admin", "%terrain 80 30", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainMin != 40 || gameState.TerrainMax != 75 {
+		t.Errorf("expected unchanged bounds after invalid command; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
+
+	// %terrain reset
+	processCommand("Admin", "%terrain reset", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
+		t.Errorf("expected reset to 20 and 75; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestCraterDeduplication(t *testing.T) {
+	clearAppliedCraters()
+
+	shotID := "1_Player1"
+
+	appliedCratersMu.Lock()
+	if appliedCraters[shotID] {
+		t.Fatalf("expected crater %s to not be applied yet", shotID)
+	}
+	appliedCraters[shotID] = true
+	appliedCratersMu.Unlock()
+
+	// Second check: should report already applied
+	appliedCratersMu.Lock()
+	isApplied := appliedCraters[shotID]
+	appliedCratersMu.Unlock()
+
+	if !isApplied {
+		t.Errorf("expected crater %s to be marked as applied", shotID)
+	}
+
+	// Clearing craters
+	clearAppliedCraters()
+	appliedCratersMu.Lock()
+	afterClear := appliedCraters[shotID]
+	appliedCratersMu.Unlock()
+
+	if afterClear {
+		t.Errorf("expected crater %s to be cleared after clearAppliedCraters", shotID)
+	}
+}
