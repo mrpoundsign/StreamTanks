@@ -58,6 +58,7 @@ export interface Player {
   moveTarget?: number;
   speedMultiplier?: number;
   hasBounced?: boolean;
+  lastActiveRound?: number;
 }
 
 export interface GameState {
@@ -106,6 +107,11 @@ export interface CraterPayload {
   x: number;
   y: number;
   radius: number;
+}
+
+export interface PlayerDiedPayload {
+  victim: string;
+  killer?: string;
 }
 
 export interface WSMessage<T = unknown> {

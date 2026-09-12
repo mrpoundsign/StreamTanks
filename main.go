@@ -71,18 +71,20 @@ func main() {
 			Emote:     "Kappa",
 			EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0",
 			LastAngle: 45,
-			LastPower: 50,
-			X:         p1X,
-			Y:         getTerrainHeight(gameState.Terrain, p1X),
+			LastPower:       50,
+			X:               p1X,
+			Y:               getTerrainHeight(gameState.Terrain, p1X),
+			LastActiveRound: gameState.RoundID,
 		}
 		gameState.Players["TargetBot"] = &Player{
-			Name:      "TargetBot",
-			Emote:     "PogChamp",
-			EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/2.0",
-			LastAngle: 135,
-			LastPower: 50,
-			X:         botX,
-			Y:         getTerrainHeight(gameState.Terrain, botX),
+			Name:            "TargetBot",
+			Emote:           "PogChamp",
+			EmoteURL:        "https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/2.0",
+			LastAngle:       135,
+			LastPower:       50,
+			X:               botX,
+			Y:               getTerrainHeight(gameState.Terrain, botX),
+			LastActiveRound: gameState.RoundID,
 		}
 		gameState.mu.Unlock()
 		log.Printf("Debug mode enabled: spawned %s and TargetBot", localPlayer)
