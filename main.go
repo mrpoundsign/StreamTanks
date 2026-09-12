@@ -60,12 +60,16 @@ func main() {
 		localPlayer := getDebugUsername()
 		gameState.mu.Lock()
 		gameState.Debug = true
+		p1X := float64(defaultTerrainWidth)/2.0 - 100.0
+		botX := float64(defaultTerrainWidth)/2.0 + 100.0
 		gameState.Players[localPlayer] = &Player{
 			Name:      localPlayer,
 			Emote:     "Kappa",
 			EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0",
 			LastAngle: 45,
 			LastPower: 50,
+			X:         p1X,
+			Y:         getTerrainHeight(gameState.Terrain, p1X),
 		}
 		gameState.Players["TargetBot"] = &Player{
 			Name:      "TargetBot",
@@ -73,6 +77,8 @@ func main() {
 			EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/2.0",
 			LastAngle: 135,
 			LastPower: 50,
+			X:         botX,
+			Y:         getTerrainHeight(gameState.Terrain, botX),
 		}
 		gameState.mu.Unlock()
 		log.Printf("Debug mode enabled: spawned %s and TargetBot", localPlayer)

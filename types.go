@@ -22,6 +22,7 @@ const (
 	msgCelebrationComplete = "CELEBRATION_COMPLETE"
 	msgChatCommand         = "CHAT_COMMAND"
 	msgDebugCommand        = "DEBUG_COMMAND"
+	msgTerrainCrater       = "TERRAIN_CRATER"
 )
 
 // Player actions
@@ -33,16 +34,18 @@ const (
 
 // Player models an individual artillery tank in the game
 type Player struct {
-	Name       string `json:"name"`
-	Emote      string `json:"emote"`
-	EmoteURL   string `json:"emoteUrl"`
-	LastAngle  int    `json:"lastAngle"`
-	LastPower  int    `json:"lastPower"`
-	ActionType string `json:"actionType"`
-	Fired      bool   `json:"fired"`
-	Angle      int    `json:"angle"`
-	Power      int    `json:"power"`
-	IsDead     bool   `json:"isDead"`
+	Name       string  `json:"name"`
+	Emote      string  `json:"emote"`
+	EmoteURL   string  `json:"emoteUrl"`
+	LastAngle  int     `json:"lastAngle"`
+	LastPower  int     `json:"lastPower"`
+	ActionType string  `json:"actionType"`
+	Fired      bool    `json:"fired"`
+	Angle      int     `json:"angle"`
+	Power      int     `json:"power"`
+	IsDead     bool    `json:"isDead"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
 }
 
 // GameState holds all synchronized state for active players, phases, and settings
@@ -60,6 +63,14 @@ type GameState struct {
 	AutoRound     int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
 	IdleMessage   bool               `json:"idleMessage"`
 	BouncyWalls   bool               `json:"bouncyWalls"`
+	Terrain       []float64          `json:"terrain"`
+}
+
+// CraterPayload carries crater coordinates and radius for terrain deformation
+type CraterPayload struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Radius float64 `json:"radius"`
 }
 
 // WSMessage is the generic envelope sent over WebSocket

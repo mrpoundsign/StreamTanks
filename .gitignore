@@ -5,3 +5,4 @@ leaderboard.json
 dist/
 node_modules/
 *.map
+*~

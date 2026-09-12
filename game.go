@@ -22,6 +22,42 @@ var gameState = GameState{
 	IdleMessage:   true,
 }
 
+func init() {
+	gameState.Terrain = generateTerrain()
+}
+
+func resetMatchState() {
+	gameState.mu.Lock()
+	if gameState.Phase != phaseCelebration {
+		gameState.mu.Unlock()
+		return
+	}
+	gameState.Phase = phaseIdle
+	gameState.Terrain = generateTerrain()
+
+	// Revive all players for next game and reposition
+	for name, p := range gameState.Players {
+		p.IsDead = false
+		p.Fired = false
+		p.ActionType = ""
+		if gameState.Debug {
+			if name == "TargetBot" {
+				p.X = float64(defaultTerrainWidth)/2.0 + 100.0
+			} else {
+				p.X = float64(defaultTerrainWidth)/2.0 - 100.0
+			}
+		} else {
+			p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+		}
+		p.Y = getTerrainHeight(gameState.Terrain, p.X)
+	}
+	gameState.mu.Unlock()
+
+	broadcast(msgStateUpdate, &gameState)
+	broadcast(msgResetTerrain, nil)
+	triggerAutoRound()
+}
+
 var inputCancel chan struct{}
 var (
 	autoRoundTimerMu sync.Mutex
@@ -83,10 +119,14 @@ func startInputPhase() {
 
 	gameState.mu.Lock()
 	gameState.Phase = phaseInput
-	// Reset fired status and action for all players
+	// Reset fired status and action for all players, ensuring valid terrain coordinates
 	for _, p := range gameState.Players {
 		p.Fired = false
 		p.ActionType = ""
+		if p.X <= 0 {
+			p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+		}
+		p.Y = getTerrainHeight(gameState.Terrain, p.X)
 	}
 	if inputCancel != nil {
 		close(inputCancel)
@@ -195,12 +235,16 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 	if _, exists := gameState.Players[username]; !exists {
 		randIdx := rand.IntN(len(defaultEmotes))
 		defEmote := defaultEmotes[randIdx]
+		spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+		spawnY := getTerrainHeight(gameState.Terrain, spawnX)
 		gameState.Players[username] = &Player{
 			Name:      username,
 			Emote:     defEmote.Name,
 			EmoteURL:  defEmote.URL,
 			LastAngle: 45,
 			LastPower: 50,
+			X:         spawnX,
+			Y:         spawnY,
 		}
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
