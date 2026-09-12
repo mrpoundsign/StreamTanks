@@ -60,6 +60,7 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 ### Streamer / Mod Configuration Commands:
 - `%prefix <str>`: Sets the command prefix (supports multi-character prefixes).
 - `%idlemessage on|off`: Toggles visibility of the idle waiting message and leaderboard.
+- `%bouncywalls on|off`: Toggles bouncy screen walls (+10% bullet speed, +50% tank speed).
 - `%roundtime <seconds>`: Configures the input phase timer duration (e.g. `%roundtime 15`).
 - `%autoround <minutes>`: Configures automated round starts (`-1` for immediate, `> 0` for scheduled minutes, `0` or `off` to disable).
 
@@ -69,9 +70,9 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 
 1. **Running the Server**:
    ```bash
-   go run main.go -channel <channel_name> -addr :8080
+   go run main.go -channel <channel_name> -addr :8102
    ```
 2. **Overlay Access**:
-   Open `http://localhost:8080` in a browser or add as an OBS Browser Source (Width: 1920, Height: 1080).
+   Open `http://localhost:8102` in a browser or add as an OBS Browser Source (Width: 1920, Height: 1080).
 3. **Connection Resilience**:
    The frontend automatically detects server disconnects, hides the overlay transparently, polls the server, and triggers a full page reload when the server comes back online.

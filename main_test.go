@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ func resetGameStateForTest() {
 	gameState.ShowConfig = false
 	gameState.AutoRound = 0
 	gameState.IdleMessage = true
+	gameState.BouncyWalls = false
 
 	cancelAutoRoundTimer()
 
@@ -430,11 +432,12 @@ func TestSettingsPersistence(t *testing.T) {
 	processCommand("Admin", "!commandtime 25", nil)
 	processCommand("Admin", "!autoround -1", nil)
 	processCommand("Admin", "!idlemessage off", nil)
+	processCommand("Admin", "!bouncywalls on", nil)
 
 	// Reset in-memory gameState
 	resetGameStateForTest()
 	gameState.mu.Lock()
-	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage {
+	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage || gameState.BouncyWalls {
 		gameState.mu.Unlock()
 		t.Fatalf("expected reset state")
 	}
@@ -458,6 +461,9 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if gameState.IdleMessage {
 		t.Errorf("expected loaded IdleMessage to be false")
+	}
+	if !gameState.BouncyWalls {
+		t.Errorf("expected loaded BouncyWalls to be true")
 	}
 	gameState.mu.Unlock()
 }
@@ -555,5 +561,105 @@ func TestIdleMessageConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestEmbeddedPublicAssets(t *testing.T) {
+	// Verify embedded public files can be read
+	subFS, err := fs.Sub(embeddedPublic, "public")
+	if err != nil {
+		t.Fatalf("failed to open embedded subFS: %v", err)
+	}
+
+	requiredFiles := []string{"index.html", "game.js", "style.css"}
+	for _, fname := range requiredFiles {
+		content, err := fs.ReadFile(subFS, fname)
+		if err != nil {
+			t.Errorf("expected embedded asset %s to be readable, got error: %v", fname, err)
+		}
+		if len(content) == 0 {
+			t.Errorf("expected embedded asset %s to not be empty", fname)
+		}
+	}
+}
+
+func TestInactivePlayerRandomDirection(t *testing.T) {
+	leftCount := 0
+	rightCount := 0
+
+	for trial := 0; trial < 100; trial++ {
+		resetGameStateForTest()
+
+		gameState.mu.Lock()
+		gameState.Phase = PhaseInput
+		gameState.Players["P1"] = &Player{Name: "P1", Fired: false, ActionType: ""}
+		gameState.mu.Unlock()
+
+		executeActionPhase()
+
+		gameState.mu.Lock()
+		p1 := gameState.Players["P1"]
+		if !p1.Fired {
+			t.Errorf("expected P1 to be marked fired after action phase")
+		}
+		if p1.ActionType != "LEFT" && p1.ActionType != "RIGHT" {
+			t.Errorf("expected ActionType to be LEFT or RIGHT, got %s", p1.ActionType)
+		}
+		switch p1.ActionType {
+		case "LEFT":
+			leftCount++
+		case "RIGHT":
+			rightCount++
+		}
+		gameState.mu.Unlock()
+	}
+
+	if leftCount == 0 || rightCount == 0 {
+		t.Errorf("expected both LEFT and RIGHT to be selected across 100 trials, got left=%d, right=%d", leftCount, rightCount)
+	}
+}
+
+func TestBouncyWallsConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	// Default is false
+	gameState.mu.Lock()
+	if gameState.BouncyWalls {
+		t.Errorf("expected default BouncyWalls to be false")
+	}
+	gameState.mu.Unlock()
+
+	// %bouncywalls on
+	processCommand("Admin", "%bouncywalls on", nil)
+	gameState.mu.Lock()
+	if !gameState.BouncyWalls {
+		t.Errorf("expected BouncyWalls true after %%bouncywalls on")
+	}
+	gameState.mu.Unlock()
+
+	// %bouncywalls off
+	processCommand("Admin", "%bouncywalls off", nil)
+	gameState.mu.Lock()
+	if gameState.BouncyWalls {
+		t.Errorf("expected BouncyWalls false after %%bouncywalls off")
+	}
+	gameState.mu.Unlock()
+
+	// %bouncy toggle
+	processCommand("Admin", "%bouncy", nil)
+	gameState.mu.Lock()
+	if !gameState.BouncyWalls {
+		t.Errorf("expected BouncyWalls true after %%bouncy toggle")
+	}
+	gameState.mu.Unlock()
+
+	// %bouncy toggle off
+	processCommand("Admin", "%bouncy", nil)
+	gameState.mu.Lock()
+	if gameState.BouncyWalls {
+		t.Errorf("expected BouncyWalls false after second %%bouncy toggle")
+	}
+	gameState.mu.Unlock()
+}
+
+
 
 

@@ -2,11 +2,15 @@ package main
 
 import (
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
+	"math/rand/v2"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +19,16 @@ import (
 	"github.com/gempir/go-twitch-irc/v4"
 	"golang.org/x/net/websocket"
 	_ "modernc.org/sqlite"
+)
+
+//go:embed public/*
+var embeddedPublic embed.FS
+
+// Build version info injected by GoReleaser ldflags
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 // Game phases
@@ -51,6 +65,7 @@ type GameState struct {
 	ShowConfig    bool               `json:"showConfig"`
 	AutoRound     int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
 	IdleMessage   bool               `json:"idleMessage"`
+	BouncyWalls   bool               `json:"bouncyWalls"`
 }
 
 var gameState = GameState{
@@ -157,6 +172,13 @@ func loadSettings() {
 					case "1", "true", "on":
 						gameState.IdleMessage = true
 					}
+				case "bouncy_walls":
+					switch v {
+					case "0", "false", "off":
+						gameState.BouncyWalls = false
+					case "1", "true", "on":
+						gameState.BouncyWalls = true
+					}
 				}
 			}
 		}
@@ -199,6 +221,7 @@ func broadcast(msgType string, payload interface{}) {
 			ShowConfig:    gameState.ShowConfig,
 			AutoRound:     gameState.AutoRound,
 			IdleMessage:   gameState.IdleMessage,
+			BouncyWalls:   gameState.BouncyWalls,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -227,8 +250,9 @@ func broadcast(msgType string, payload interface{}) {
 
 var (
 	channelFlag = flag.String("channel", "", "Twitch channel to join (optional)")
-	listenAddr  = flag.String("addr", ":8080", "HTTP listen address")
+	listenAddr  = flag.String("addr", ":8102", "HTTP listen address")
 	debugMode   = flag.Bool("debug", false, "Enable debug mode with a test bot for single-player testing")
+	bouncyFlag  = flag.Bool("bouncy", false, "Enable bouncy walls for bullets (+10% speed) and tanks (+50% speed)")
 )
 
 func getDebugUsername() string {
@@ -423,7 +447,11 @@ func startInputPhase() {
 				gameState.mu.Lock()
 				if gameState.Phase == PhaseInput && !bot.IsDead {
 					bot.Fired = true
-					bot.ActionType = "LEFT"
+					if rand.IntN(2) == 0 {
+						bot.ActionType = "LEFT"
+					} else {
+						bot.ActionType = "RIGHT"
+					}
 					checkAllPlayersFired()
 					gameState.mu.Unlock()
 					broadcast("STATE_UPDATE", &gameState)
@@ -490,7 +518,7 @@ func executeActionPhase() {
 			continue
 		}
 		if !p.Fired || p.ActionType == "" {
-			if time.Now().UnixNano()%2 == 0 {
+			if rand.IntN(2) == 0 {
 				p.ActionType = "LEFT"
 			} else {
 				p.ActionType = "RIGHT"
@@ -510,10 +538,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 
 	// Ensure player exists in state
 	if _, exists := gameState.Players[username]; !exists {
-		randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
-		if randIdx < 0 {
-			randIdx = -randIdx
-		}
+		randIdx := rand.IntN(len(defaultEmotes))
 		defEmote := defaultEmotes[randIdx]
 		gameState.Players[username] = &Player{
 			Name:      username,
@@ -668,6 +693,29 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		broadcast("STATE_UPDATE", &gameState)
 		return
 
+	case "bouncywalls", "bouncy":
+		var val bool
+		if len(parts) > 1 {
+			arg := strings.ToLower(parts[1])
+			if arg == "off" || arg == "false" || arg == "0" {
+				val = false
+			} else {
+				val = true
+			}
+		} else {
+			val = !gameState.BouncyWalls
+		}
+
+		gameState.BouncyWalls = val
+		gameState.mu.Unlock()
+		dbVal := "0"
+		if val {
+			dbVal = "1"
+		}
+		saveSetting("bouncy_walls", dbVal)
+		broadcast("STATE_UPDATE", &gameState)
+		return
+
 	case "join":
 		player := gameState.Players[username]
 		if len(parts) > 1 {
@@ -684,10 +732,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			}
 		}
 		if player.EmoteURL == "" {
-			randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
-			if randIdx < 0 {
-				randIdx = -randIdx
-			}
+			randIdx := rand.IntN(len(defaultEmotes))
 			player.Emote = defaultEmotes[randIdx].Name
 			player.EmoteURL = defaultEmotes[randIdx].URL
 		}
@@ -740,6 +785,8 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 func main() {
 	flag.Parse()
 
+	log.Printf("Starting StreamTanks %s (commit: %s, built: %s)", version, commit, date)
+
 	var err error
 	db, err = sql.Open("sqlite", "streamtanks.db")
 	if err != nil {
@@ -762,6 +809,12 @@ func main() {
 	// Load leaderboard and settings from DB
 	loadLeaderboard()
 	loadSettings()
+
+	if *bouncyFlag {
+		gameState.mu.Lock()
+		gameState.BouncyWalls = true
+		gameState.mu.Unlock()
+	}
 
 	if *debugMode {
 		localPlayer := getDebugUsername()
@@ -805,12 +858,25 @@ func main() {
 
 	// Setup WebSocket and HTTP server with no-cache headers for overlay assets
 	http.Handle("/ws", websocket.Handler(handleWebSocket))
-	fs := http.FileServer(http.Dir("./public"))
+
+	// Prefer local ./public directory if present (for development), fallback to embedded assets
+	var fileSystem http.FileSystem
+	if _, err := os.Stat("./public"); err == nil {
+		fileSystem = http.Dir("./public")
+	} else {
+		subFS, err := fs.Sub(embeddedPublic, "public")
+		if err != nil {
+			log.Fatalf("Failed to initialize embedded filesystem: %v", err)
+		}
+		fileSystem = http.FS(subFS)
+	}
+
+	fileHandler := http.FileServer(fileSystem)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
-		fs.ServeHTTP(w, r)
+		fileHandler.ServeHTTP(w, r)
 	})
 
 	log.Printf("Server starting on %s", *listenAddr)

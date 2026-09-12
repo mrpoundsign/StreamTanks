@@ -357,6 +357,11 @@ function renderConfigModal(prefix) {
         ? `<span class="config-val badge-on">On</span>` 
         : `<span class="config-val badge-off">Off</span>`;
 
+    const bouncyVal = !!(stateRef && stateRef.bouncyWalls);
+    const bouncyDisplay = bouncyVal 
+        ? `<span class="config-val badge-on">On (+10% bullet, +50% tank)</span>` 
+        : `<span class="config-val badge-off">Off</span>`;
+
     const rows = [
         {
             label: "Command Prefix",
@@ -382,6 +387,11 @@ function renderConfigModal(prefix) {
             label: "Idle Message",
             value: idleMessageDisplay,
             cmd: `<span class="config-cmd">${prefix}idlemessage <span class="cmd-param">&lt;on|off&gt;</span></span>`
+        },
+        {
+            label: "Bouncy Walls",
+            value: bouncyDisplay,
+            cmd: `<span class="config-cmd">${prefix}bouncywalls <span class="cmd-param">&lt;on|off&gt;</span></span>`
         }
     ];
 
@@ -477,11 +487,19 @@ function executeActions() {
         } else if (p.actionType === "LEFT") {
             p.moveTarget = p.x - (stateRef.moveDistance || 100);
             p.moving = true;
+            p.speedMultiplier = 1.0;
+            p.hasBounced = false;
         } else if (p.actionType === "RIGHT") {
             p.moveTarget = p.x + (stateRef.moveDistance || 100);
             p.moving = true;
+            p.speedMultiplier = 1.0;
+            p.hasBounced = false;
         }
     }
+}
+
+function createWallSpark(cx, cy) {
+    explosions.push({ x: cx, y: cy, radius: 0, maxRadius: 30, alpha: 1, isSpark: true });
 }
 
 function destroyTerrain(cx, cy, radius) {
@@ -533,6 +551,8 @@ function showKillMessage(msg) {
 function updatePhysics(dtScale) {
     // Player logic
     let anyMoving = false;
+    const bouncyWalls = !!(stateRef && stateRef.bouncyWalls);
+
     for (const name in players) {
         const p = players[name];
         if (p.isDead) continue;
@@ -540,26 +560,63 @@ function updatePhysics(dtScale) {
         // Execute Action Movement
         if (currentPhase === 'ACTION' && p.moving) {
             anyMoving = true;
-            const speed = 2.0 * dtScale;
+            const currentSpeed = (p.speedMultiplier || 1.0) * 2.0 * dtScale;
             if (p.actionType === "LEFT") {
-                p.x -= speed;
-                if (p.x <= p.moveTarget || p.x <= 0) p.moving = false;
+                p.x -= currentSpeed;
+                if (p.x <= 20) {
+                    if (bouncyWalls && !p.hasBounced) {
+                        p.x = 20;
+                        p.actionType = "RIGHT";
+                        p.moveTarget = p.x + (stateRef.moveDistance || 100);
+                        p.speedMultiplier = 1.5; // +50% speed boost on wall ricochet
+                        p.hasBounced = true;
+                        createWallSpark(20, p.y);
+                    } else if (p.x <= p.moveTarget || p.x <= 20) {
+                        p.moving = false;
+                        if (p.x < 20) p.x = 20;
+                    }
+                } else if (p.x <= p.moveTarget) {
+                    p.moving = false;
+                }
             } else if (p.actionType === "RIGHT") {
-                p.x += speed;
-                if (p.x >= p.moveTarget || p.x >= WIDTH) p.moving = false;
+                p.x += currentSpeed;
+                if (p.x >= WIDTH - 20) {
+                    if (bouncyWalls && !p.hasBounced) {
+                        p.x = WIDTH - 20;
+                        p.actionType = "LEFT";
+                        p.moveTarget = p.x - (stateRef.moveDistance || 100);
+                        p.speedMultiplier = 1.5; // +50% speed boost on wall ricochet
+                        p.hasBounced = true;
+                        createWallSpark(WIDTH - 20, p.y);
+                    } else if (p.x >= p.moveTarget || p.x >= WIDTH - 20) {
+                        p.moving = false;
+                        if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+                    }
+                } else if (p.x >= p.moveTarget) {
+                    p.moving = false;
+                }
             }
         }
 
         // Roaming in IDLE
         if (currentPhase === 'IDLE') {
             p.x += p.dx * dtScale;
-            if (p.x < 50 || p.x > WIDTH - 50) {
-                p.dx *= -1;
+            if (p.x < 50) {
+                p.x = 50;
+                p.dx = Math.abs(p.dx);
+            } else if (p.x > WIDTH - 50) {
+                p.x = WIDTH - 50;
+                p.dx = -Math.abs(p.dx);
             }
         }
 
-        // Falling/Ground snapping
-        const floorY = terrain[Math.floor(p.x)];
+        // Boundary clamping: ensure tanks never leave the screen boundaries [20, WIDTH - 20]
+        if (p.x < 20) p.x = 20;
+        if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+
+        // Falling/Ground snapping (safe clamped index)
+        const floorIndex = Math.min(WIDTH - 1, Math.max(0, Math.floor(p.x)));
+        const floorY = terrain[floorIndex];
         if (p.y < floorY) {
             p.y += 5.0 * dtScale; // Falling speed
             if (p.y > floorY) p.y = floorY;
@@ -587,11 +644,33 @@ function updatePhysics(dtScale) {
         let hit = false;
         
         // Out of bounds (side or bottom)
-        if (proj.x < 0 || proj.x > WIDTH || proj.y > HEIGHT) {
+        if (proj.y > HEIGHT) {
             hit = true;
-        } 
+        } else if (proj.x < 0) {
+            if (bouncyWalls) {
+                proj.x = 0;
+                proj.vx = -proj.vx * 1.1; // +10% speed boost on horizontal ricochet
+                proj.vy = proj.vy * 1.1;  // +10% speed boost on vertical
+                proj.bounces = (proj.bounces || 0) + 1;
+                createWallSpark(0, proj.y);
+                if (proj.bounces > 15) hit = true;
+            } else {
+                hit = true;
+            }
+        } else if (proj.x > WIDTH) {
+            if (bouncyWalls) {
+                proj.x = WIDTH;
+                proj.vx = -proj.vx * 1.1; // +10% speed boost on horizontal ricochet
+                proj.vy = proj.vy * 1.1;  // +10% speed boost on vertical
+                proj.bounces = (proj.bounces || 0) + 1;
+                createWallSpark(WIDTH, proj.y);
+                if (proj.bounces > 15) hit = true;
+            } else {
+                hit = true;
+            }
+        }
         // Terrain collision
-        else if (proj.y >= terrain[Math.floor(proj.x)]) {
+        else if (proj.y >= terrain[Math.min(WIDTH - 1, Math.max(0, Math.floor(proj.x)))]) {
             hit = true;
             destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS);
             checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
@@ -655,7 +734,8 @@ function updatePhysics(dtScale) {
         // Here we just end it immediately for simplicity
         let anyFalling = false;
         for (const name in players) {
-            if (!players[name].isDead && players[name].y < terrain[Math.floor(players[name].x)]) {
+            const pX = Math.min(WIDTH - 1, Math.max(0, Math.floor(players[name].x)));
+            if (!players[name].isDead && players[name].y < terrain[pX]) {
                 anyFalling = true; break;
             }
         }
@@ -871,12 +951,19 @@ function draw() {
         }
     }
 
-    // Draw Explosions
+    // Draw Explosions & Sparks
     for (const exp of explosions) {
-        ctx.strokeStyle = `rgba(255, 0, 60, ${exp.alpha})`;
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#ff003c';
-        ctx.lineWidth = 4;
+        if (exp.isSpark) {
+            ctx.strokeStyle = `rgba(0, 255, 204, ${exp.alpha})`;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00ffcc';
+            ctx.lineWidth = 3;
+        } else {
+            ctx.strokeStyle = `rgba(255, 0, 60, ${exp.alpha})`;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff003c';
+            ctx.lineWidth = 4;
+        }
         ctx.beginPath();
         ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
         ctx.stroke();
