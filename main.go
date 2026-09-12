@@ -272,6 +272,7 @@ func executeActionPhase() {
 
 func main() {
 	channelName := flag.String("channel", "mrpou", "Twitch channel to join")
+	listenAddr := flag.String("addr", ":8080", "HTTP listen address")
 	flag.Parse()
 
 	var err error
@@ -402,7 +403,6 @@ func main() {
 	http.Handle("/ws", websocket.Handler(handleWebSocket))
 	http.Handle("/", http.FileServer(http.Dir("./public")))
 
-	port := ":8080"
-	log.Printf("Server starting on http://localhost%s", port)
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Printf("Server starting on %s", *listenAddr)
+	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }
