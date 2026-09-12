@@ -80,7 +80,7 @@ func loadLeaderboard() {
 
 	rows, err := db.Query(`SELECT username, wins FROM leaderboard`)
 	if err == nil {
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var name string
 			var wins int
@@ -107,7 +107,7 @@ func broadcast(msgType string, payload interface{}) {
 		err := websocket.JSON.Send(conn, msg)
 		if err != nil {
 			log.Printf("Error sending to client: %v", err)
-			conn.Close()
+			_ = conn.Close()
 			delete(gameState.ActiveClients, conn)
 		}
 	}
@@ -121,7 +121,7 @@ func handleWebSocket(ws *websocket.Conn) {
 	log.Println("New WebSocket client connected (Overlay)")
 
 	// Send initial state
-	broadcast("STATE_UPDATE", gameState)
+	broadcast("STATE_UPDATE", &gameState)
 
 	// Listen for messages from frontend (e.g. ActionPhase complete)
 	for {
@@ -134,51 +134,52 @@ func handleWebSocket(ws *websocket.Conn) {
 			break
 		}
 
-		if msg.Type == "ACTION_COMPLETE" {
-			// Start new input phase
+		switch msg.Type {
+		case "ACTION_COMPLETE":
 			startInputPhase()
-		} else if msg.Type == "PLAYER_DIED" {
-			// A player was destroyed, remove from active players
-			payloadBytes, _ := json.Marshal(msg.Payload)
-			var deadPlayer string
-			json.Unmarshal(payloadBytes, &deadPlayer)
-
-			gameState.mu.Lock()
-			if p, exists := gameState.Players[deadPlayer]; exists {
-				p.IsDead = true
-			}
-			gameState.mu.Unlock()
-			broadcast("STATE_UPDATE", gameState)
-		} else if msg.Type == "GAME_OVER" {
-			// Payload is winner name
-			payloadBytes, _ := json.Marshal(msg.Payload)
-			var winner string
-			json.Unmarshal(payloadBytes, &winner)
-			
-			gameState.mu.Lock()
-			gameState.Phase = PhaseCelebration
-			if winner != "" {
-				gameState.Leaderboard[winner]++
-				incrementWin(winner)
-			}
-			gameState.mu.Unlock()
-			broadcast("STATE_UPDATE", gameState)
-
-			// Wait for celebration to end, then return to IDLE and reset terrain
-			go func() {
-				time.Sleep(5 * time.Second)
-				gameState.mu.Lock()
-				gameState.Phase = PhaseIdle
-				// Revive all players for the next game
-				for _, p := range gameState.Players {
-					p.IsDead = false
-					p.Fired = false
-					p.ActionType = ""
+		case "PLAYER_DIED":
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				var deadPlayer string
+				if err := json.Unmarshal(payloadBytes, &deadPlayer); err == nil {
+					gameState.mu.Lock()
+					if p, exists := gameState.Players[deadPlayer]; exists {
+						p.IsDead = true
+					}
+					gameState.mu.Unlock()
+					broadcast("STATE_UPDATE", &gameState)
 				}
-				gameState.mu.Unlock()
-				broadcast("STATE_UPDATE", gameState)
-				broadcast("RESET_TERRAIN", nil)
-			}()
+			}
+		case "GAME_OVER":
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				var winner string
+				if err := json.Unmarshal(payloadBytes, &winner); err == nil {
+					gameState.mu.Lock()
+					gameState.Phase = PhaseCelebration
+					if winner != "" {
+						gameState.Leaderboard[winner]++
+						incrementWin(winner)
+					}
+					gameState.mu.Unlock()
+					broadcast("STATE_UPDATE", &gameState)
+
+					// Wait for celebration to end, then return to IDLE and reset terrain
+					go func() {
+						time.Sleep(5 * time.Second)
+						gameState.mu.Lock()
+						gameState.Phase = PhaseIdle
+						for _, p := range gameState.Players {
+							p.IsDead = false
+							p.Fired = false
+							p.ActionType = ""
+						}
+						gameState.mu.Unlock()
+						broadcast("STATE_UPDATE", &gameState)
+						broadcast("RESET_TERRAIN", nil)
+					}()
+				}
+			}
 		}
 	}
 }
@@ -200,7 +201,7 @@ func startInputPhase() {
 	cancelChan := inputCancel
 	gameState.mu.Unlock()
 
-	broadcast("STATE_UPDATE", gameState)
+	broadcast("STATE_UPDATE", &gameState)
 
 	// Start timer for input phase
 	go func() {
@@ -266,7 +267,7 @@ func executeActionPhase() {
 	gameState.mu.Unlock()
 
 	// Send state update which tells frontend to execute the shots/moves
-	broadcast("STATE_UPDATE", gameState)
+	broadcast("STATE_UPDATE", &gameState)
 	broadcast("EXECUTE_ACTIONS", nil)
 }
 
@@ -280,12 +281,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS leaderboard (username TEXT PRIMARY KEY, wins INTEGER)`)
 	if err != nil {
+		_ = db.Close()
 		log.Fatal(err)
 	}
+	defer func() { _ = db.Close() }()
 
 	// Load leaderboard
 	loadLeaderboard()
@@ -316,7 +318,7 @@ func main() {
 				LastPower: 50,
 			}
 			// Let frontend know a new player is roaming
-			go broadcast("STATE_UPDATE", gameState)
+			go broadcast("STATE_UPDATE", &gameState)
 		}
 
 		parts := strings.Split(msg, " ")
@@ -345,7 +347,7 @@ func main() {
 				player.Emote = defaultEmotes[randIdx].Name
 				player.EmoteURL = defaultEmotes[randIdx].URL
 			}
-			go broadcast("STATE_UPDATE", gameState)
+			go broadcast("STATE_UPDATE", &gameState)
 		}
 
 		if cmd == "!startgame" && gameState.Phase == PhaseIdle {
@@ -358,8 +360,8 @@ func main() {
 			if cmd == "!fire" {
 				if len(parts) >= 3 {
 					var angle, power int
-					fmt.Sscanf(parts[1], "%d", &angle)
-					fmt.Sscanf(parts[2], "%d", &power)
+					_, _ = fmt.Sscanf(parts[1], "%d", &angle)
+					_, _ = fmt.Sscanf(parts[2], "%d", &power)
 					
 					player.Angle = angle
 					player.Power = power
@@ -375,14 +377,14 @@ func main() {
 				player.Fired = true
 				
 				go broadcast("PLAYER_LOCKED", username)
-				go broadcast("STATE_UPDATE", gameState)
+				go broadcast("STATE_UPDATE", &gameState)
 			} else {
 				// Movement commands
 				player.ActionType = strings.ToUpper(cmd[1:])
 				player.Fired = true
 				
 				go broadcast("PLAYER_LOCKED", username)
-				go broadcast("STATE_UPDATE", gameState)
+				go broadcast("STATE_UPDATE", &gameState)
 			}
 
 			checkAllPlayersFired()
@@ -404,5 +406,7 @@ func main() {
 	http.Handle("/", http.FileServer(http.Dir("./public")))
 
 	log.Printf("Server starting on %s", *listenAddr)
-	log.Fatal(http.ListenAndServe(*listenAddr, nil))
+	if err := http.ListenAndServe(*listenAddr, nil); err != nil {
+		log.Println("Server stopped:", err)
+	}
 }
