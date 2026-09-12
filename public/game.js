@@ -22,6 +22,7 @@ let lastTime = performance.now();
 let celebrationWinner = "";
 
 const avatarCache = {};
+const emoteCache = {};
 
 // Initialize terrain
 function initTerrain() {
@@ -53,11 +54,92 @@ function initTerrain() {
     }
 }
 
-// WebSocket setup
-const ws = new WebSocket(`ws://${window.location.host}/ws`);
+// WebSocket & Connection Resilience Setup
+let ws = null;
 let stateRef = null;
+let isDisconnected = false;
+let reconnectInterval = null;
+let healthCheckInterval = null;
+
+function handleDisconnect() {
+    if (isDisconnected) return;
+    isDisconnected = true;
+
+    console.log("Server disconnected or unreachable. Hiding overlay and waiting for server to return...");
+
+    // Make the entire overlay go away (transparent in OBS)
+    const container = document.getElementById('game-container');
+    if (container) {
+        container.style.display = 'none';
+    }
+    document.body.style.display = 'none';
+
+    if (healthCheckInterval) {
+        clearInterval(healthCheckInterval);
+        healthCheckInterval = null;
+    }
+
+    // Continuously retry until server is back online, then do a full reload
+    if (reconnectInterval) clearInterval(reconnectInterval);
+    reconnectInterval = setInterval(async () => {
+        try {
+            const res = await fetch(`/?nocache=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store'
+            });
+            if (res.ok) {
+                console.log("Server is back online! Performing full page reload...");
+                clearInterval(reconnectInterval);
+                const url = new URL(window.location.href);
+                url.searchParams.set('_t', Date.now().toString());
+                window.location.replace(url.toString());
+            }
+        } catch (e) {
+            // Still waiting for server to come back
+        }
+    }, 1000);
+}
+
+function safeSend(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+            ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        } catch (e) {
+            handleDisconnect();
+        }
+    }
+}
+
+try {
+    ws = new WebSocket(`ws://${window.location.host}/ws`);
+    ws.onclose = handleDisconnect;
+    ws.onerror = handleDisconnect;
+} catch (e) {
+    handleDisconnect();
+}
+
+// Periodic heartbeat to detect frozen or terminated server without TCP FIN
+healthCheckInterval = setInterval(() => {
+    if (isDisconnected) return;
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        handleDisconnect();
+        return;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    fetch(`/?ping=${Date.now()}`, { method: 'GET', cache: 'no-store', signal: controller.signal })
+        .then(res => {
+            clearTimeout(timeoutId);
+            if (!res.ok) handleDisconnect();
+        })
+        .catch(() => {
+            clearTimeout(timeoutId);
+            handleDisconnect();
+        });
+}, 3000);
 
 // Websocket Handling
+if (ws) {
 ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'STATE_UPDATE') {
@@ -80,12 +162,12 @@ ws.onmessage = (event) => {
                     dx: (Math.random() > 0.5 ? 1 : -1) * 1.5, // Roaming speed
                     ...newPlayers[name]
                 };
-                // Ensure emote is loaded (dummy loading for now, ideally fetch from Twitch)
-                if (!emoteCache[players[name].emote]) {
+                // Preload emote image for projectiles
+                const emoteUrl = players[name].emoteUrl || `https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0`;
+                if (!emoteCache[emoteUrl]) {
                     const img = new Image();
-                    // Using a placeholder image for emotes. In a real app, use Twitch Emote API.
-                    img.src = `https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0`; // Kappa placeholder
-                    emoteCache[players[name].emote] = img;
+                    img.src = emoteUrl;
+                    emoteCache[emoteUrl] = img;
                 }
             } else {
                 // Update existing player state
@@ -130,16 +212,17 @@ ws.onmessage = (event) => {
     } else if (msg.type === 'EXECUTE_ACTIONS') {
         executeActions();
     } else if (msg.type === 'PLAYER_LOCKED') {
-        initTerrain();
+        // Just play a sound or show visual feedback if desired
     } else if (msg.type === 'RESET_TERRAIN') {
         initTerrain();
     }
 };
+}
 
 function updateUI() {
     if (currentPhase === 'IDLE') {
         phaseDisplay.style.display = 'block';
-        phaseDisplay.innerText = "WAITING FOR PLAYERS... (!fire to start)";
+        phaseDisplay.innerText = "WAITING FOR PLAYERS... (!startgame to start)";
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'none';
         document.getElementById('leaderboard').style.display = 'block';
@@ -338,7 +421,7 @@ function updatePhysics(dt) {
         if (p.y >= HEIGHT) {
             p.isDead = true;
             showKillMessage(`${name} fell into the abyss!`);
-            ws.send(JSON.stringify({ type: 'PLAYER_DIED', payload: name }));
+            safeSend({ type: 'PLAYER_DIED', payload: name });
             const imgEl = document.getElementById('emote-' + name);
             if (imgEl) imgEl.style.display = 'none';
         }
@@ -420,7 +503,7 @@ function updatePhysics(dt) {
         }
         if (!anyFalling) {
             currentPhase = 'WAITING_NEXT_PHASE'; // Prevent spamming
-            ws.send(JSON.stringify({ type: 'ACTION_COMPLETE' }));
+            safeSend({ type: 'ACTION_COMPLETE' });
             
             // Check win condition
             let aliveCount = 0;
@@ -437,7 +520,7 @@ function updatePhysics(dt) {
             if (aliveCount <= 1 && totalPlayers > 1 || (totalPlayers === 1 && aliveCount === 0)) {
                  const winner = aliveCount === 1 ? aliveName : "";
                  celebrationWinner = winner;
-                 ws.send(JSON.stringify({ type: 'GAME_OVER', payload: winner }));
+                 safeSend({ type: 'GAME_OVER', payload: winner });
                  
                  const celebImg = document.getElementById('celebration-avatar');
                  celebImg.style.display = 'none';
@@ -530,7 +613,14 @@ function draw() {
     // Draw Tanks
     for (const name in players) {
         const p = players[name];
-        const imgEl = document.getElementById('emote-' + name);
+        let imgEl = document.getElementById('emote-' + name);
+        if (!imgEl && p.emoteUrl) {
+            imgEl = document.createElement('img');
+            imgEl.id = 'emote-' + name;
+            imgEl.className = 'tank-emote';
+            imgEl.src = p.emoteUrl;
+            emotesLayer.appendChild(imgEl);
+        }
         if (p.isDead) {
             if (imgEl) imgEl.style.display = 'none';
             continue;
@@ -636,6 +726,7 @@ function draw() {
 }
 
 function gameLoop(time) {
+    if (isDisconnected) return;
     const dt = time - lastTime;
     lastTime = time;
 

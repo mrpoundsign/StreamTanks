@@ -282,11 +282,28 @@ func main() {
 		parts := strings.Split(msg, " ")
 		cmd := strings.ToLower(parts[0])
 
-		if cmd == "!join" && len(parts) > 1 {
+		if cmd == "!join" {
 			player := gameState.Players[username]
-			player.Emote = parts[1]
-			if len(message.Emotes) > 0 {
-				player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", message.Emotes[0].ID)
+			if len(parts) > 1 {
+				player.Emote = parts[1]
+				if len(message.Emotes) > 0 {
+					player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", message.Emotes[0].ID)
+				} else {
+					for _, de := range defaultEmotes {
+						if strings.EqualFold(de.Name, parts[1]) {
+							player.EmoteURL = de.URL
+							break
+						}
+					}
+				}
+			}
+			if player.EmoteURL == "" {
+				randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
+				if randIdx < 0 {
+					randIdx = -randIdx
+				}
+				player.Emote = defaultEmotes[randIdx].Name
+				player.EmoteURL = defaultEmotes[randIdx].URL
 			}
 			go broadcast("STATE_UPDATE", gameState)
 		}
@@ -296,47 +313,36 @@ func main() {
 			go startInputPhase()
 		}
 
-		if cmd == "!fire" || cmd == "!left" || cmd == "!right" {
-			if gameState.Phase == PhaseIdle || gameState.Phase == PhaseInput {
-				if gameState.Phase == PhaseIdle {
-					// Auto-start the game if someone plays while idle
-					gameState.Phase = PhaseInput
-					for _, p := range gameState.Players {
-						p.Fired = false
-						p.ActionType = ""
-					}
-					go func() {
-						time.Sleep(time.Duration(gameState.InputDuration) * time.Second)
-						executeActionPhase()
-					}()
-				}
-
-				player := gameState.Players[username]
-				
-				if cmd == "!fire" {
-					if len(parts) >= 3 {
-						var angle, power int
-						fmt.Sscanf(parts[1], "%d", &angle)
-						fmt.Sscanf(parts[2], "%d", &power)
-						
-						player.Angle = angle
-						player.Power = power
-						player.LastAngle = angle
-						player.LastPower = power
-						player.ActionType = "FIRE"
-						player.Fired = true
-						
-						go broadcast("PLAYER_LOCKED", username)
-						go broadcast("STATE_UPDATE", gameState)
-					}
-				} else {
-					// Movement commands
-					player.ActionType = strings.ToUpper(cmd[1:])
-					player.Fired = true
+		if (cmd == "!fire" || cmd == "!left" || cmd == "!right") && gameState.Phase == PhaseInput {
+			player := gameState.Players[username]
+			if cmd == "!fire" {
+				if len(parts) >= 3 {
+					var angle, power int
+					fmt.Sscanf(parts[1], "%d", &angle)
+					fmt.Sscanf(parts[2], "%d", &power)
 					
-					go broadcast("PLAYER_LOCKED", username)
-					go broadcast("STATE_UPDATE", gameState)
+					player.Angle = angle
+					player.Power = power
+					player.LastAngle = angle
+					player.LastPower = power
+				} else {
+					// Use last known config
+					player.Angle = player.LastAngle
+					player.Power = player.LastPower
 				}
+				
+				player.ActionType = "FIRE"
+				player.Fired = true
+				
+				go broadcast("PLAYER_LOCKED", username)
+				go broadcast("STATE_UPDATE", gameState)
+			} else {
+				// Movement commands
+				player.ActionType = strings.ToUpper(cmd[1:])
+				player.Fired = true
+				
+				go broadcast("PLAYER_LOCKED", username)
+				go broadcast("STATE_UPDATE", gameState)
 			}
 		}
 	})
