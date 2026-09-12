@@ -20,12 +20,18 @@ let currentPhase = 'IDLE';
 let inputTimer = 0;
 let lastTime = performance.now();
 let celebrationWinner = "";
+let celebrationStartTime = 0;
+let celebrationSentComplete = false;
 
 const avatarCache = {};
 const emoteCache = {};
 
 // Initialize terrain
 function initTerrain() {
+    projectiles = [];
+    explosions = [];
+    celebrationStartTime = 0;
+    celebrationSentComplete = false;
     // Generate large, smooth rolling hills using a random walk with momentum
     let y = HEIGHT / 2 + (Math.random() * 200 - 100);
     let slope = 0;
@@ -149,6 +155,10 @@ ws.onmessage = (event) => {
     if (msg.type === 'STATE_UPDATE') {
         const state = msg.payload;
         stateRef = state;
+        if (state.phase === 'CELEBRATION' && currentPhase !== 'CELEBRATION') {
+            celebrationStartTime = performance.now();
+            celebrationSentComplete = false;
+        }
         currentPhase = state.phase;
         
         if (state.leaderboard) {
@@ -499,8 +509,9 @@ function updatePhysics(dt) {
     }
 
     // Celebration random emote bombs
-    if (currentPhase === 'CELEBRATION' && celebrationWinner) {
-        if (Math.random() < 0.2) {
+    if (currentPhase === 'CELEBRATION') {
+        const elapsed = celebrationStartTime > 0 ? performance.now() - celebrationStartTime : 0;
+        if (celebrationWinner && elapsed < 3500 && Math.random() < 0.2) {
             const p = players[celebrationWinner];
             const emoteUrl = p ? p.emoteUrl : "";
             projectiles.push({
@@ -511,6 +522,12 @@ function updatePhysics(dt) {
                 owner: celebrationWinner,
                 emoteUrl: emoteUrl
             });
+        }
+
+        // Only complete celebration after all bombs and explosions have fully settled
+        if (elapsed >= 3500 && projectiles.length === 0 && explosions.length === 0 && !celebrationSentComplete) {
+            celebrationSentComplete = true;
+            safeSend({ type: 'CELEBRATION_COMPLETE' });
         }
     }
 

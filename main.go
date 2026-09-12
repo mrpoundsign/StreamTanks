@@ -223,21 +223,41 @@ func handleWebSocket(ws *websocket.Conn) {
 					gameState.mu.Unlock()
 					broadcast("STATE_UPDATE", &gameState)
 
-					// Wait for celebration to end, then return to IDLE and reset terrain
+					// Safety fallback: if no CELEBRATION_COMPLETE arrives within 12s, reset cleanly
 					go func() {
-						time.Sleep(5 * time.Second)
+						time.Sleep(12 * time.Second)
 						gameState.mu.Lock()
-						gameState.Phase = PhaseIdle
-						for _, p := range gameState.Players {
-							p.IsDead = false
-							p.Fired = false
-							p.ActionType = ""
+						if gameState.Phase == PhaseCelebration {
+							gameState.Phase = PhaseIdle
+							for _, p := range gameState.Players {
+								p.IsDead = false
+								p.Fired = false
+								p.ActionType = ""
+							}
+							gameState.mu.Unlock()
+							broadcast("STATE_UPDATE", &gameState)
+							broadcast("RESET_TERRAIN", nil)
+						} else {
+							gameState.mu.Unlock()
 						}
-						gameState.mu.Unlock()
-						broadcast("STATE_UPDATE", &gameState)
-						broadcast("RESET_TERRAIN", nil)
 					}()
 				}
+			}
+		case "CELEBRATION_COMPLETE":
+			gameState.mu.Lock()
+			if gameState.Phase == PhaseCelebration {
+				gameState.Phase = PhaseIdle
+				// Revive all players for the next game
+				for _, p := range gameState.Players {
+					p.IsDead = false
+					p.Fired = false
+					p.ActionType = ""
+				}
+				gameState.mu.Unlock()
+				broadcast("STATE_UPDATE", &gameState)
+				broadcast("RESET_TERRAIN", nil)
+			} else {
+				gameState.mu.Unlock()
 			}
 		case "CHAT_COMMAND":
 			payloadBytes, err := json.Marshal(msg.Payload)
