@@ -25,15 +25,24 @@ const avatarCache = {};
 
 // Initialize terrain
 function initTerrain() {
-    // Generate some wavy hills
-    let y = HEIGHT / 2 + Math.random() * 100 - 50;
+    // Generate large, smooth rolling hills using a random walk with momentum
+    let y = HEIGHT / 2 + (Math.random() * 200 - 100);
+    let slope = 0;
     terrain[0] = y;
     for (let x = 1; x < WIDTH; x++) {
-        let slope = (Math.random() - 0.5) * 2;
+        // Change slope smoothly
+        slope += (Math.random() - 0.5) * 0.15;
+        
+        // Limit max steepness
+        if (slope > 2) slope = 2;
+        if (slope < -2) slope = -2;
+        
         y += slope;
-        // Keep in bounds roughly
-        if (y < 200) y = 200;
-        if (y > HEIGHT - 100) y = HEIGHT - 100;
+        
+        // Softly push back towards the center if getting too close to edges
+        if (y < 250) slope += 0.05;
+        if (y > HEIGHT - 200) slope -= 0.05;
+        
         terrain[x] = y;
     }
     

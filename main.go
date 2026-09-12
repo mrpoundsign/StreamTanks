@@ -58,6 +58,16 @@ var gameState = GameState{
 
 var db *sql.DB
 
+var defaultEmotes = []struct {
+	Name string
+	URL  string
+}{
+	{"Kappa", "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0"},
+	{"LUL", "https://static-cdn.jtvnw.net/emoticons/v2/425618/default/dark/2.0"},
+	{"PogChamp", "https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/2.0"},
+	{"GlitchCat", "https://static-cdn.jtvnw.net/emoticons/v2/112290/default/dark/2.0"},
+}
+
 // WSMessage is the generic message sent over websocket
 type WSMessage struct {
 	Type    string      `json:"type"`
@@ -252,10 +262,16 @@ func main() {
 
 		// Idle roaming: Any active chatter is tracked, optionally with emote
 		if _, exists := gameState.Players[username]; !exists {
+			randIdx := time.Now().UnixNano() % int64(len(defaultEmotes))
+			if randIdx < 0 {
+				randIdx = -randIdx
+			}
+			defEmote := defaultEmotes[randIdx]
+			
 			gameState.Players[username] = &Player{
 				Name:      username,
-				Emote:     "Kappa", // Default emote
-				EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0",
+				Emote:     defEmote.Name,
+				EmoteURL:  defEmote.URL,
 				LastAngle: 45,
 				LastPower: 50,
 			}
