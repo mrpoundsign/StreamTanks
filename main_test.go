@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"math"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -29,6 +30,7 @@ func resetGameStateForTest() {
 	gameState.AutoRound = 0
 	gameState.IdleMessage = true
 	gameState.BouncyWalls = false
+	gameState.Terrain = generateTerrain()
 
 	cancelAutoRoundTimer()
 
@@ -659,6 +661,123 @@ func TestBouncyWallsConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestGenerateTerrain(t *testing.T) {
+	terrain := generateTerrain()
+	if len(terrain) != defaultTerrainWidth {
+		t.Fatalf("expected terrain length %d, got %d", defaultTerrainWidth, len(terrain))
+	}
+
+	for i, y := range terrain {
+		if y < 100 || y > float64(defaultTerrainHeight)-50 {
+			t.Errorf("terrain at index %d out of expected vertical bounds: %f", i, y)
+		}
+		if i > 0 {
+			diff := math.Abs(terrain[i] - terrain[i-1])
+			if diff > 2.5 {
+				t.Errorf("slope too steep at index %d: diff=%f", i, diff)
+			}
+		}
+	}
+}
+
+func TestGetTerrainHeight(t *testing.T) {
+	terrain := generateTerrain()
+
+	// Normal lookup
+	h := getTerrainHeight(terrain, 500)
+	if h != terrain[500] {
+		t.Errorf("expected %f, got %f", terrain[500], h)
+	}
+
+	// Boundary clamping: x < 0
+	hNeg := getTerrainHeight(terrain, -100)
+	if hNeg != terrain[0] {
+		t.Errorf("expected %f for negative x, got %f", terrain[0], hNeg)
+	}
+
+	// Boundary clamping: x >= width
+	hOver := getTerrainHeight(terrain, 5000)
+	if hOver != terrain[defaultTerrainWidth-1] {
+		t.Errorf("expected %f for overflow x, got %f", terrain[defaultTerrainWidth-1], hOver)
+	}
+}
+
+func TestApplyCrater(t *testing.T) {
+	terrain := make([]float64, defaultTerrainWidth)
+	for i := range terrain {
+		terrain[i] = 500.0 // flat line at Y=500
+	}
+
+	cx := 400.0
+	cy := 500.0
+	radius := 40.0
+
+	applyCrater(terrain, cx, cy, radius)
+
+	// Center should be lowered to cy + radius = 540
+	centerH := getTerrainHeight(terrain, cx)
+	if centerH != 540.0 {
+		t.Errorf("expected crater center depth 540.0, got %f", centerH)
+	}
+
+	// Outside crater radius should remain unaffected at 500
+	outsideH := getTerrainHeight(terrain, cx+radius+10)
+	if outsideH != 500.0 {
+		t.Errorf("expected outside crater height 500.0, got %f", outsideH)
+	}
+
+	// Idempotency: applying the same crater again should result in the exact same heightmap
+	applyCrater(terrain, cx, cy, radius)
+	if getTerrainHeight(terrain, cx) != 540.0 {
+		t.Errorf("crater height changed upon reapplying: got %f", getTerrainHeight(terrain, cx))
+	}
+}
+
+func TestTerrainStateSync(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	if len(gameState.Terrain) != defaultTerrainWidth {
+		t.Fatalf("expected gameState.Terrain length %d, got %d", defaultTerrainWidth, len(gameState.Terrain))
+	}
+	gameState.mu.Unlock()
+
+	// Player joins -> assigned X and Y
+	processCommand("Alice", "%join Kappa", nil)
+
+	gameState.mu.Lock()
+	alice, exists := gameState.Players["Alice"]
+	if !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to exist")
+	}
+	if alice.X <= 0 || alice.Y <= 0 {
+		t.Errorf("expected valid Alice coordinates, got X=%f, Y=%f", alice.X, alice.Y)
+	}
+	expectedY := getTerrainHeight(gameState.Terrain, alice.X)
+	if alice.Y != expectedY {
+		t.Errorf("expected Alice Y=%f, got %f", expectedY, alice.Y)
+	}
+	gameState.mu.Unlock()
+
+	// Test resetMatchState
+	gameState.mu.Lock()
+	gameState.Phase = phaseCelebration
+	gameState.mu.Unlock()
+
+	resetMatchState()
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		t.Errorf("expected phaseIdle after resetMatchState, got %s", gameState.Phase)
+	}
+	if len(gameState.Terrain) != defaultTerrainWidth {
+		t.Errorf("expected regenerated terrain, got length %d", len(gameState.Terrain))
+	}
+	gameState.mu.Unlock()
+}
+
 
 
 

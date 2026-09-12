@@ -28,6 +28,8 @@ func broadcast(msgType string, payload interface{}) {
 		for k, v := range gameState.Leaderboard {
 			lbCopy[k] = v
 		}
+		terrainCopy := make([]float64, len(gameState.Terrain))
+		copy(terrainCopy, gameState.Terrain)
 		stateCopy := &GameState{
 			Phase:         gameState.Phase,
 			Players:       playersCopy,
@@ -41,6 +43,7 @@ func broadcast(msgType string, payload interface{}) {
 			AutoRound:     gameState.AutoRound,
 			IdleMessage:   gameState.IdleMessage,
 			BouncyWalls:   gameState.BouncyWalls,
+			Terrain:       terrainCopy,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -125,40 +128,22 @@ func handleWebSocket(ws *websocket.Conn) {
 					// Safety fallback: if no CELEBRATION_COMPLETE arrives within 12s, reset cleanly
 					go func() {
 						time.Sleep(12 * time.Second)
-						gameState.mu.Lock()
-						if gameState.Phase == phaseCelebration {
-							gameState.Phase = phaseIdle
-							for _, p := range gameState.Players {
-								p.IsDead = false
-								p.Fired = false
-								p.ActionType = ""
-							}
-							gameState.mu.Unlock()
-							broadcast(msgStateUpdate, &gameState)
-							broadcast(msgResetTerrain, nil)
-							triggerAutoRound()
-						} else {
-							gameState.mu.Unlock()
-						}
+						resetMatchState()
 					}()
 				}
 			}
 		case msgCelebrationComplete:
-			gameState.mu.Lock()
-			if gameState.Phase == phaseCelebration {
-				gameState.Phase = phaseIdle
-				// Revive all players for the next game
-				for _, p := range gameState.Players {
-					p.IsDead = false
-					p.Fired = false
-					p.ActionType = ""
+			resetMatchState()
+		case msgTerrainCrater:
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				var crater CraterPayload
+				if err := json.Unmarshal(payloadBytes, &crater); err == nil {
+					gameState.mu.Lock()
+					applyCrater(gameState.Terrain, crater.X, crater.Y, crater.Radius)
+					gameState.mu.Unlock()
+					broadcast(msgTerrainCrater, crater)
 				}
-				gameState.mu.Unlock()
-				broadcast(msgStateUpdate, &gameState)
-				broadcast(msgResetTerrain, nil)
-				triggerAutoRound()
-			} else {
-				gameState.mu.Unlock()
 			}
 		case msgChatCommand, msgDebugCommand:
 			payloadBytes, err := json.Marshal(msg.Payload)

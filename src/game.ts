@@ -22,6 +22,8 @@ import {
   MsgGameOver,
   MsgCelebrationComplete,
   MsgChatCommand,
+  MsgTerrainCrater,
+  CraterPayload,
   ActionFire,
   ActionLeft,
   ActionRight,
@@ -110,9 +112,15 @@ function checkTankCollisions(cx: number, cy: number, radius: number, owner: stri
   }
 }
 
-function destroyTerrain(cx: number, cy: number, radius: number): void {
+function destroyTerrain(cx: number, cy: number, radius: number, broadcast = true): void {
   applyCrater(terrain, cx, cy, radius);
   explosions.push({ x: cx, y: cy, radius: 0, maxRadius: radius, alpha: 1 });
+  if (broadcast) {
+    net.send({
+      type: MsgTerrainCrater,
+      payload: { x: cx, y: cy, radius },
+    });
+  }
 }
 
 function executeActions(): void {
@@ -605,19 +613,25 @@ net.onMessage((msg: WSMessage) => {
       updateLeaderboard(state.leaderboard);
     }
 
+    if (Array.isArray(state.terrain) && state.terrain.length === WIDTH) {
+      terrain = state.terrain;
+    }
+
     const newPlayers = state.players;
     for (const name in newPlayers) {
       if (!players[name]) {
-        let spawnX = Math.random() * (WIDTH - 100) + 50;
+        let spawnX = typeof newPlayers[name].x === 'number' && newPlayers[name].x > 0 ? newPlayers[name].x : Math.random() * (WIDTH - 100) + 50;
+        let spawnY = typeof newPlayers[name].y === 'number' ? newPlayers[name].y : getTerrainHeight(terrain, spawnX);
         let moveDx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
         if (stateRef && stateRef.debug) {
           spawnX = name === 'TargetBot' ? WIDTH / 2 + 100 : WIDTH / 2 - 100;
+          spawnY = getTerrainHeight(terrain, spawnX);
           moveDx = 0;
         }
         players[name] = {
           ...newPlayers[name],
-          x: typeof newPlayers[name].x === 'number' ? newPlayers[name].x : spawnX,
-          y: typeof newPlayers[name].y === 'number' ? newPlayers[name].y : 0,
+          x: spawnX,
+          y: spawnY,
           dx: moveDx,
         };
         const emoteUrl = players[name].emoteUrl || `https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0`;
@@ -666,18 +680,35 @@ net.onMessage((msg: WSMessage) => {
   } else if (msg.type === MsgExecuteActions) {
     executeActions();
   } else if (msg.type === MsgResetTerrain) {
-    terrain = createDefaultTerrain();
+    if (stateRef && Array.isArray(stateRef.terrain) && stateRef.terrain.length === WIDTH) {
+      terrain = stateRef.terrain;
+    } else {
+      terrain = createDefaultTerrain();
+    }
     projectiles = [];
     explosions.length = 0;
     celebrationStartTime = 0;
     celebrationSentComplete = false;
     for (const name in players) {
-      if (stateRef && stateRef.debug) {
+      if (stateRef && stateRef.players && stateRef.players[name] && typeof stateRef.players[name].x === 'number') {
+        players[name].x = stateRef.players[name].x;
+      } else if (stateRef && stateRef.debug) {
         players[name].x = name === 'TargetBot' ? WIDTH / 2 + 100 : WIDTH / 2 - 100;
       } else {
         players[name].x = Math.random() * (WIDTH - 100) + 50;
       }
       players[name].y = -50;
+    }
+  } else if (msg.type === MsgTerrainCrater) {
+    const crater = msg.payload as CraterPayload;
+    if (crater && typeof crater.x === 'number') {
+      applyCrater(terrain, crater.x, crater.y, crater.radius);
+      const hasExplosion = explosions.some(
+        (e) => Math.hypot(e.x - crater.x, e.y - crater.y) < 20
+      );
+      if (!hasExplosion) {
+        explosions.push({ x: crater.x, y: crater.y, radius: 0, maxRadius: crater.radius, alpha: 1 });
+      }
     }
   }
 });

@@ -29,6 +29,7 @@ export const MsgGameOver = 'GAME_OVER';
 export const MsgCelebrationComplete = 'CELEBRATION_COMPLETE';
 export const MsgChatCommand = 'CHAT_COMMAND';
 export const MsgDebugCommand = 'DEBUG_COMMAND';
+export const MsgTerrainCrater = 'TERRAIN_CRATER';
 
 // Player Actions
 export const ActionFire = 'FIRE';
@@ -92,6 +93,12 @@ export interface Explosion {
   maxRadius: number;
   alpha: number;
   isSpark?: boolean;
+}
+
+export interface CraterPayload {
+  x: number;
+  y: number;
+  radius: number;
 }
 
 export interface WSMessage<T = unknown> {
