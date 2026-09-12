@@ -445,7 +445,7 @@ function showKillMessage(msg) {
     }, 5000);
 }
 
-function updatePhysics(dt) {
+function updatePhysics(dtScale) {
     // Player logic
     let anyMoving = false;
     for (const name in players) {
@@ -455,7 +455,7 @@ function updatePhysics(dt) {
         // Execute Action Movement
         if (currentPhase === 'ACTION' && p.moving) {
             anyMoving = true;
-            const speed = 2;
+            const speed = 2.0 * dtScale;
             if (p.actionType === "LEFT") {
                 p.x -= speed;
                 if (p.x <= p.moveTarget || p.x <= 0) p.moving = false;
@@ -467,7 +467,7 @@ function updatePhysics(dt) {
 
         // Roaming in IDLE
         if (currentPhase === 'IDLE') {
-            p.x += p.dx;
+            p.x += p.dx * dtScale;
             if (p.x < 50 || p.x > WIDTH - 50) {
                 p.dx *= -1;
             }
@@ -476,7 +476,7 @@ function updatePhysics(dt) {
         // Falling/Ground snapping
         const floorY = terrain[Math.floor(p.x)];
         if (p.y < floorY) {
-            p.y += 5; // Falling speed
+            p.y += 5.0 * dtScale; // Falling speed
             if (p.y > floorY) p.y = floorY;
         } else {
             p.y = floorY;
@@ -495,9 +495,9 @@ function updatePhysics(dt) {
     // Projectile logic
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
-        proj.x += proj.vx;
-        proj.vy += GRAVITY;
-        proj.y += proj.vy;
+        proj.x += proj.vx * dtScale;
+        proj.vy += GRAVITY * dtScale;
+        proj.y += proj.vy * dtScale;
 
         let hit = false;
         
@@ -534,8 +534,8 @@ function updatePhysics(dt) {
     // Update explosions
     for (let i = explosions.length - 1; i >= 0; i--) {
         const exp = explosions[i];
-        exp.radius += 2;
-        exp.alpha -= 0.05;
+        exp.radius += 2.0 * dtScale;
+        exp.alpha -= 0.05 * dtScale;
         if (exp.alpha <= 0) {
             explosions.splice(i, 1);
         }
@@ -800,10 +800,17 @@ function draw() {
 
 function gameLoop(time) {
     if (isDisconnected) return;
-    const dt = time - lastTime;
+    const rawDt = time - lastTime;
     lastTime = time;
 
-    updatePhysics(dt);
+    // Normalize dt relative to 60fps (16.667ms)
+    // Clamp to prevent huge jumps if tab was backgrounded (max 100ms)
+    const dtClamped = Math.min(Math.max(rawDt, 0), 100);
+    const baseDtScale = dtClamped / (1000 / 60);
+    const speedMultiplier = (stateRef && typeof stateRef.physicsSpeed === 'number') ? stateRef.physicsSpeed : 0.5;
+    const dtScale = baseDtScale * speedMultiplier;
+
+    updatePhysics(dtScale);
     draw();
 
     requestAnimationFrame(gameLoop);

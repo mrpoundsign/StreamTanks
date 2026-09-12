@@ -22,6 +22,7 @@ func resetGameStateForTest() {
 	gameState.Leaderboard = make(map[string]int)
 	gameState.Debug = false
 	gameState.Prefix = "%"
+	gameState.PhysicsSpeed = 0.5
 
 	if inputCancel != nil {
 		close(inputCancel)
@@ -235,6 +236,49 @@ func TestPrefixConfiguration(t *testing.T) {
 	alice, exists := gameState.Players["Alice"]
 	if !exists || alice.Emote != "Kappa" {
 		t.Errorf("expected Alice to join with new prefix, got exists=%v", exists)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestSpeedConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	// Verify default is 0.5
+	gameState.mu.Lock()
+	if gameState.PhysicsSpeed != 0.5 {
+		t.Errorf("expected default PhysicsSpeed to be 0.5, got %f", gameState.PhysicsSpeed)
+	}
+	gameState.mu.Unlock()
+
+	// Test %speed command
+	processCommand("Admin", "%speed 1.0", nil)
+	gameState.mu.Lock()
+	if gameState.PhysicsSpeed != 1.0 {
+		t.Errorf("expected PhysicsSpeed 1.0, got %f", gameState.PhysicsSpeed)
+	}
+	gameState.mu.Unlock()
+
+	// Test %physicsspeed alias
+	processCommand("Admin", "%physicsspeed 0.25", nil)
+	gameState.mu.Lock()
+	if gameState.PhysicsSpeed != 0.25 {
+		t.Errorf("expected PhysicsSpeed 0.25, got %f", gameState.PhysicsSpeed)
+	}
+	gameState.mu.Unlock()
+
+	// Test clamping below minimum (0.1)
+	processCommand("Admin", "%speed 0.01", nil)
+	gameState.mu.Lock()
+	if gameState.PhysicsSpeed != 0.1 {
+		t.Errorf("expected PhysicsSpeed clamped to 0.1, got %f", gameState.PhysicsSpeed)
+	}
+	gameState.mu.Unlock()
+
+	// Test clamping above maximum (3.0)
+	processCommand("Admin", "%speed 99.0", nil)
+	gameState.mu.Lock()
+	if gameState.PhysicsSpeed != 3.0 {
+		t.Errorf("expected PhysicsSpeed clamped to 3.0, got %f", gameState.PhysicsSpeed)
 	}
 	gameState.mu.Unlock()
 }

@@ -46,6 +46,7 @@ type GameState struct {
 	Leaderboard   map[string]int     `json:"leaderboard"`
 	Debug         bool               `json:"debug"`
 	Prefix        string             `json:"prefix"`
+	PhysicsSpeed  float64            `json:"physicsSpeed"`
 }
 
 var gameState = GameState{
@@ -55,6 +56,7 @@ var gameState = GameState{
 	MoveDistance:  100,
 	Leaderboard:   make(map[string]int),
 	Prefix:        "%",
+	PhysicsSpeed:  0.5,
 }
 
 var (
@@ -132,6 +134,7 @@ func broadcast(msgType string, payload interface{}) {
 			Leaderboard:   lbCopy,
 			Debug:         gameState.Debug,
 			Prefix:        gameState.Prefix,
+			PhysicsSpeed:  gameState.PhysicsSpeed,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -437,6 +440,22 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			gameState.mu.Unlock()
 			broadcast("STATE_UPDATE", &gameState)
 			return
+		}
+
+	case "speed", "physicsspeed":
+		if len(parts) > 1 {
+			var spd float64
+			if _, err := fmt.Sscanf(parts[1], "%f", &spd); err == nil {
+				if spd < 0.1 {
+					spd = 0.1
+				} else if spd > 3.0 {
+					spd = 3.0
+				}
+				gameState.PhysicsSpeed = spd
+				gameState.mu.Unlock()
+				broadcast("STATE_UPDATE", &gameState)
+				return
+			}
 		}
 
 	case "join":
