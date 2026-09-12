@@ -21,6 +21,7 @@ func resetGameStateForTest() {
 	gameState.MoveDistance = 100
 	gameState.Leaderboard = make(map[string]int)
 	gameState.Debug = false
+	gameState.Prefix = "%"
 
 	if inputCancel != nil {
 		close(inputCancel)
@@ -207,4 +208,33 @@ func TestConcurrentBroadcastAndStateAccess(t *testing.T) {
 	opWg.Wait()
 	close(stopChan)
 	wg.Wait()
+}
+
+func TestPrefixConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	// Default prefix is %
+	processCommand("Admin", "%prefix !", nil)
+	gameState.mu.Lock()
+	if gameState.Prefix != "!" {
+		t.Errorf("expected Prefix to be !, got %s", gameState.Prefix)
+	}
+	gameState.mu.Unlock()
+
+	// Test multi-character prefix
+	processCommand("Admin", "!prefix tank!", nil)
+	gameState.mu.Lock()
+	if gameState.Prefix != "tank!" {
+		t.Errorf("expected Prefix to be tank!, got %s", gameState.Prefix)
+	}
+	gameState.mu.Unlock()
+
+	// Now commands should work with tank!
+	processCommand("Alice", "tank!join Kappa", nil)
+	gameState.mu.Lock()
+	alice, exists := gameState.Players["Alice"]
+	if !exists || alice.Emote != "Kappa" {
+		t.Errorf("expected Alice to join with new prefix, got exists=%v", exists)
+	}
+	gameState.mu.Unlock()
 }

@@ -1,6 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const phaseDisplay = document.getElementById('phase-display');
+const phaseBadge = document.getElementById('phase-badge');
+const hudInstructions = document.getElementById('hud-instructions');
 const timerDisplay = document.getElementById('timer-display');
 const killFeed = document.getElementById('kill-feed');
 const emotesLayer = document.getElementById('emotes-layer');
@@ -242,32 +243,56 @@ ws.onmessage = (event) => {
 let previousPhase = 'IDLE';
 
 function updateUI() {
+    const prefix = (stateRef && stateRef.prefix) || '%';
+
     if (currentPhase === 'IDLE') {
-        phaseDisplay.style.display = 'block';
-        phaseDisplay.innerText = "WAITING FOR PLAYERS... (!startgame to start)";
+        if (phaseBadge) {
+            phaseBadge.innerText = "WAITING FOR PLAYERS";
+            phaseBadge.className = "hud-badge idle";
+        }
+        if (hudInstructions) {
+            hudInstructions.innerHTML = `Type <span class="cmd-highlight">${prefix}startgame</span> to start | <span class="cmd-highlight">${prefix}join</span> to join`;
+        }
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'none';
         document.getElementById('leaderboard').style.display = 'block';
     } else if (currentPhase === 'INPUT') {
-        phaseDisplay.style.display = 'block';
-        phaseDisplay.innerText = "INPUT PHASE - !fire <angle> <power> | !left | !right";
+        if (phaseBadge) {
+            phaseBadge.innerText = "INPUT PHASE";
+            phaseBadge.className = "hud-badge input";
+        }
+        if (hudInstructions) {
+            hudInstructions.innerHTML = `<span class="cmd-highlight">${prefix}fire &lt;angle&gt; &lt;power&gt;</span> | <span class="cmd-highlight">${prefix}left</span> | <span class="cmd-highlight">${prefix}right</span>`;
+        }
         timerDisplay.style.display = 'block';
         celebrationDisplay.style.display = 'none';
         document.getElementById('leaderboard').style.display = 'none'; // Hide for protractor
         if (previousPhase !== 'INPUT') {
-            inputTimer = 20; // 15s + 5s lag
+            inputTimer = (stateRef && stateRef.inputDuration) ? stateRef.inputDuration : 20;
             timerDisplay.innerText = inputTimer.toString();
             timerDisplay.style.color = "#fff";
             timerDisplay.style.animation = "none";
+            timerDisplay.style.textShadow = "0 0 8px #00ffcc";
         }
     } else if (currentPhase === 'ACTION') {
-        phaseDisplay.style.display = 'block';
-        phaseDisplay.innerText = "ACTION PHASE";
+        if (phaseBadge) {
+            phaseBadge.innerText = "ACTION PHASE";
+            phaseBadge.className = "hud-badge action";
+        }
+        if (hudInstructions) {
+            hudInstructions.innerHTML = "Executing commands...";
+        }
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'none';
         document.getElementById('leaderboard').style.display = 'block';
     } else if (currentPhase === 'CELEBRATION') {
-        phaseDisplay.style.display = 'none';
+        if (phaseBadge) {
+            phaseBadge.innerText = "GAME OVER";
+            phaseBadge.className = "hud-badge celebration";
+        }
+        if (hudInstructions) {
+            hudInstructions.innerHTML = celebrationWinner ? `${celebrationWinner} WINS!` : "DRAW!";
+        }
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'block';
     }
@@ -275,6 +300,11 @@ function updateUI() {
     const debugBar = document.getElementById('debug-bar');
     if (debugBar) {
         debugBar.style.display = (stateRef && stateRef.debug) ? 'flex' : 'none';
+    }
+
+    const debugInput = document.getElementById('debug-input');
+    if (debugInput) {
+        debugInput.placeholder = `Type command (${prefix}startgame, ${prefix}fire 45 60, ${prefix}left, etc.)...`;
     }
 
     previousPhase = currentPhase;
@@ -318,17 +348,20 @@ setInterval(() => {
     if (currentPhase === 'INPUT' && inputTimer > 0) {
         inputTimer--;
         if (inputTimer <= 5 && inputTimer > 0) {
-            timerDisplay.innerText = "FIRING IN " + inputTimer + "!";
+            timerDisplay.innerText = inputTimer.toString();
             timerDisplay.style.color = "#ff003c";
             timerDisplay.style.animation = "pulse 0.5s infinite alternate";
-            timerDisplay.style.textShadow = "0 0 10px #ff003c";
+            timerDisplay.style.textShadow = "0 0 12px #ff003c";
         } else if (inputTimer > 5) {
             timerDisplay.innerText = inputTimer.toString();
-            timerDisplay.style.color = "#fff";
+            timerDisplay.style.color = "#ffffff";
             timerDisplay.style.animation = "none";
-            timerDisplay.style.textShadow = "0 0 5px #00ffcc";
+            timerDisplay.style.textShadow = "0 0 8px #00ffcc";
         } else {
             timerDisplay.innerText = "FIRING!";
+            timerDisplay.style.color = "#ffaa00";
+            timerDisplay.style.animation = "none";
+            timerDisplay.style.textShadow = "0 0 10px #ffaa00";
         }
     }
 }, 1000);

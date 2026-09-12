@@ -22,8 +22,12 @@
                 <h3>Top Commanders</h3>
                 <ul id="leaderboard-list"></ul>
             </div>
-            <div id="phase-display" style="display: none;"></div>
-            <div id="timer-display"></div>
+            <!-- Top HUD: Phase Badge, Instructions, and Countdown Timer -->
+            <div id="hud-top">
+                <div id="phase-badge" class="hud-badge idle">WAITING</div>
+                <div id="hud-instructions">Type <span class="cmd-highlight">%startgame</span> to start</div>
+                <div id="timer-display" style="display: none;">20</div>
+            </div>
             <div id="kill-feed"></div>
             
             <div id="celebration-display" style="display: none;">

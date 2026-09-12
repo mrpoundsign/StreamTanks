@@ -45,6 +45,7 @@ type GameState struct {
 	MoveDistance  int                `json:"moveDistance"`
 	Leaderboard   map[string]int     `json:"leaderboard"`
 	Debug         bool               `json:"debug"`
+	Prefix        string             `json:"prefix"`
 }
 
 var gameState = GameState{
@@ -53,6 +54,7 @@ var gameState = GameState{
 	InputDuration: 20,
 	MoveDistance:  100,
 	Leaderboard:   make(map[string]int),
+	Prefix:        "%",
 }
 
 var (
@@ -129,6 +131,7 @@ func broadcast(msgType string, payload interface{}) {
 			MoveDistance:  gameState.MoveDistance,
 			Leaderboard:   lbCopy,
 			Debug:         gameState.Debug,
+			Prefix:        gameState.Prefix,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -399,22 +402,43 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 		gameState.mu.Lock()
 	}
 
-	parts := strings.Fields(strings.TrimSpace(msg))
+	currPrefix := gameState.Prefix
+	if currPrefix == "" {
+		currPrefix = "%"
+	}
+
+	trimmedMsg := strings.TrimSpace(msg)
+	var cmdStr string
+	switch {
+	case strings.HasPrefix(trimmedMsg, currPrefix):
+		cmdStr = strings.TrimPrefix(trimmedMsg, currPrefix)
+	case strings.HasPrefix(trimmedMsg, "%"):
+		cmdStr = strings.TrimPrefix(trimmedMsg, "%")
+	case strings.HasPrefix(trimmedMsg, "!"):
+		cmdStr = strings.TrimPrefix(trimmedMsg, "!")
+	default:
+		gameState.mu.Unlock()
+		return
+	}
+
+	parts := strings.Fields(cmdStr)
 	if len(parts) == 0 {
 		gameState.mu.Unlock()
 		return
 	}
 
-	rawCmd := strings.ToLower(parts[0])
-	// Support both % and ! prefixes seamlessly
-	if !strings.HasPrefix(rawCmd, "%") && !strings.HasPrefix(rawCmd, "!") {
-		gameState.mu.Unlock()
-		return
-	}
-
-	cmd := strings.TrimLeft(rawCmd, "%!")
+	cmd := strings.ToLower(parts[0])
 
 	switch cmd {
+	case "prefix":
+		if len(parts) > 1 {
+			newPrefix := parts[1]
+			gameState.Prefix = newPrefix
+			gameState.mu.Unlock()
+			broadcast("STATE_UPDATE", &gameState)
+			return
+		}
+
 	case "join":
 		player := gameState.Players[username]
 		if len(parts) > 1 {
