@@ -219,6 +219,8 @@ ws.onmessage = (event) => {
 };
 }
 
+let previousPhase = 'IDLE';
+
 function updateUI() {
     if (currentPhase === 'IDLE') {
         phaseDisplay.style.display = 'block';
@@ -232,10 +234,12 @@ function updateUI() {
         timerDisplay.style.display = 'block';
         celebrationDisplay.style.display = 'none';
         document.getElementById('leaderboard').style.display = 'none'; // Hide for protractor
-        inputTimer = 20; // 15s + 5s lag
-        timerDisplay.innerText = inputTimer.toString();
-        timerDisplay.style.color = "#fff";
-        timerDisplay.style.animation = "none";
+        if (previousPhase !== 'INPUT') {
+            inputTimer = 20; // 15s + 5s lag
+            timerDisplay.innerText = inputTimer.toString();
+            timerDisplay.style.color = "#fff";
+            timerDisplay.style.animation = "none";
+        }
     } else if (currentPhase === 'ACTION') {
         phaseDisplay.style.display = 'block';
         phaseDisplay.innerText = "ACTION PHASE";
@@ -247,6 +251,7 @@ function updateUI() {
         timerDisplay.style.display = 'none';
         celebrationDisplay.style.display = 'block';
     }
+    previousPhase = currentPhase;
 }
 
 function updateLeaderboard(lb) {
@@ -353,6 +358,7 @@ function destroyTerrain(cx, cy, radius) {
 
 function checkTankCollisions(cx, cy, radius, owner) {
     for (const name in players) {
+        if (name === owner) continue; // No self-damage
         const p = players[name];
         if (p.isDead) continue;
         const dist = Math.hypot(p.x - cx, p.y - cy);
@@ -360,7 +366,7 @@ function checkTankCollisions(cx, cy, radius, owner) {
             // Tank is destroyed
             p.isDead = true;
             showKillMessage(`${owner} destroyed ${name}!`);
-            ws.send(JSON.stringify({ type: 'PLAYER_DIED', payload: name }));
+            safeSend({ type: 'PLAYER_DIED', payload: name });
             
             const imgEl = document.getElementById('emote-' + name);
             if (imgEl) imgEl.style.display = 'none';
@@ -449,6 +455,7 @@ function updatePhysics(dt) {
         // Direct tank collision (simplified)
         else {
             for (const name in players) {
+                if (name === proj.owner) continue; // No self-damage
                 const p = players[name];
                 if (p.isDead) continue;
                 if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
@@ -702,7 +709,7 @@ function draw() {
     for (const proj of projectiles) {
         if (proj.emoteUrl && emoteCache[proj.emoteUrl] && emoteCache[proj.emoteUrl].complete) {
             ctx.shadowBlur = 0;
-            ctx.drawImage(emoteCache[proj.emoteUrl], proj.x - 14, proj.y - 14, 28, 28);
+            ctx.drawImage(emoteCache[proj.emoteUrl], proj.x - 7, proj.y - 7, 14, 14);
         } else {
             ctx.fillStyle = '#00ffcc';
             ctx.shadowBlur = 10;

@@ -183,6 +183,8 @@ func handleWebSocket(ws *websocket.Conn) {
 	}
 }
 
+var inputCancel chan struct{}
+
 func startInputPhase() {
 	gameState.mu.Lock()
 	gameState.Phase = PhaseInput
@@ -191,15 +193,48 @@ func startInputPhase() {
 		p.Fired = false
 		p.ActionType = ""
 	}
+	if inputCancel != nil {
+		close(inputCancel)
+	}
+	inputCancel = make(chan struct{})
+	cancelChan := inputCancel
 	gameState.mu.Unlock()
 
 	broadcast("STATE_UPDATE", gameState)
 
 	// Start timer for input phase
 	go func() {
-		time.Sleep(time.Duration(gameState.InputDuration) * time.Second)
-		executeActionPhase()
+		select {
+		case <-time.After(time.Duration(gameState.InputDuration) * time.Second):
+			executeActionPhase()
+		case <-cancelChan:
+			return
+		}
 	}()
+}
+
+func checkAllPlayersFired() {
+	// Assumes gameState.mu is held
+	if gameState.Phase != PhaseInput || inputCancel == nil {
+		return
+	}
+	alivePlayers := 0
+	for _, p := range gameState.Players {
+		if !p.IsDead {
+			alivePlayers++
+			if !p.Fired {
+				return
+			}
+		}
+	}
+	if alivePlayers > 0 {
+		close(inputCancel)
+		inputCancel = nil
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			executeActionPhase()
+		}()
+	}
 }
 
 func executeActionPhase() {
@@ -207,6 +242,10 @@ func executeActionPhase() {
 	if gameState.Phase != PhaseInput {
 		gameState.mu.Unlock()
 		return
+	}
+	if inputCancel != nil {
+		close(inputCancel)
+		inputCancel = nil
 	}
 	gameState.Phase = PhaseAction
 	
@@ -344,6 +383,8 @@ func main() {
 				go broadcast("PLAYER_LOCKED", username)
 				go broadcast("STATE_UPDATE", gameState)
 			}
+
+			checkAllPlayersFired()
 		}
 	})
 
