@@ -512,6 +512,16 @@ function renderConfigModal(prefix: string): void {
       value: `<span class="config-val">${stateRef?.terrainMin ?? 20}% - ${stateRef?.terrainMax ?? 75}%</span>`,
       cmd: `<span class="config-cmd">${prefix}terrain <span class="cmd-param">&lt;min%&gt; &lt;max%&gt;</span></span>`,
     },
+    {
+      label: 'Start Game Perm',
+      value: `<span class="config-val badge-on">${stateRef?.startPerm ?? 'broadcaster'}</span>`,
+      cmd: `<span class="config-cmd">${prefix}startperm <span class="cmd-param">&lt;role&gt;</span></span>`,
+    },
+    {
+      label: 'Config Perm',
+      value: `<span class="config-val badge-on">${stateRef?.configPerm ?? 'broadcaster'}</span>`,
+      cmd: `<span class="config-cmd">${prefix}configperm <span class="cmd-param">&lt;role&gt;</span></span>`,
+    },
   ];
 
   configTableBody.innerHTML = rows

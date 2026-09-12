@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gempir/go-twitch-irc/v4"
 	"golang.org/x/net/websocket"
 )
 
@@ -33,6 +34,8 @@ func resetGameStateForTest() {
 	gameState.TerrainMin = 20
 	gameState.TerrainMax = 75
 	gameState.Terrain = generateTerrain(20, 75)
+	gameState.StartPerm = "broadcaster"
+	gameState.ConfigPerm = "broadcaster"
 
 	cancelAutoRoundTimer()
 
@@ -874,3 +877,136 @@ func TestCraterDeduplication(t *testing.T) {
 		t.Errorf("expected crater %s to be cleared after clearAppliedCraters", shotID)
 	}
 }
+
+func TestHasPermission(t *testing.T) {
+	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+	mod := &twitch.User{Name: "ModUser", IsMod: true}
+	vip := &twitch.User{Name: "VipUser", IsVip: true}
+	sub := &twitch.User{Name: "SubUser", Badges: map[string]int{"subscriber": 1}}
+	viewer := &twitch.User{Name: "RegularViewer"}
+
+	// Local / nil user always allowed
+	if !hasPermission(nil, "broadcaster") {
+		t.Errorf("expected nil user to have broadcaster permission")
+	}
+
+	// Required: broadcaster
+	if !hasPermission(broadcaster, "broadcaster") {
+		t.Errorf("expected broadcaster to have broadcaster perm")
+	}
+	if hasPermission(mod, "broadcaster") {
+		t.Errorf("expected mod to NOT have broadcaster perm")
+	}
+	if hasPermission(viewer, "broadcaster") {
+		t.Errorf("expected viewer to NOT have broadcaster perm")
+	}
+
+	// Required: mod
+	if !hasPermission(broadcaster, "mod") || !hasPermission(mod, "mod") {
+		t.Errorf("expected broadcaster and mod to have mod perm")
+	}
+	if hasPermission(vip, "mod") || hasPermission(viewer, "mod") {
+		t.Errorf("expected vip and viewer to NOT have mod perm")
+	}
+
+	// Required: vip
+	if !hasPermission(broadcaster, "vip") || !hasPermission(mod, "vip") || !hasPermission(vip, "vip") {
+		t.Errorf("expected broadcaster, mod, and vip to have vip perm")
+	}
+	if hasPermission(sub, "vip") || hasPermission(viewer, "vip") {
+		t.Errorf("expected sub and viewer to NOT have vip perm")
+	}
+
+	// Required: sub
+	if !hasPermission(sub, "sub") || !hasPermission(vip, "sub") || !hasPermission(mod, "sub") || !hasPermission(broadcaster, "sub") {
+		t.Errorf("expected sub, vip, mod, and broadcaster to have sub perm")
+	}
+	if hasPermission(viewer, "sub") {
+		t.Errorf("expected viewer to NOT have sub perm")
+	}
+
+	// Required: all
+	if !hasPermission(viewer, "all") {
+		t.Errorf("expected viewer to have all perm")
+	}
+}
+
+func TestPermissionCommands(t *testing.T) {
+	resetGameStateForTest()
+
+	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+	mod := &twitch.User{Name: "ModUser", IsMod: true}
+	viewer := &twitch.User{Name: "RegularViewer"}
+
+	// 1. Default permissions: broadcaster only
+	gameState.mu.Lock()
+	if gameState.StartPerm != "broadcaster" || gameState.ConfigPerm != "broadcaster" {
+		t.Errorf("expected default permissions to be broadcaster, got start=%s, config=%s", gameState.StartPerm, gameState.ConfigPerm)
+	}
+	gameState.mu.Unlock()
+
+	// 2. Regular viewer cannot %startgame
+	processCommand("RegularViewer", "%startgame", nil, viewer)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		t.Errorf("expected phase to remain IDLE when regular viewer executes %%startgame, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Regular viewer cannot change settings
+	processCommand("RegularViewer", "%roundtime 45", nil, viewer)
+	gameState.mu.Lock()
+	if gameState.InputDuration == 45 {
+		t.Errorf("expected InputDuration to remain unchanged when regular viewer executes %%roundtime")
+	}
+	gameState.mu.Unlock()
+
+	// 4. Regular viewer cannot change permissions
+	processCommand("RegularViewer", "%startperm all", nil, viewer)
+	gameState.mu.Lock()
+	if gameState.StartPerm == "all" {
+		t.Errorf("expected StartPerm to remain unchanged when regular viewer executes %%startperm")
+	}
+	gameState.mu.Unlock()
+
+	// 5. Mod cannot change permissions
+	processCommand("ModUser", "%configperm all", nil, mod)
+	gameState.mu.Lock()
+	if gameState.ConfigPerm == "all" {
+		t.Errorf("expected ConfigPerm to remain unchanged when mod executes %%configperm")
+	}
+	gameState.mu.Unlock()
+
+	// 6. Broadcaster can configure permissions
+	processCommand("Streamer", "%configperm mod", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.ConfigPerm != "mod" {
+		t.Errorf("expected ConfigPerm to be 'mod', got %s", gameState.ConfigPerm)
+	}
+	gameState.mu.Unlock()
+
+	// Now mod can change settings
+	processCommand("ModUser", "%roundtime 35", nil, mod)
+	gameState.mu.Lock()
+	if gameState.InputDuration != 35 {
+		t.Errorf("expected InputDuration=35 after mod command, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+
+	// 7. Broadcaster configures %startperm via unified %perm command
+	processCommand("Streamer", "%perm start all", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.StartPerm != "all" {
+		t.Errorf("expected StartPerm to be 'all', got %s", gameState.StartPerm)
+	}
+	gameState.mu.Unlock()
+
+	// Now regular viewer can start game
+	processCommand("RegularViewer", "%startgame", nil, viewer)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		t.Errorf("expected phase to be INPUT after viewer %%startgame with startPerm=all, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+}
+

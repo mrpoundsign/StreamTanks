@@ -77,6 +77,8 @@ export interface GameState {
   terrainMin?: number;
   terrainMax?: number;
   roundId?: number;
+  startPerm?: string;
+  configPerm?: string;
 }
 
 export interface Projectile {
