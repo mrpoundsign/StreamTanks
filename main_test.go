@@ -17,7 +17,7 @@ func resetGameStateForTest() {
 	gameState.mu.Lock()
 	defer gameState.mu.Unlock()
 
-	gameState.Phase = PhaseIdle
+	gameState.Phase = phaseIdle
 	gameState.Players = make(map[string]*Player)
 	gameState.InputDuration = 2
 	gameState.MoveDistance = 100
@@ -75,8 +75,8 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	gameState.mu.Lock()
-	if gameState.Phase != PhaseInput {
-		t.Errorf("expected PhaseInput, got %s", gameState.Phase)
+	if gameState.Phase != phaseInput {
+		t.Errorf("expected phaseInput, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 
@@ -85,7 +85,7 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 
 	gameState.mu.Lock()
 	alice = gameState.Players["Alice"]
-	if !alice.Fired || alice.ActionType != "FIRE" || alice.Angle != 60 || alice.Power != 75 {
+	if !alice.Fired || alice.ActionType != actionFire || alice.Angle != 60 || alice.Power != 75 {
 		t.Errorf("unexpected Alice state after fire: %+v", alice)
 	}
 	gameState.mu.Unlock()
@@ -95,7 +95,7 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 
 	gameState.mu.Lock()
 	bob = gameState.Players["Bob"]
-	if !bob.Fired || bob.ActionType != "LEFT" {
+	if !bob.Fired || bob.ActionType != actionLeft {
 		t.Errorf("unexpected Bob state after move: %+v", bob)
 	}
 	gameState.mu.Unlock()
@@ -104,8 +104,8 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 
 	gameState.mu.Lock()
-	if gameState.Phase != PhaseAction {
-		t.Errorf("expected PhaseAction after all players fired, got %s", gameState.Phase)
+	if gameState.Phase != phaseAction {
+		t.Errorf("expected phaseAction after all players fired, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 }
@@ -142,8 +142,8 @@ func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 	if !bot.Fired {
 		t.Errorf("expected TargetBot to have fired in debug mode")
 	}
-	if gameState.Phase != PhaseInput {
-		t.Errorf("expected PhaseInput while Player1 hasn't fired yet, got %s", gameState.Phase)
+	if gameState.Phase != phaseInput {
+		t.Errorf("expected phaseInput while Player1 hasn't fired yet, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 
@@ -154,8 +154,8 @@ func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 
 	gameState.mu.Lock()
-	if gameState.Phase != PhaseAction {
-		t.Errorf("expected PhaseAction after both fired, got %s", gameState.Phase)
+	if gameState.Phase != phaseAction {
+		t.Errorf("expected phaseAction after both fired, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 }
@@ -209,8 +209,8 @@ func TestConcurrentBroadcastAndStateAccess(t *testing.T) {
 		go func(name string) {
 			defer opWg.Done()
 			processCommand(name, "%join Kappa", nil)
-			broadcast("STATE_UPDATE", &gameState)
-			broadcast("PLAYER_LOCKED", name)
+			broadcast(msgStateUpdate, &gameState)
+			broadcast(msgPlayerLocked, name)
 		}(playerID)
 	}
 
@@ -589,7 +589,7 @@ func TestInactivePlayerRandomDirection(t *testing.T) {
 		resetGameStateForTest()
 
 		gameState.mu.Lock()
-		gameState.Phase = PhaseInput
+		gameState.Phase = phaseInput
 		gameState.Players["P1"] = &Player{Name: "P1", Fired: false, ActionType: ""}
 		gameState.mu.Unlock()
 
@@ -600,13 +600,13 @@ func TestInactivePlayerRandomDirection(t *testing.T) {
 		if !p1.Fired {
 			t.Errorf("expected P1 to be marked fired after action phase")
 		}
-		if p1.ActionType != "LEFT" && p1.ActionType != "RIGHT" {
+		if p1.ActionType != actionLeft && p1.ActionType != actionRight {
 			t.Errorf("expected ActionType to be LEFT or RIGHT, got %s", p1.ActionType)
 		}
 		switch p1.ActionType {
-		case "LEFT":
+		case actionLeft:
 			leftCount++
-		case "RIGHT":
+		case actionRight:
 			rightCount++
 		}
 		gameState.mu.Unlock()

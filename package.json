@@ -1,0 +1,16 @@
+{
+  "name": "streamtanks",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Interactive Twitch chat artillery game and OBS browser overlay",
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/game.ts --bundle --outfile=public/game.js --sourcemap",
+    "build:prod": "tsc --noEmit && esbuild src/game.ts --bundle --outfile=public/game.js --minify --sourcemap",
+    "watch": "esbuild src/game.ts --bundle --outfile=public/game.js --sourcemap --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.2"
+  }
+}

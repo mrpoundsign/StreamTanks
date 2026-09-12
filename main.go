@@ -33,10 +33,31 @@ var (
 
 // Game phases
 const (
-	PhaseIdle        = "IDLE"
-	PhaseInput       = "INPUT"
-	PhaseAction      = "ACTION"
-	PhaseCelebration = "CELEBRATION"
+	phaseIdle        = "IDLE"
+	phaseInput       = "INPUT"
+	phaseAction      = "ACTION"
+	phaseCelebration = "CELEBRATION"
+)
+
+// WebSocket message types
+const (
+	msgStateUpdate         = "STATE_UPDATE"
+	msgExecuteActions      = "EXECUTE_ACTIONS"
+	msgPlayerLocked        = "PLAYER_LOCKED"
+	msgResetTerrain        = "RESET_TERRAIN"
+	msgActionComplete      = "ACTION_COMPLETE"
+	msgPlayerDied          = "PLAYER_DIED"
+	msgGameOver            = "GAME_OVER"
+	msgCelebrationComplete = "CELEBRATION_COMPLETE"
+	msgChatCommand         = "CHAT_COMMAND"
+	msgDebugCommand        = "DEBUG_COMMAND"
+)
+
+// Player actions
+const (
+	actionFire  = "FIRE"
+	actionLeft  = "LEFT"
+	actionRight = "RIGHT"
 )
 
 type Player struct {
@@ -69,7 +90,7 @@ type GameState struct {
 }
 
 var gameState = GameState{
-	Phase:         PhaseIdle,
+	Phase:         phaseIdle,
 	Players:       make(map[string]*Player),
 	InputDuration: 20,
 	MoveDistance:  100,
@@ -277,7 +298,7 @@ func handleWebSocket(ws *websocket.Conn) {
 	log.Println("New WebSocket client connected (Overlay)")
 
 	// Send initial state
-	broadcast("STATE_UPDATE", &gameState)
+	broadcast(msgStateUpdate, &gameState)
 
 	// Listen for messages from frontend
 	for {
@@ -288,9 +309,9 @@ func handleWebSocket(ws *websocket.Conn) {
 		}
 
 		switch msg.Type {
-		case "ACTION_COMPLETE":
+		case msgActionComplete:
 			startInputPhase()
-		case "PLAYER_DIED":
+		case msgPlayerDied:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
 				var deadPlayer string
@@ -300,37 +321,37 @@ func handleWebSocket(ws *websocket.Conn) {
 						p.IsDead = true
 					}
 					gameState.mu.Unlock()
-					broadcast("STATE_UPDATE", &gameState)
+					broadcast(msgStateUpdate, &gameState)
 				}
 			}
-		case "GAME_OVER":
+		case msgGameOver:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
 				var winner string
 				if err := json.Unmarshal(payloadBytes, &winner); err == nil {
 					gameState.mu.Lock()
-					gameState.Phase = PhaseCelebration
+					gameState.Phase = phaseCelebration
 					if winner != "" {
 						gameState.Leaderboard[winner]++
 						incrementWin(winner)
 					}
 					gameState.mu.Unlock()
-					broadcast("STATE_UPDATE", &gameState)
+					broadcast(msgStateUpdate, &gameState)
 
 					// Safety fallback: if no CELEBRATION_COMPLETE arrives within 12s, reset cleanly
 					go func() {
 						time.Sleep(12 * time.Second)
 						gameState.mu.Lock()
-						if gameState.Phase == PhaseCelebration {
-							gameState.Phase = PhaseIdle
+						if gameState.Phase == phaseCelebration {
+							gameState.Phase = phaseIdle
 							for _, p := range gameState.Players {
 								p.IsDead = false
 								p.Fired = false
 								p.ActionType = ""
 							}
 							gameState.mu.Unlock()
-							broadcast("STATE_UPDATE", &gameState)
-							broadcast("RESET_TERRAIN", nil)
+							broadcast(msgStateUpdate, &gameState)
+							broadcast(msgResetTerrain, nil)
 							triggerAutoRound()
 						} else {
 							gameState.mu.Unlock()
@@ -338,10 +359,10 @@ func handleWebSocket(ws *websocket.Conn) {
 					}()
 				}
 			}
-		case "CELEBRATION_COMPLETE":
+		case msgCelebrationComplete:
 			gameState.mu.Lock()
-			if gameState.Phase == PhaseCelebration {
-				gameState.Phase = PhaseIdle
+			if gameState.Phase == phaseCelebration {
+				gameState.Phase = phaseIdle
 				// Revive all players for the next game
 				for _, p := range gameState.Players {
 					p.IsDead = false
@@ -349,13 +370,13 @@ func handleWebSocket(ws *websocket.Conn) {
 					p.ActionType = ""
 				}
 				gameState.mu.Unlock()
-				broadcast("STATE_UPDATE", &gameState)
-				broadcast("RESET_TERRAIN", nil)
+				broadcast(msgStateUpdate, &gameState)
+				broadcast(msgResetTerrain, nil)
 				triggerAutoRound()
 			} else {
 				gameState.mu.Unlock()
 			}
-		case "CHAT_COMMAND":
+		case msgChatCommand, msgDebugCommand:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
 				var cmdStr string
@@ -398,7 +419,7 @@ func triggerAutoRound() {
 		go func() {
 			time.Sleep(500 * time.Millisecond)
 			gameState.mu.Lock()
-			if gameState.Phase == PhaseIdle {
+			if gameState.Phase == phaseIdle {
 				gameState.mu.Unlock()
 				startInputPhase()
 			} else {
@@ -413,7 +434,7 @@ func triggerAutoRound() {
 	autoRoundTimerMu.Lock()
 	autoRoundTimer = time.AfterFunc(delay, func() {
 		gameState.mu.Lock()
-		if gameState.Phase == PhaseIdle {
+		if gameState.Phase == phaseIdle {
 			gameState.mu.Unlock()
 			startInputPhase()
 		} else {
@@ -427,7 +448,7 @@ func startInputPhase() {
 	cancelAutoRoundTimer()
 
 	gameState.mu.Lock()
-	gameState.Phase = PhaseInput
+	gameState.Phase = phaseInput
 	// Reset fired status and action for all players
 	for _, p := range gameState.Players {
 		p.Fired = false
@@ -445,16 +466,16 @@ func startInputPhase() {
 			go func() {
 				time.Sleep(1 * time.Second)
 				gameState.mu.Lock()
-				if gameState.Phase == PhaseInput && !bot.IsDead {
+				if gameState.Phase == phaseInput && !bot.IsDead {
 					bot.Fired = true
 					if rand.IntN(2) == 0 {
-						bot.ActionType = "LEFT"
+						bot.ActionType = actionLeft
 					} else {
-						bot.ActionType = "RIGHT"
+						bot.ActionType = actionRight
 					}
 					checkAllPlayersFired()
 					gameState.mu.Unlock()
-					broadcast("STATE_UPDATE", &gameState)
+					broadcast(msgStateUpdate, &gameState)
 				} else {
 					gameState.mu.Unlock()
 				}
@@ -463,7 +484,7 @@ func startInputPhase() {
 	}
 	gameState.mu.Unlock()
 
-	broadcast("STATE_UPDATE", &gameState)
+	broadcast(msgStateUpdate, &gameState)
 
 	// Start timer for input phase
 	go func() {
@@ -478,7 +499,7 @@ func startInputPhase() {
 
 func checkAllPlayersFired() {
 	// Assumes gameState.mu is held
-	if gameState.Phase != PhaseInput || inputCancel == nil {
+	if gameState.Phase != phaseInput || inputCancel == nil {
 		return
 	}
 	alivePlayers := 0
@@ -502,7 +523,7 @@ func checkAllPlayersFired() {
 
 func executeActionPhase() {
 	gameState.mu.Lock()
-	if gameState.Phase != PhaseInput {
+	if gameState.Phase != phaseInput {
 		gameState.mu.Unlock()
 		return
 	}
@@ -510,7 +531,7 @@ func executeActionPhase() {
 		close(inputCancel)
 		inputCancel = nil
 	}
-	gameState.Phase = PhaseAction
+	gameState.Phase = phaseAction
 
 	// Apply last known values for those who didn't fire
 	for _, p := range gameState.Players {
@@ -519,9 +540,9 @@ func executeActionPhase() {
 		}
 		if !p.Fired || p.ActionType == "" {
 			if rand.IntN(2) == 0 {
-				p.ActionType = "LEFT"
+				p.ActionType = actionLeft
 			} else {
-				p.ActionType = "RIGHT"
+				p.ActionType = actionRight
 			}
 			p.Fired = true
 		}
@@ -529,8 +550,8 @@ func executeActionPhase() {
 	gameState.mu.Unlock()
 
 	// Send state update which tells frontend to execute the shots/moves
-	broadcast("STATE_UPDATE", &gameState)
-	broadcast("EXECUTE_ACTIONS", nil)
+	broadcast(msgStateUpdate, &gameState)
+	broadcast(msgExecuteActions, nil)
 }
 
 func processCommand(username string, msg string, emotes []*twitch.Emote) {
@@ -548,7 +569,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			LastPower: 50,
 		}
 		gameState.mu.Unlock()
-		broadcast("STATE_UPDATE", &gameState)
+		broadcast(msgStateUpdate, &gameState)
 		gameState.mu.Lock()
 	}
 
@@ -602,7 +623,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 				gameState.PhysicsSpeed = spd
 				gameState.mu.Unlock()
 				saveSetting("physics_speed", fmt.Sprintf("%.2f", spd))
-				broadcast("STATE_UPDATE", &gameState)
+				broadcast(msgStateUpdate, &gameState)
 				return
 			}
 		}
@@ -620,7 +641,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			gameState.ShowConfig = !gameState.ShowConfig
 		}
 		gameState.mu.Unlock()
-		broadcast("STATE_UPDATE", &gameState)
+		broadcast(msgStateUpdate, &gameState)
 		return
 
 	case "commandtime":
@@ -635,7 +656,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 				gameState.InputDuration = dur
 				gameState.mu.Unlock()
 				saveSetting("command_time", strconv.Itoa(dur))
-				broadcast("STATE_UPDATE", &gameState)
+				broadcast(msgStateUpdate, &gameState)
 				return
 			}
 		}
@@ -662,7 +683,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			gameState.AutoRound = ar
 			gameState.mu.Unlock()
 			saveSetting("auto_round", strconv.Itoa(ar))
-			broadcast("STATE_UPDATE", &gameState)
+			broadcast(msgStateUpdate, &gameState)
 
 			if ar == 0 {
 				cancelAutoRoundTimer()
@@ -690,7 +711,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			dbVal = "1"
 		}
 		saveSetting("idle_message", dbVal)
-		broadcast("STATE_UPDATE", &gameState)
+		broadcast(msgStateUpdate, &gameState)
 		return
 
 	case "bouncywalls", "bouncy":
@@ -713,7 +734,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			dbVal = "1"
 		}
 		saveSetting("bouncy_walls", dbVal)
-		broadcast("STATE_UPDATE", &gameState)
+		broadcast(msgStateUpdate, &gameState)
 		return
 
 	case "join":
@@ -737,18 +758,18 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 			player.EmoteURL = defaultEmotes[randIdx].URL
 		}
 		gameState.mu.Unlock()
-		broadcast("STATE_UPDATE", &gameState)
+		broadcast(msgStateUpdate, &gameState)
 		return
 
 	case "startgame":
-		if gameState.Phase == PhaseIdle {
+		if gameState.Phase == phaseIdle {
 			gameState.mu.Unlock()
 			startInputPhase()
 			return
 		}
 
 	case "fire", "left", "right":
-		if gameState.Phase == PhaseInput {
+		if gameState.Phase == phaseInput {
 			player := gameState.Players[username]
 			if cmd == "fire" {
 				if len(parts) >= 3 {
@@ -764,7 +785,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 					player.Angle = player.LastAngle
 					player.Power = player.LastPower
 				}
-				player.ActionType = "FIRE"
+				player.ActionType = actionFire
 				player.Fired = true
 			} else {
 				player.ActionType = strings.ToUpper(cmd)
@@ -773,8 +794,8 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 
 			checkAllPlayersFired()
 			gameState.mu.Unlock()
-			broadcast("PLAYER_LOCKED", username)
-			broadcast("STATE_UPDATE", &gameState)
+			broadcast(msgPlayerLocked, username)
+			broadcast(msgStateUpdate, &gameState)
 			return
 		}
 	}

@@ -3,3 +3,5 @@
 *.db-journal
 leaderboard.json
 dist/
+node_modules/
+*.map
