@@ -332,6 +332,14 @@ function renderConfigModal(prefix) {
 
     const speedVal = (stateRef && typeof stateRef.physicsSpeed === 'number') ? stateRef.physicsSpeed : 0.5;
     const roundDuration = (stateRef && stateRef.inputDuration) ? stateRef.inputDuration : 20;
+    const autoRoundVal = (stateRef && typeof stateRef.autoRound === 'number') ? stateRef.autoRound : 0;
+
+    let autoRoundDisplay = `<span class="config-val badge-off">Off</span>`;
+    if (autoRoundVal === -1) {
+        autoRoundDisplay = `<span class="config-val badge-on">Immediate</span>`;
+    } else if (autoRoundVal > 0) {
+        autoRoundDisplay = `<span class="config-val badge-on">${autoRoundVal} min</span>`;
+    }
 
     const rows = [
         {
@@ -351,7 +359,7 @@ function renderConfigModal(prefix) {
         },
         {
             label: "Auto Round",
-            value: `<span class="config-val badge-off">Off</span>`,
+            value: autoRoundDisplay,
             cmd: `<span class="config-cmd">${prefix}autoround <span class="cmd-param">&lt;minutes|-1|off&gt;</span></span>`
         },
         {

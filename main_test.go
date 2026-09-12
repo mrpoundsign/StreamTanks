@@ -25,6 +25,9 @@ func resetGameStateForTest() {
 	gameState.Prefix = "%"
 	gameState.PhysicsSpeed = 0.5
 	gameState.ShowConfig = false
+	gameState.AutoRound = 0
+
+	cancelAutoRoundTimer()
 
 	if inputCancel != nil {
 		close(inputCancel)
@@ -424,11 +427,12 @@ func TestSettingsPersistence(t *testing.T) {
 	processCommand("Admin", "%prefix !", nil)
 	processCommand("Admin", "!speed 0.8", nil)
 	processCommand("Admin", "!commandtime 25", nil)
+	processCommand("Admin", "!autoround -1", nil)
 
 	// Reset in-memory gameState
 	resetGameStateForTest()
 	gameState.mu.Lock()
-	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 {
+	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 {
 		gameState.mu.Unlock()
 		t.Fatalf("expected reset state")
 	}
@@ -446,6 +450,60 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if gameState.InputDuration != 25 {
 		t.Errorf("expected loaded InputDuration 25, got %d", gameState.InputDuration)
+	}
+	if gameState.AutoRound != -1 {
+		t.Errorf("expected loaded AutoRound -1, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestAutoRoundConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	// Default AutoRound is 0 (off)
+	gameState.mu.Lock()
+	if gameState.AutoRound != 0 {
+		t.Errorf("expected default AutoRound 0, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+
+	// %autoround -1 (immediate)
+	processCommand("Admin", "%autoround -1", nil)
+	gameState.mu.Lock()
+	if gameState.AutoRound != -1 {
+		t.Errorf("expected AutoRound -1, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+
+	// %autoround immediate keyword
+	processCommand("Admin", "%autoround immediate", nil)
+	gameState.mu.Lock()
+	if gameState.AutoRound != -1 {
+		t.Errorf("expected AutoRound -1, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+
+	// %autoround 5 (5 minutes)
+	processCommand("Admin", "%autoround 5", nil)
+	gameState.mu.Lock()
+	if gameState.AutoRound != 5 {
+		t.Errorf("expected AutoRound 5, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+
+	// %autoround 0 / off disables
+	processCommand("Admin", "%autoround off", nil)
+	gameState.mu.Lock()
+	if gameState.AutoRound != 0 {
+		t.Errorf("expected AutoRound 0, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+
+	// Clamping max 60 minutes
+	processCommand("Admin", "%autoround 120", nil)
+	gameState.mu.Lock()
+	if gameState.AutoRound != 60 {
+		t.Errorf("expected AutoRound clamped to 60, got %d", gameState.AutoRound)
 	}
 	gameState.mu.Unlock()
 }

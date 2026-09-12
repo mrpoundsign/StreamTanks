@@ -49,6 +49,7 @@ type GameState struct {
 	Prefix        string             `json:"prefix"`
 	PhysicsSpeed  float64            `json:"physicsSpeed"`
 	ShowConfig    bool               `json:"showConfig"`
+	AutoRound     int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
 }
 
 var gameState = GameState{
@@ -142,6 +143,11 @@ func loadSettings() {
 					if _, err := fmt.Sscanf(v, "%d", &dur); err == nil && dur >= 5 && dur <= 120 {
 						gameState.InputDuration = dur
 					}
+				case "auto_round":
+					var ar int
+					if _, err := fmt.Sscanf(v, "%d", &ar); err == nil && (ar >= -1 && ar <= 60) {
+						gameState.AutoRound = ar
+					}
 				}
 			}
 		}
@@ -182,6 +188,7 @@ func broadcast(msgType string, payload interface{}) {
 			Prefix:        gameState.Prefix,
 			PhysicsSpeed:  gameState.PhysicsSpeed,
 			ShowConfig:    gameState.ShowConfig,
+			AutoRound:     gameState.AutoRound,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -290,6 +297,7 @@ func handleWebSocket(ws *websocket.Conn) {
 							gameState.mu.Unlock()
 							broadcast("STATE_UPDATE", &gameState)
 							broadcast("RESET_TERRAIN", nil)
+							triggerAutoRound()
 						} else {
 							gameState.mu.Unlock()
 						}
@@ -309,6 +317,7 @@ func handleWebSocket(ws *websocket.Conn) {
 				gameState.mu.Unlock()
 				broadcast("STATE_UPDATE", &gameState)
 				broadcast("RESET_TERRAIN", nil)
+				triggerAutoRound()
 			} else {
 				gameState.mu.Unlock()
 			}
@@ -325,8 +334,64 @@ func handleWebSocket(ws *websocket.Conn) {
 }
 
 var inputCancel chan struct{}
+var (
+	autoRoundTimerMu sync.Mutex
+	autoRoundTimer   *time.Timer
+)
+
+func cancelAutoRoundTimer() {
+	autoRoundTimerMu.Lock()
+	defer autoRoundTimerMu.Unlock()
+	if autoRoundTimer != nil {
+		autoRoundTimer.Stop()
+		autoRoundTimer = nil
+	}
+}
+
+func triggerAutoRound() {
+	gameState.mu.Lock()
+	ar := gameState.AutoRound
+	gameState.mu.Unlock()
+
+	if ar == 0 {
+		return
+	}
+
+	cancelAutoRoundTimer()
+
+	if ar == -1 {
+		// Immediate next round
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			gameState.mu.Lock()
+			if gameState.Phase == PhaseIdle {
+				gameState.mu.Unlock()
+				startInputPhase()
+			} else {
+				gameState.mu.Unlock()
+			}
+		}()
+		return
+	}
+
+	// Scheduled minutes
+	delay := time.Duration(ar) * time.Minute
+	autoRoundTimerMu.Lock()
+	autoRoundTimer = time.AfterFunc(delay, func() {
+		gameState.mu.Lock()
+		if gameState.Phase == PhaseIdle {
+			gameState.mu.Unlock()
+			startInputPhase()
+		} else {
+			gameState.mu.Unlock()
+		}
+	})
+	autoRoundTimerMu.Unlock()
+}
 
 func startInputPhase() {
+	cancelAutoRoundTimer()
+
 	gameState.mu.Lock()
 	gameState.Phase = PhaseInput
 	// Reset fired status and action for all players
@@ -538,6 +603,36 @@ func processCommand(username string, msg string, emotes []*twitch.Emote) {
 				broadcast("STATE_UPDATE", &gameState)
 				return
 			}
+		}
+
+	case "autoround":
+		if len(parts) > 1 {
+			arg := strings.ToLower(parts[1])
+			var ar int
+			switch arg {
+			case "off", "false", "0":
+				ar = 0
+			case "-1", "immediate", "instant":
+				ar = -1
+			default:
+				if _, err := fmt.Sscanf(parts[1], "%d", &ar); err != nil || ar < 1 {
+					gameState.mu.Unlock()
+					return
+				}
+				if ar > 60 {
+					ar = 60
+				}
+			}
+
+			gameState.AutoRound = ar
+			gameState.mu.Unlock()
+			saveSetting("auto_round", strconv.Itoa(ar))
+			broadcast("STATE_UPDATE", &gameState)
+
+			if ar == 0 {
+				cancelAutoRoundTimer()
+			}
+			return
 		}
 
 	case "join":
