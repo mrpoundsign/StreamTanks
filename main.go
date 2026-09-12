@@ -1,17 +1,18 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
+	_ "modernc.org/sqlite"
 	"golang.org/x/net/websocket"
 )
 
@@ -32,6 +33,7 @@ type Player struct {
 	Fired     bool   `json:"fired"`
 	Angle     int    `json:"angle"`
 	Power     int    `json:"power"`
+	IsDead    bool   `json:"isDead"`
 }
 
 type GameState struct {
@@ -46,15 +48,41 @@ type GameState struct {
 var gameState = GameState{
 	Phase:         PhaseIdle,
 	Players:       make(map[string]*Player),
-	InputDuration: 15,
+	InputDuration: 20,
 	Leaderboard:   make(map[string]int),
 	ActiveClients: make(map[*websocket.Conn]bool),
 }
+
+var db *sql.DB
 
 // WSMessage is the generic message sent over websocket
 type WSMessage struct {
 	Type    string      `json:"type"`
 	Payload interface{} `json:"payload"`
+}
+
+func loadLeaderboard() {
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	rows, err := db.Query(`SELECT username, wins FROM leaderboard`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			var wins int
+			if err := rows.Scan(&name, &wins); err == nil {
+				gameState.Leaderboard[name] = wins
+			}
+		}
+	}
+}
+
+func incrementWin(username string) {
+	_, err := db.Exec(`INSERT INTO leaderboard (username, wins) VALUES (?, 1) ON CONFLICT(username) DO UPDATE SET wins = wins + 1`, username)
+	if err != nil {
+		log.Println("DB error:", err)
+	}
 }
 
 func broadcast(msgType string, payload interface{}) {
@@ -97,14 +125,15 @@ func handleWebSocket(ws *websocket.Conn) {
 			// Start new input phase
 			startInputPhase()
 		} else if msg.Type == "PLAYER_DIED" {
-			// Remove player
-			// Payload is expected to be a string (player name)
+			// A player was destroyed, remove from active players
 			payloadBytes, _ := json.Marshal(msg.Payload)
-			var name string
-			json.Unmarshal(payloadBytes, &name)
-			
+			var deadPlayer string
+			json.Unmarshal(payloadBytes, &deadPlayer)
+
 			gameState.mu.Lock()
-			delete(gameState.Players, name)
+			if p, exists := gameState.Players[deadPlayer]; exists {
+				p.IsDead = true
+			}
 			gameState.mu.Unlock()
 			broadcast("STATE_UPDATE", gameState)
 		} else if msg.Type == "GAME_OVER" {
@@ -117,7 +146,7 @@ func handleWebSocket(ws *websocket.Conn) {
 			gameState.Phase = PhaseCelebration
 			if winner != "" {
 				gameState.Leaderboard[winner]++
-				saveLeaderboard()
+				incrementWin(winner)
 			}
 			gameState.mu.Unlock()
 			broadcast("STATE_UPDATE", gameState)
@@ -127,18 +156,16 @@ func handleWebSocket(ws *websocket.Conn) {
 				time.Sleep(5 * time.Second)
 				gameState.mu.Lock()
 				gameState.Phase = PhaseIdle
+				// Revive all players for the next game
+				for _, p := range gameState.Players {
+					p.IsDead = false
+					p.Fired = false
+				}
 				gameState.mu.Unlock()
 				broadcast("STATE_UPDATE", gameState)
 				broadcast("RESET_TERRAIN", nil)
 			}()
 		}
-	}
-}
-
-func saveLeaderboard() {
-	data, err := json.Marshal(gameState.Leaderboard)
-	if err == nil {
-		os.WriteFile("leaderboard.json", data, 0644)
 	}
 }
 
@@ -170,7 +197,11 @@ func executeActionPhase() {
 	
 	// Apply last known values for those who didn't fire
 	for _, p := range gameState.Players {
+		if p.IsDead {
+			continue
+		}
 		if !p.Fired {
+			// Auto-fire with last known config
 			p.Angle = p.LastAngle
 			p.Power = p.LastPower
 			p.Fired = true
@@ -187,10 +218,20 @@ func main() {
 	channelName := flag.String("channel", "mrpou", "Twitch channel to join")
 	flag.Parse()
 
-	// Load leaderboard
-	if data, err := os.ReadFile("leaderboard.json"); err == nil {
-		json.Unmarshal(data, &gameState.Leaderboard)
+	var err error
+	db, err = sql.Open("sqlite", "streamtanks.db")
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS leaderboard (username TEXT PRIMARY KEY, wins INTEGER)`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Load leaderboard
+	loadLeaderboard()
 
 	// Setup Twitch Client
 	client := twitch.NewAnonymousClient()

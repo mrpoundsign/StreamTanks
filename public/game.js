@@ -26,8 +26,21 @@ const avatarCache = {};
 // Initialize terrain
 function initTerrain() {
     // Generate some wavy hills
-    for (let x = 0; x < WIDTH; x++) {
-        terrain[x] = 700 + Math.sin(x / 150) * 150 + Math.sin(x / 40) * 30;
+    let y = HEIGHT / 2 + Math.random() * 100 - 50;
+    terrain[0] = y;
+    for (let x = 1; x < WIDTH; x++) {
+        let slope = (Math.random() - 0.5) * 2;
+        y += slope;
+        // Keep in bounds roughly
+        if (y < 200) y = 200;
+        if (y > HEIGHT - 100) y = HEIGHT - 100;
+        terrain[x] = y;
+    }
+    
+    // Parachute all players back in
+    for (const name in players) {
+        players[name].x = Math.random() * (WIDTH - 100) + 50;
+        players[name].y = -50;
     }
 }
 
@@ -71,6 +84,7 @@ ws.onmessage = (event) => {
                 players[name].power = newPlayers[name].power;
                 players[name].emote = newPlayers[name].emote;
                 players[name].emoteUrl = newPlayers[name].emoteUrl;
+                players[name].isDead = newPlayers[name].isDead;
             }
             
             // Ensure emote DOM element exists and has correct src
@@ -117,7 +131,10 @@ function updateUI() {
         phaseDisplay.innerText = "INPUT PHASE - !fire <angle> <power>";
         timerDisplay.style.display = 'block';
         celebrationDisplay.style.display = 'none';
-        inputTimer = 15; // Set by backend, hardcoded for now
+        inputTimer = 20; // 15s + 5s lag
+        timerDisplay.innerText = inputTimer.toString();
+        timerDisplay.style.color = "#fff";
+        timerDisplay.style.animation = "none";
     } else if (currentPhase === 'ACTION') {
         phaseDisplay.style.display = 'block';
         phaseDisplay.innerText = "ACTION PHASE";
@@ -167,13 +184,27 @@ function updateLeaderboard(lb) {
 setInterval(() => {
     if (currentPhase === 'INPUT' && inputTimer > 0) {
         inputTimer--;
-        timerDisplay.innerText = inputTimer;
+        if (inputTimer <= 5 && inputTimer > 0) {
+            timerDisplay.innerText = "FIRING IN " + inputTimer + "!";
+            timerDisplay.style.color = "#ff003c";
+            timerDisplay.style.animation = "pulse 0.5s infinite alternate";
+            timerDisplay.style.textShadow = "0 0 10px #ff003c";
+        } else if (inputTimer > 5) {
+            timerDisplay.innerText = inputTimer.toString();
+            timerDisplay.style.color = "#fff";
+            timerDisplay.style.animation = "none";
+            timerDisplay.style.textShadow = "0 0 5px #00ffcc";
+        } else {
+            timerDisplay.innerText = "FIRING!";
+        }
     }
 }, 1000);
 
 function executeFire() {
+    projectiles = [];
     for (const name in players) {
         const p = players[name];
+        if (p.isDead) continue;
         // Convert angle (degrees) to radians. 0 is right, 90 is up, 180 is left.
         const rad = p.angle * Math.PI / 180;
         // Scale power
@@ -208,16 +239,16 @@ function destroyTerrain(cx, cy, radius) {
 function checkTankCollisions(cx, cy, radius, owner) {
     for (const name in players) {
         const p = players[name];
+        if (p.isDead) continue;
         const dist = Math.hypot(p.x - cx, p.y - cy);
         if (dist < radius + 20) {
             // Tank is destroyed
+            p.isDead = true;
             showKillMessage(`${owner} destroyed ${name}!`);
             ws.send(JSON.stringify({ type: 'PLAYER_DIED', payload: name }));
             
             const imgEl = document.getElementById('emote-' + name);
-            if (imgEl) imgEl.remove();
-            
-            delete players[name];
+            if (imgEl) imgEl.style.display = 'none';
         }
     }
 }
@@ -235,9 +266,10 @@ function showKillMessage(msg) {
 }
 
 function updatePhysics(dt) {
-    // Tank logic
+    // Player logic
     for (const name in players) {
         const p = players[name];
+        if (p.isDead) continue;
         
         // Roaming in IDLE
         if (currentPhase === 'IDLE') {
@@ -258,11 +290,11 @@ function updatePhysics(dt) {
 
         // Fall off bottom of screen
         if (p.y >= HEIGHT) {
+            p.isDead = true;
             showKillMessage(`${name} fell into the abyss!`);
             ws.send(JSON.stringify({ type: 'PLAYER_DIED', payload: name }));
             const imgEl = document.getElementById('emote-' + name);
-            if (imgEl) imgEl.remove();
-            delete players[name];
+            if (imgEl) imgEl.style.display = 'none';
         }
     }
 
@@ -289,6 +321,7 @@ function updatePhysics(dt) {
         else {
             for (const name in players) {
                 const p = players[name];
+                if (p.isDead) continue;
                 if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
                     hit = true;
                     destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS);
@@ -335,7 +368,7 @@ function updatePhysics(dt) {
         // Here we just end it immediately for simplicity
         let anyFalling = false;
         for (const name in players) {
-            if (players[name].y < terrain[Math.floor(players[name].x)]) {
+            if (!players[name].isDead && players[name].y < terrain[Math.floor(players[name].x)]) {
                 anyFalling = true; break;
             }
         }
@@ -344,8 +377,19 @@ function updatePhysics(dt) {
             ws.send(JSON.stringify({ type: 'ACTION_COMPLETE' }));
             
             // Check win condition
-            if (Object.keys(players).length <= 1) {
-                 const winner = Object.keys(players)[0] || "";
+            let aliveCount = 0;
+            let aliveName = "";
+            let totalPlayers = 0;
+            for (const key in players) {
+                totalPlayers++;
+                if (!players[key].isDead) {
+                    aliveCount++;
+                    aliveName = key;
+                }
+            }
+
+            if (aliveCount <= 1 && totalPlayers > 1 || (totalPlayers === 1 && aliveCount === 0)) {
+                 const winner = aliveCount === 1 ? aliveName : "";
                  celebrationWinner = winner;
                  ws.send(JSON.stringify({ type: 'GAME_OVER', payload: winner }));
                  
@@ -403,6 +447,12 @@ function draw() {
     // Draw Tanks
     for (const name in players) {
         const p = players[name];
+        const imgEl = document.getElementById('emote-' + name);
+        if (p.isDead) {
+            if (imgEl) imgEl.style.display = 'none';
+            continue;
+        }
+
         ctx.save();
         ctx.translate(p.x, p.y);
         
@@ -422,8 +472,8 @@ function draw() {
         ctx.restore();
 
         // Sync DOM Emote position and rotation
-        const imgEl = document.getElementById('emote-' + name);
         if (imgEl) {
+            imgEl.style.display = 'block';
             imgEl.style.left = (p.x - 14) + 'px';
             imgEl.style.top = (p.y - 35) + 'px';
             imgEl.style.transformOrigin = "14px 35px";
