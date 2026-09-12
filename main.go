@@ -879,7 +879,14 @@ func main() {
 		fileHandler.ServeHTTP(w, r)
 	})
 
-	log.Printf("Server starting on %s", *listenAddr)
+	displayURL := *listenAddr
+	if strings.HasPrefix(displayURL, ":") {
+		displayURL = "localhost" + displayURL
+	}
+	if !strings.HasPrefix(displayURL, "http://") && !strings.HasPrefix(displayURL, "https://") {
+		displayURL = "http://" + displayURL
+	}
+	log.Printf("StreamTanks overlay running at: %s", displayURL)
 	if err := http.ListenAndServe(*listenAddr, nil); err != nil {
 		log.Println("Server stopped:", err)
 	}
