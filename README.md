@@ -70,6 +70,7 @@ All settings automatically save to the local database and persist across restart
 | `%autoround` | `<minutes\|-1\|off>` | Automates round starts: `-1` for immediate, `>0` for scheduled minutes, `off` to disable. | `%autoround 3` |
 | `%idlemessage` | `on\|off` | Shows or hides the idle waiting HUD and leaderboard when waiting between matches. | `%idlemessage off` |
 | `%bouncywalls` | `[on\|off]` | Enables bouncy screen walls with a +10% speed boost for bullets and +50% speed boost for tanks. | `%bouncywalls on` |
+| `%clearleaderboard` | _none_ | Clears all player wins from SQLite database and live overlay leaderboard. | `%clearleaderboard` |
 | `%prefix` | `<symbol>` | Changes the command prefix for all commands. | `%prefix !` |
 
 ---

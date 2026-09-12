@@ -737,6 +737,17 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			}
 		}
 
+	case "clearleaderboard", "resetleaderboard":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		gameState.Leaderboard = make(map[string]int)
+		gameState.mu.Unlock()
+		clearLeaderboardDB()
+		broadcast(msgStateUpdate, &gameState)
+		return
+
 	case "join":
 		player := gameState.Players[username]
 		if gameState.Phase != phaseIdle {
