@@ -151,3 +151,14 @@ func saveSetting(key, value string) {
 		log.Println("DB saveSetting error:", err)
 	}
 }
+
+func clearLeaderboardDB() {
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`DELETE FROM leaderboard`)
+	if err != nil {
+		log.Println("DB clearLeaderboard error:", err)
+	}
+}
+

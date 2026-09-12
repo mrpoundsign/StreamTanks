@@ -1284,3 +1284,85 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	}
 }
 
+func TestClearLeaderboard(t *testing.T) {
+	resetGameStateForTest()
+	_ = initDB(":memory:")
+	defer closeDB()
+
+	// Populate leaderboard in memory and DB
+	incrementWin("Alice")
+	incrementWin("Alice")
+	incrementWin("Bob")
+
+	gameState.mu.Lock()
+	gameState.Leaderboard["Alice"] = 2
+	gameState.Leaderboard["Bob"] = 1
+	gameState.ConfigPerm = "broadcaster"
+	gameState.mu.Unlock()
+
+	regularUser := &twitch.User{Name: "Charlie", Badges: map[string]int{}}
+	modUser := &twitch.User{Name: "ModUser", IsMod: true}
+	broadcasterUser := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+
+	// 1. Regular user cannot clear leaderboard when ConfigPerm is broadcaster
+	processCommand("Charlie", "%clearleaderboard", nil, regularUser)
+	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected leaderboard not to be cleared by regular user, got len %d", len(gameState.Leaderboard))
+	}
+	gameState.mu.Unlock()
+
+	// 2. Mod user cannot clear leaderboard when ConfigPerm is broadcaster
+	processCommand("ModUser", "%clearleaderboard", nil, modUser)
+	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected leaderboard not to be cleared by mod when ConfigPerm=broadcaster, got len %d", len(gameState.Leaderboard))
+	}
+	gameState.mu.Unlock()
+
+	// 3. Broadcaster clears leaderboard
+	processCommand("Streamer", "%clearleaderboard", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 0 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected leaderboard to be empty after %%clearleaderboard, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+
+	// Verify SQLite database was also cleared
+	loadLeaderboard()
+	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 0 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected SQLite leaderboard table to be empty after %%clearleaderboard, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+
+	// 4. Test alias %resetleaderboard works when ConfigPerm allows it
+	incrementWin("David")
+	gameState.mu.Lock()
+	gameState.Leaderboard["David"] = 1
+	gameState.ConfigPerm = "mod"
+	gameState.mu.Unlock()
+
+	processCommand("ModUser", "%resetleaderboard", nil, modUser)
+	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 0 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected leaderboard to be empty after %%resetleaderboard, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+
+	// Verify SQLite database was also cleared
+	loadLeaderboard()
+	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 0 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected SQLite leaderboard table to be empty after %%resetleaderboard, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+}
+
+

@@ -559,6 +559,11 @@ function renderConfigModal(prefix: string): void {
       value: `<span class="config-val badge-on">${stateRef?.configPerm ?? 'broadcaster'}</span>`,
       cmd: `<span class="config-cmd">${prefix}configperm <span class="cmd-param">&lt;role&gt;</span></span>`,
     },
+    {
+      label: 'Clear Leaderboard',
+      value: `<span class="config-val badge-off">Wipe</span>`,
+      cmd: `<span class="config-cmd">${prefix}clearleaderboard</span>`,
+    },
   ];
 
   configTableBody.innerHTML = rows
