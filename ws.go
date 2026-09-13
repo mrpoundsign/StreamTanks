@@ -42,29 +42,37 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 		}
 		terrainCopy := make([]float64, len(gameState.Terrain))
 		copy(terrainCopy, gameState.Terrain)
+		projCopy := make([]Projectile, len(gameState.Projectiles))
+		copy(projCopy, gameState.Projectiles)
+		expCopy := make([]Explosion, len(gameState.Explosions))
+		copy(expCopy, gameState.Explosions)
 		stateCopy := &GameState{
-			Phase:         gameState.Phase,
-			Players:       playersCopy,
-			InputDuration: gameState.InputDuration,
-			MoveDistance:  gameState.MoveDistance,
-			Leaderboard:   lbCopy,
-			Debug:         gameState.Debug,
-			Prefix:        gameState.Prefix,
-			PhysicsSpeed:  gameState.PhysicsSpeed,
-			ShowConfig:    gameState.ShowConfig,
-			AutoRound:     gameState.AutoRound,
-			IdleMessage:   gameState.IdleMessage,
-			BouncyWalls:   gameState.BouncyWalls,
-			Terrain:       terrainCopy,
-			TerrainMin:    gameState.TerrainMin,
-			TerrainMax:    gameState.TerrainMax,
-			RoundID:       gameState.RoundID,
-			StartPerm:     gameState.StartPerm,
-			ConfigPerm:    gameState.ConfigPerm,
-			MinPlayers:    gameState.MinPlayers,
-			BotFill:       gameState.BotFill,
-			BotPoints:     gameState.BotPoints,
-			BotList:       gameState.BotList,
+			Phase:          gameState.Phase,
+			Players:        playersCopy,
+			InputDuration:  gameState.InputDuration,
+			MoveDistance:   gameState.MoveDistance,
+			Leaderboard:    lbCopy,
+			Debug:          gameState.Debug,
+			Prefix:         gameState.Prefix,
+			PhysicsSpeed:   gameState.PhysicsSpeed,
+			ShowConfig:     gameState.ShowConfig,
+			AutoRound:      gameState.AutoRound,
+			IdleMessage:    gameState.IdleMessage,
+			BouncyWalls:    gameState.BouncyWalls,
+			Terrain:        terrainCopy,
+			TerrainMin:     gameState.TerrainMin,
+			TerrainMax:     gameState.TerrainMax,
+			RoundID:        gameState.RoundID,
+			StartPerm:      gameState.StartPerm,
+			ConfigPerm:     gameState.ConfigPerm,
+			MinPlayers:     gameState.MinPlayers,
+			BotFill:        gameState.BotFill,
+			BotPoints:      gameState.BotPoints,
+			BotList:        gameState.BotList,
+			Winner:         gameState.Winner,
+			TimerRemaining: gameState.TimerRemaining,
+			Projectiles:    projCopy,
+			Explosions:     expCopy,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
