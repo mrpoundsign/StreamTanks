@@ -252,7 +252,8 @@ body {
 
 .scrollable-body {
     overflow-y: auto;
-    max-height: 420px;
+    max-height: calc(100vh - 170px);
+    flex: 1;
     padding: 0;
 }
 
@@ -537,128 +538,4 @@ input[type="range"] {
 }
 
 /* Command Console */
-.admin-console {
-    background: #080a0f;
-    border-top: 1px solid var(--border-color);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.7);
-    display: flex;
-    flex-direction: column;
-    z-index: 20;
-    max-height: 260px;
-}
 
-.console-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 18px;
-    background: rgba(0, 0, 0, 0.4);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.console-title {
-    font-family: var(--font-heading);
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--neon-cyan);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    letter-spacing: 0.5px;
-}
-
-.console-quick-pills {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    overflow-x: auto;
-    padding: 2px 0;
-}
-
-.pill-label {
-    font-size: 10px;
-    color: var(--text-muted);
-    margin-right: 4px;
-}
-
-.console-pill {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: var(--text-main);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    padding: 3px 8px;
-    border-radius: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s;
-}
-
-.console-pill:hover {
-    background: rgba(0, 255, 204, 0.15);
-    border-color: var(--neon-cyan);
-    color: var(--neon-cyan);
-}
-
-.console-output {
-    padding: 10px 18px;
-    overflow-y: auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.5;
-    height: 140px;
-    background: rgba(0, 0, 0, 0.6);
-}
-
-.console-line {
-    margin-bottom: 2px;
-    word-break: break-all;
-}
-
-.console-line.system {
-    color: #6c7d93;
-}
-
-.console-line.cmd {
-    color: var(--neon-cyan);
-    font-weight: 600;
-}
-
-.console-line.event {
-    color: var(--neon-yellow);
-}
-
-.console-line.error {
-    color: #ff5577;
-}
-
-.console-input-bar {
-    display: flex;
-    align-items: center;
-    padding: 8px 18px;
-    background: rgba(12, 16, 24, 0.95);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    gap: 10px;
-}
-
-.console-prompt {
-    font-family: var(--font-mono);
-    font-size: 16px;
-    color: var(--neon-cyan);
-    font-weight: bold;
-}
-
-.console-input-bar input {
-    flex: 1;
-    font-family: var(--font-mono);
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 13px;
-    padding: 6px 0;
-}
-
-.console-input-bar input:focus {
-    outline: none;
-    box-shadow: none;
-}

@@ -4,8 +4,6 @@
     let stateRef = null;
     let reconnectTimer = null;
     const avatarCache = {};
-    const commandHistory = JSON.parse(localStorage.getItem('st_admin_history') || '[]');
-    let historyIdx = -1;
     let isTerrainDirty = false;
 
     // DOM Elements
@@ -42,21 +40,6 @@
     const playerCountBadge = document.getElementById('player-count-badge');
     const leaderboardTableBody = document.getElementById('leaderboard-table-body');
 
-    // Console
-    const consoleOutput = document.getElementById('console-output');
-    const consoleForm = document.getElementById('console-form');
-    const consoleInput = document.getElementById('console-input');
-    const btnClearConsole = document.getElementById('btn-clear-console');
-
-    // Log to Console UI
-    function logConsole(msg, type = 'system') {
-        const line = document.createElement('div');
-        line.className = `console-line ${type}`;
-        const time = new Date().toLocaleTimeString();
-        line.innerText = `[${time}] ${msg}`;
-        consoleOutput.appendChild(line);
-        consoleOutput.scrollTop = consoleOutput.scrollHeight;
-    }
 
     // Connect WebSocket
     function connectWS() {
@@ -72,7 +55,6 @@
             ws.onopen = () => {
                 connectionPill.className = 'connection-pill connected';
                 connectionText.innerText = 'Connected';
-                logConsole('Connected to StreamTanks live server.', 'system');
                 if (reconnectTimer) {
                     clearInterval(reconnectTimer);
                     reconnectTimer = null;
@@ -91,7 +73,6 @@
             ws.onclose = () => {
                 connectionPill.className = 'connection-pill disconnected';
                 connectionText.innerText = 'Disconnected';
-                logConsole('WebSocket disconnected. Retrying in 2s...', 'error');
                 scheduleReconnect();
             };
 
@@ -121,17 +102,8 @@
 
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'CHAT_COMMAND', payload: formatted }));
-            logConsole(`> ${formatted}`, 'cmd');
-
-            // Save to history
-            if (commandHistory[commandHistory.length - 1] !== formatted) {
-                commandHistory.push(formatted);
-                if (commandHistory.length > 50) commandHistory.shift();
-                localStorage.setItem('st_admin_history', JSON.stringify(commandHistory));
-            }
-            historyIdx = -1;
         } else {
-            logConsole(`Error: WebSocket not connected. Cannot send: ${formatted}`, 'error');
+            console.warn(`WebSocket not connected. Cannot send: ${formatted}`);
         }
     }
 
@@ -435,53 +407,6 @@
             }
             return;
         }
-
-        const pill = e.target.closest('.console-pill');
-        if (pill) {
-            const cmd = pill.dataset.cmd;
-            if (cmd) {
-                consoleInput.value = cmd;
-                consoleInput.focus();
-            }
-            return;
-        }
-    });
-
-    // Console Command Input Handling
-    consoleForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const cmd = consoleInput.value.trim();
-        if (cmd) {
-            sendCommand(cmd);
-            consoleInput.value = '';
-        }
-    });
-
-    // Command History (Up / Down Arrows)
-    consoleInput.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            if (commandHistory.length > 0) {
-                if (historyIdx === -1) historyIdx = commandHistory.length - 1;
-                else if (historyIdx > 0) historyIdx--;
-                consoleInput.value = commandHistory[historyIdx];
-            }
-        } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            if (commandHistory.length > 0 && historyIdx !== -1) {
-                if (historyIdx < commandHistory.length - 1) {
-                    historyIdx++;
-                    consoleInput.value = commandHistory[historyIdx];
-                } else {
-                    historyIdx = -1;
-                    consoleInput.value = '';
-                }
-            }
-        }
-    });
-
-    btnClearConsole.addEventListener('click', () => {
-        consoleOutput.innerHTML = '<div class="console-line system">[SYSTEM] Console log cleared.</div>';
     });
 
     // Initialize

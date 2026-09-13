@@ -228,37 +228,6 @@
                 </div>
             </section>
         </main>
-
-        <!-- Always-Visible Command Console at Bottom -->
-        <footer class="admin-console">
-            <div class="console-header">
-                <div class="console-title">
-                    <span class="console-icon">&#9002;</span> Interactive Command Console
-                </div>
-                <div class="console-quick-pills">
-                    <span class="pill-label">Quick Commands:</span>
-                    <button class="console-pill" data-cmd="%startgame">%startgame</button>
-                    <button class="console-pill" data-cmd="%fire 45 60">%fire 45 60</button>
-                    <button class="console-pill" data-cmd="%left">%left</button>
-                    <button class="console-pill" data-cmd="%right">%right</button>
-                    <button class="console-pill" data-cmd="%bouncywalls on">%bouncywalls on</button>
-                    <button class="console-pill" data-cmd="%roundtime 20">%roundtime 20</button>
-                    <button class="console-pill" data-cmd="%clearleaderboard">%clearleaderboard</button>
-                    <button class="console-pill" data-cmd="%config on">%config on</button>
-                </div>
-                <button id="btn-clear-console" class="btn btn-tiny">Clear Log</button>
-            </div>
-
-            <div id="console-output" class="console-output">
-                <div class="console-line system">[SYSTEM] StreamTanks Commander Console initialized. Connect to /ws...</div>
-            </div>
-
-            <form id="console-form" class="console-input-bar">
-                <span class="console-prompt">&gt;</span>
-                <input type="text" id="console-input" placeholder="Type a chat command (%startgame, %fire 45 70, %roundtime 15, %deleteplayer <user>)..." autocomplete="off" spellcheck="false" />
-                <button type="submit" id="console-send-btn" class="btn btn-primary">Execute</button>
-            </form>
-        </footer>
     </div>
 
     <script src="admin.js"></script>
