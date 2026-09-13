@@ -162,3 +162,14 @@ func clearLeaderboardDB() {
 	}
 }
 
+func deletePlayerDB(username string) {
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`DELETE FROM leaderboard WHERE LOWER(username) = LOWER(?)`, username)
+	if err != nil {
+		log.Println("DB deletePlayer error:", err)
+	}
+}
+
+
