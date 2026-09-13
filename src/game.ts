@@ -1,11 +1,8 @@
 import {
   WIDTH,
   HEIGHT,
-  EXPLOSION_RADIUS,
-  GRAVITY,
   Player,
   GameState,
-  Projectile,
   Explosion,
   GamePhase,
   WSMessage,
@@ -13,21 +10,13 @@ import {
   PhaseInput,
   PhaseAction,
   PhaseCelebration,
-  PhaseWaitingNextPhase,
   MsgStateUpdate,
-  MsgExecuteActions,
   MsgResetTerrain,
-  MsgActionComplete,
   MsgPlayerDied,
   PlayerDiedPayload,
-  MsgGameOver,
-  MsgCelebrationComplete,
   MsgChatCommand,
   MsgTerrainCrater,
   CraterPayload,
-  ActionFire,
-  ActionLeft,
-  ActionRight,
 } from './types';
 import { createDefaultTerrain, getTerrainHeight, applyCrater } from './terrain';
 import { NetworkManager } from './network';
@@ -63,26 +52,19 @@ const debugSendBtn = document.getElementById('debug-send-btn') as HTMLElement;
 // Game State
 let terrain: number[] = createDefaultTerrain();
 const players: Record<string, Player> = {};
-let projectiles: Projectile[] = [];
 const explosions: Explosion[] = [];
 let currentPhase: GamePhase = PhaseIdle;
 let previousPhase: GamePhase = PhaseIdle;
 let inputTimer = 0;
-let lastTime = performance.now();
 let celebrationWinner = '';
-let celebrationStartTime = 0;
-let celebrationSentComplete = false;
 let stateRef: GameState | null = null;
+const appliedCraterIds = new Set<string>();
 
 const avatarCache: Record<string, string> = {};
 const emoteCache: Record<string, HTMLImageElement> = {};
 
 // Network
 const net = new NetworkManager();
-
-function createWallSpark(cx: number, cy: number): void {
-  explosions.push({ x: cx, y: cy, radius: 0, maxRadius: 30, alpha: 1, isSpark: true });
-}
 
 function showKillMessage(msg: string): void {
   const el = document.createElement('div');
@@ -96,347 +78,7 @@ function showKillMessage(msg: string): void {
   }, 5000);
 }
 
-function checkTankCollisions(cx: number, cy: number, radius: number, owner: string): void {
-  for (const name in players) {
-    if (name === owner) continue; // No self-damage
-    const p = players[name];
-    if (p.isDead) continue;
-    const dist = Math.hypot(p.x - cx, p.y - cy);
-    if (dist < radius + 20) {
-      p.isDead = true;
-      showKillMessage(`${owner} destroyed ${name}!`);
-      net.send({ type: MsgPlayerDied, payload: { victim: name, killer: owner } as PlayerDiedPayload });
 
-      const imgEl = document.getElementById('emote-' + name);
-      if (imgEl) imgEl.style.display = 'none';
-    }
-  }
-}
-
-const appliedCraterIds = new Set<string>();
-
-function destroyTerrain(cx: number, cy: number, radius: number, shotId?: string): void {
-  if (shotId) {
-    if (appliedCraterIds.has(shotId)) {
-      return;
-    }
-    appliedCraterIds.add(shotId);
-  }
-  applyCrater(terrain, cx, cy, radius);
-  explosions.push({ x: cx, y: cy, radius: 0, maxRadius: radius, alpha: 1 });
-  net.send({
-    type: MsgTerrainCrater,
-    payload: { id: shotId, x: cx, y: cy, radius },
-  });
-}
-
-function executeActions(): void {
-  projectiles = [];
-  for (const name in players) {
-    const p = players[name];
-    if (p.isDead) continue;
-
-    if (p.actionType === ActionFire) {
-      const rad = ((p.angle ?? 45) * Math.PI) / 180;
-      const powerClamped = Math.min(Math.max(p.power ?? 50, 1), 100);
-      const powerScaled = powerClamped / 5;
-      const vx = Math.cos(rad) * powerScaled;
-      const vy = -Math.sin(rad) * powerScaled;
-      const shotId = `${stateRef?.roundId ?? 0}_${name}`;
-
-      const muzzleDist = 25;
-      const spawnX = p.x + Math.cos(rad) * muzzleDist;
-      const spawnY = p.y - 10 - Math.sin(rad) * muzzleDist;
-
-      projectiles.push({
-        id: shotId,
-        x: spawnX,
-        y: spawnY,
-        vx,
-        vy,
-        owner: name,
-        emoteUrl: p.emoteUrl,
-      });
-    } else if (p.actionType === ActionLeft) {
-      p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
-      p.moving = true;
-      p.speedMultiplier = 1.0;
-      p.hasBounced = false;
-    } else if (p.actionType === ActionRight) {
-      p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
-      p.moving = true;
-      p.speedMultiplier = 1.0;
-      p.hasBounced = false;
-    }
-  }
-}
-
-function updatePhysics(dtScale: number): void {
-  let anyMoving = false;
-  const bouncyWalls = !!stateRef?.bouncyWalls;
-
-  for (const name in players) {
-    const p = players[name];
-    if (p.isDead) continue;
-
-    // Execute Action Movement
-    if (currentPhase === PhaseAction && p.moving) {
-      anyMoving = true;
-      const currentSpeed = (p.speedMultiplier ?? 1.0) * 2.0 * dtScale;
-      if (p.actionType === ActionLeft) {
-        p.x -= currentSpeed;
-        if (p.x <= 20) {
-          if (bouncyWalls && !p.hasBounced) {
-            p.x = 20;
-            p.actionType = ActionRight;
-            p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
-            p.speedMultiplier = 1.5; // +50% speed boost
-            p.hasBounced = true;
-            createWallSpark(20, p.y);
-          } else if ((p.moveTarget !== undefined && p.x <= p.moveTarget) || p.x <= 20) {
-            p.moving = false;
-            if (p.x < 20) p.x = 20;
-          }
-        } else if (p.moveTarget !== undefined && p.x <= p.moveTarget) {
-          p.moving = false;
-        }
-      } else if (p.actionType === ActionRight) {
-        p.x += currentSpeed;
-        if (p.x >= WIDTH - 20) {
-          if (bouncyWalls && !p.hasBounced) {
-            p.x = WIDTH - 20;
-            p.actionType = ActionLeft;
-            p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
-            p.speedMultiplier = 1.5; // +50% speed boost
-            p.hasBounced = true;
-            createWallSpark(WIDTH - 20, p.y);
-          } else if ((p.moveTarget !== undefined && p.x >= p.moveTarget) || p.x >= WIDTH - 20) {
-            p.moving = false;
-            if (p.x > WIDTH - 20) p.x = WIDTH - 20;
-          }
-        } else if (p.moveTarget !== undefined && p.x >= p.moveTarget) {
-          p.moving = false;
-        }
-      }
-    }
-
-    // Roaming in IDLE
-    if (currentPhase === PhaseIdle) {
-      if (!p.dx) {
-        p.dx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
-      }
-      p.x += p.dx * dtScale;
-      if (p.x < 50) {
-        p.x = 50;
-        p.dx = Math.abs(p.dx);
-      } else if (p.x > WIDTH - 50) {
-        p.x = WIDTH - 50;
-        p.dx = -Math.abs(p.dx);
-      }
-    }
-
-    // Boundary clamping: ensure tanks never leave the screen boundaries [20, WIDTH - 20]
-    if (p.x < 20) p.x = 20;
-    if (p.x > WIDTH - 20) p.x = WIDTH - 20;
-
-    // Falling / Ground snapping
-    const floorY = getTerrainHeight(terrain, p.x);
-    if (p.y < floorY) {
-      p.y += 5.0 * dtScale; // Falling speed
-      if (p.y > floorY) p.y = floorY;
-    } else {
-      p.y = floorY;
-    }
-
-    // Fall off bottom of screen
-    if (p.y >= HEIGHT) {
-      p.isDead = true;
-      showKillMessage(`${name} fell into the abyss!`);
-      net.send({ type: MsgPlayerDied, payload: { victim: name } as PlayerDiedPayload });
-      const imgEl = document.getElementById('emote-' + name);
-      if (imgEl) imgEl.style.display = 'none';
-    }
-  }
-
-  // Projectile logic
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    const proj = projectiles[i];
-    proj.x += proj.vx * dtScale;
-    proj.vy += GRAVITY * dtScale;
-    proj.y += proj.vy * dtScale;
-
-    let hit = false;
-
-    // Ceiling bounce (top of screen)
-    if (proj.y < 0) {
-      if (bouncyWalls) {
-        proj.y = 0;
-        proj.vy = Math.abs(proj.vy) * 1.1; // +10% speed boost downward
-        proj.vx *= 1.1;
-        proj.bounces = (proj.bounces ?? 0) + 1;
-        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), 0);
-        if (proj.bounces > 15) hit = true;
-      }
-      // When not bouncyWalls: bullet arcs above screen and returns via gravity
-    } else if (proj.y > HEIGHT) {
-      // Bottom of screen
-      if (bouncyWalls) {
-        proj.y = HEIGHT;
-        proj.vy = -Math.abs(proj.vy) * 1.1; // +10% speed boost upward
-        proj.vx *= 1.1;
-        proj.bounces = (proj.bounces ?? 0) + 1;
-        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), HEIGHT);
-        if (proj.bounces > 15) hit = true;
-      } else {
-        hit = true;
-      }
-    }
-
-    // Side walls bounce (left and right of screen)
-    if (!hit) {
-      if (proj.x < 0) {
-        if (bouncyWalls) {
-          proj.x = 0;
-          proj.vx = Math.abs(proj.vx) * 1.1; // +10% speed boost rightward
-          proj.vy *= 1.1;
-          proj.bounces = (proj.bounces ?? 0) + 1;
-          createWallSpark(0, Math.max(0, Math.min(HEIGHT, proj.y)));
-          if (proj.bounces > 15) hit = true;
-        } else {
-          hit = true;
-        }
-      } else if (proj.x > WIDTH) {
-        if (bouncyWalls) {
-          proj.x = WIDTH;
-          proj.vx = -Math.abs(proj.vx) * 1.1; // +10% speed boost leftward
-          proj.vy *= 1.1;
-          proj.bounces = (proj.bounces ?? 0) + 1;
-          createWallSpark(WIDTH, Math.max(0, Math.min(HEIGHT, proj.y)));
-          if (proj.bounces > 15) hit = true;
-        } else {
-          hit = true;
-        }
-      }
-    }
-
-    // Terrain collision
-    if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(terrain, proj.x)) {
-      hit = true;
-      if (currentPhase === PhaseCelebration) {
-        explosions.push({ x: proj.x, y: proj.y, radius: 0, maxRadius: EXPLOSION_RADIUS, alpha: 1 });
-      } else {
-        destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS, proj.id);
-        checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
-      }
-    }
-
-    // Direct tank collision
-    if (!hit) {
-      for (const name in players) {
-        if (name === proj.owner) continue;
-        const p = players[name];
-        if (p.isDead) continue;
-        if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
-          hit = true;
-          destroyTerrain(proj.x, proj.y, EXPLOSION_RADIUS, proj.id);
-          checkTankCollisions(proj.x, proj.y, EXPLOSION_RADIUS, proj.owner);
-          break;
-        }
-      }
-    }
-
-    if (hit) {
-      projectiles.splice(i, 1);
-    }
-  }
-
-  // Update explosions
-  for (let i = explosions.length - 1; i >= 0; i--) {
-    const exp = explosions[i];
-    exp.radius += 2.0 * dtScale;
-    exp.alpha -= 0.05 * dtScale;
-    if (exp.alpha <= 0) {
-      explosions.splice(i, 1);
-    }
-  }
-
-  // Celebration random emote bombs
-  if (currentPhase === PhaseCelebration) {
-    const elapsed = celebrationStartTime > 0 ? performance.now() - celebrationStartTime : 0;
-    if (celebrationWinner && elapsed < 3500 && Math.random() < 0.2) {
-      const p = players[celebrationWinner];
-      projectiles.push({
-        x: Math.random() * WIDTH,
-        y: -30,
-        vx: (Math.random() - 0.5) * 5,
-        vy: Math.random() * 5 + 5,
-        owner: celebrationWinner,
-        emoteUrl: p?.emoteUrl ?? '',
-      });
-    }
-
-    // Only complete celebration after all bombs and explosions have fully settled
-    if (elapsed > 4000 && projectiles.length === 0 && explosions.length === 0 && !celebrationSentComplete) {
-      celebrationSentComplete = true;
-      net.send({ type: MsgCelebrationComplete });
-    }
-  }
-
-  // Phase transition check
-  if (currentPhase === PhaseAction && projectiles.length === 0 && explosions.length === 0 && !anyMoving) {
-    let anyFalling = false;
-    for (const name in players) {
-      if (!players[name].isDead && players[name].y < getTerrainHeight(terrain, players[name].x)) {
-        anyFalling = true;
-        break;
-      }
-    }
-    if (!anyFalling) {
-      currentPhase = PhaseWaitingNextPhase;
-
-      // Check win condition
-      let aliveCount = 0;
-      let aliveName = '';
-      let totalPlayers = 0;
-      let humanAliveCount = 0;
-      let humanTotalCount = 0;
-      for (const key in players) {
-        totalPlayers++;
-        if (!players[key].isBot) {
-          humanTotalCount++;
-          if (!players[key].isDead) {
-            humanAliveCount++;
-          }
-        }
-        if (!players[key].isDead) {
-          aliveCount++;
-          aliveName = key;
-        }
-      }
-
-      const isGameOver =
-        (aliveCount <= 1 && totalPlayers > 1) ||
-        (totalPlayers === 1 && aliveCount === 0) ||
-        (humanTotalCount > 0 && humanAliveCount === 0);
-
-      if (isGameOver) {
-        const winner = (aliveCount === 1 && !players[aliveName]?.isBot)
-          ? aliveName
-          : 'AI';
-        celebrationWinner = winner;
-        net.send({ type: MsgGameOver, payload: winner });
-
-        if (winner === 'AI') {
-          showKillMessage('Humanity failed to defeat the AI');
-        } else {
-          showKillMessage(`${winner} WINS THE GAME!`);
-        }
-      } else {
-        net.send({ type: MsgActionComplete });
-      }
-    }
-  }
-}
 
 function updateLeaderboard(lb: Record<string, number>): void {
   if (!leaderboardList) return;
@@ -743,13 +385,8 @@ net.onMessage((msg: WSMessage) => {
   if (msg.type === MsgStateUpdate) {
     const state = msg.payload as GameState;
     stateRef = state;
-    if (state.phase === PhaseCelebration && currentPhase !== PhaseCelebration) {
-      celebrationStartTime = performance.now();
-      celebrationSentComplete = false;
-    }
     if (state.phase === PhaseIdle && currentPhase !== PhaseIdle) {
       celebrationWinner = '';
-      celebrationSentComplete = false;
       celebrationText.innerText = '';
     }
     currentPhase = state.phase;
@@ -818,19 +455,14 @@ net.onMessage((msg: WSMessage) => {
     }
 
     updateUI();
-  } else if (msg.type === MsgExecuteActions) {
-    executeActions();
   } else if (msg.type === MsgResetTerrain) {
     if (stateRef && Array.isArray(stateRef.terrain) && stateRef.terrain.length === WIDTH) {
       terrain = stateRef.terrain;
     } else {
       terrain = createDefaultTerrain();
     }
-    projectiles = [];
     explosions.length = 0;
     appliedCraterIds.clear();
-    celebrationStartTime = 0;
-    celebrationSentComplete = false;
     for (const name in players) {
       if (stateRef && stateRef.players && stateRef.players[name] && typeof stateRef.players[name].x === 'number') {
         players[name].x = stateRef.players[name].x;
@@ -838,6 +470,13 @@ net.onMessage((msg: WSMessage) => {
         players[name].x = Math.random() * (WIDTH - 100) + 50;
       }
       players[name].y = -50;
+    }
+  } else if (msg.type === MsgPlayerDied) {
+    const payload = msg.payload as PlayerDiedPayload;
+    if (payload.killer) {
+      showKillMessage(`${payload.killer} destroyed ${payload.victim}!`);
+    } else {
+      showKillMessage(`${payload.victim} fell into the abyss!`);
     }
   } else if (msg.type === MsgTerrainCrater) {
     const crater = msg.payload as CraterPayload;
@@ -867,22 +506,16 @@ function draw(): void {
     drawGiantProtractor(ctx);
   }
   drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache);
-  drawProjectiles(ctx, projectiles, emoteCache);
-  drawExplosions(ctx, explosions);
+  
+  const activeProjectiles = stateRef?.projectiles || [];
+  const activeExplosions = stateRef?.explosions || [];
+  
+  drawProjectiles(ctx, activeProjectiles, emoteCache);
+  drawExplosions(ctx, activeExplosions);
 }
 
-function gameLoop(time: number): void {
-  const rawDt = time - lastTime;
-  lastTime = time;
-
-  const dtClamped = Math.min(Math.max(rawDt, 0), 100);
-  const baseDtScale = dtClamped / (1000 / 60);
-  const speedMultiplier = stateRef && typeof stateRef.physicsSpeed === 'number' ? stateRef.physicsSpeed : 0.5;
-  const dtScale = baseDtScale * speedMultiplier;
-
-  updatePhysics(dtScale);
+function gameLoop(): void {
   draw();
-
   requestAnimationFrame(gameLoop);
 }
 

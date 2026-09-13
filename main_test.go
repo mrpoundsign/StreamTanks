@@ -45,8 +45,6 @@ func resetGameStateForTest() {
 
 	cancelAutoRoundTimer()
 	cancelFastForward()
-	cancelActionFallback()
-	actionFallbackDuration = 5 * time.Second
 
 	if inputCancel != nil {
 		close(inputCancel)
@@ -1149,27 +1147,15 @@ func TestScoringPerKill(t *testing.T) {
 	}
 	defer func() { _ = conn.Close() }()
 
-	// Drain initial state message
-	var initMsg WSMessage
-	_ = websocket.JSON.Receive(conn, &initMsg)
-
 	// Setup players
 	processCommand("Alice", "%join Kappa", nil)
 	processCommand("Bob", "%join LUL", nil)
 
 	// 1. Alice kills Bob
-	deathMsg := WSMessage{
-		Type: msgPlayerDied,
-		Payload: PlayerDiedPayload{
-			Victim: "Bob",
-			Killer: "Alice",
-		},
-	}
-	if err := websocket.JSON.Send(conn, deathMsg); err != nil {
-		t.Fatalf("failed to send deathMsg: %v", err)
-	}
-
-	time.Sleep(100 * time.Millisecond)
+	gameState.mu.Lock()
+	bob := gameState.Players["Bob"]
+	checkTankCollisions(bob.X, bob.Y, 50, "Alice")
+	gameState.mu.Unlock()
 
 	gameState.mu.Lock()
 	if !gameState.Players["Bob"].IsDead {
@@ -1180,32 +1166,23 @@ func TestScoringPerKill(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. Duplicate kill report from another client: score should remain 1
-	if err := websocket.JSON.Send(conn, deathMsg); err != nil {
-		t.Fatalf("failed to send duplicate deathMsg: %v", err)
-	}
-
-	time.Sleep(100 * time.Millisecond)
-
+	// 2. Environmental death (abyss): Charlie dies with no killer
+	processCommand("Charlie", "%join PogChamp", nil)
+	
 	gameState.mu.Lock()
-	if gameState.Leaderboard["Alice"] != 1 {
-		t.Errorf("expected Alice score to remain 1 after duplicate report, got %d", gameState.Leaderboard["Alice"])
-	}
+	gameState.Phase = phaseAction
+	charlie := gameState.Players["Charlie"]
+	charlie.Y = 2000.0
+	gameState.Terrain[int(charlie.X)] = 2000.0 // Blast a hole so he falls
 	gameState.mu.Unlock()
 
-	// 3. Environmental death (abyss): Charlie dies with no killer
-	processCommand("Charlie", "%join PogChamp", nil)
-	abyssMsg := WSMessage{
-		Type: msgPlayerDied,
-		Payload: PlayerDiedPayload{
-			Victim: "Charlie",
-		},
+	// call updatePhysicsStep which should kill Charlie and end the game
+	gameState.mu.Lock()
+	if updatePhysicsStep(1.0) {
+		checkGameOverAndTransition() // this unlocks mu!
+	} else {
+		gameState.mu.Unlock()
 	}
-	if err := websocket.JSON.Send(conn, abyssMsg); err != nil {
-		t.Fatalf("failed to send abyssMsg: %v", err)
-	}
-
-	time.Sleep(100 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if !gameState.Players["Charlie"].IsDead {
@@ -1214,20 +1191,9 @@ func TestScoringPerKill(t *testing.T) {
 	if gameState.Leaderboard["Charlie"] != 0 {
 		t.Errorf("expected Charlie score to be 0, got %d", gameState.Leaderboard["Charlie"])
 	}
-	gameState.mu.Unlock()
-
-	// 4. Game over awards 5 points to human winner
-	gameOverMsg := WSMessage{
-		Type:    msgGameOver,
-		Payload: "Alice",
-	}
-	if err := websocket.JSON.Send(conn, gameOverMsg); err != nil {
-		t.Fatalf("failed to send gameOverMsg: %v", err)
-	}
-
-	time.Sleep(100 * time.Millisecond)
-
-	gameState.mu.Lock()
+	
+	// Game over should be triggered by updatePhysicsStep because only Alice is left
+	// Since Alice is the winner, she gets +5 points
 	if gameState.Leaderboard["Alice"] != 6 {
 		t.Errorf("expected Alice score to be 6 (1 kill + 5 win bonus) on game over, got %d", gameState.Leaderboard["Alice"])
 	}
@@ -1661,32 +1627,11 @@ func TestBotScoringAndLeaderboardExclusion(t *testing.T) {
 	gameState.Players["TargetBot"] = &Player{Name: "TargetBot", IsBot: true}
 	gameState.mu.Unlock()
 
-	// Start overlay WS server
-	server := httptest.NewServer(websocket.Handler(handleWebSocket))
-	defer server.Close()
-
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
-	wsClient, err := websocket.Dial(wsURL, "", server.URL)
-	if err != nil {
-		t.Fatalf("failed to connect websocket: %v", err)
-	}
-	defer func() { _ = wsClient.Close() }()
-
-	time.Sleep(100 * time.Millisecond)
-
 	// 1. Alice kills TargetBot -> Alice earns BotPoints (3)
-	killBotMsg := WSMessage{
-		Type: msgPlayerDied,
-		Payload: PlayerDiedPayload{
-			Victim: "TargetBot",
-			Killer: "Alice",
-		},
-	}
-	if err := websocket.JSON.Send(wsClient, killBotMsg); err != nil {
-		t.Fatalf("failed to send kill message: %v", err)
-	}
-
-	time.Sleep(150 * time.Millisecond)
+	gameState.mu.Lock()
+	targetBot := gameState.Players["TargetBot"]
+	checkTankCollisions(targetBot.X, targetBot.Y, 50.0, "Alice")
+	gameState.mu.Unlock()
 
 	gameState.mu.Lock()
 	if gameState.Leaderboard["Alice"] != 3 {
@@ -1700,34 +1645,33 @@ func TestBotScoringAndLeaderboardExclusion(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// 2. TargetBot kills Alice -> TargetBot must NOT earn points
-	killHumanMsg := WSMessage{
-		Type: msgPlayerDied,
-		Payload: PlayerDiedPayload{
-			Victim: "Alice",
-			Killer: "TargetBot",
-		},
-	}
-	if err := websocket.JSON.Send(wsClient, killHumanMsg); err != nil {
-		t.Fatalf("failed to send kill message: %v", err)
-	}
-
-	time.Sleep(150 * time.Millisecond)
+	gameState.mu.Lock()
+	alice := gameState.Players["Alice"]
+	checkTankCollisions(alice.X, alice.Y, 50.0, "TargetBot")
+	gameState.mu.Unlock()
 
 	// 3. Game over with bot winner -> TargetBot must NOT earn points
-	botGameOverMsg := WSMessage{
-		Type:    msgGameOver,
-		Payload: "TargetBot",
-	}
-	if err := websocket.JSON.Send(wsClient, botGameOverMsg); err != nil {
-		t.Fatalf("failed to send game over message: %v", err)
-	}
+	// Simulation game over via updatePhysicsStep
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.Projectiles = []Projectile{}
+	gameState.Explosions = []Explosion{}
+	gameState.mu.Unlock()
 
-	time.Sleep(150 * time.Millisecond)
+	gameState.mu.Lock()
+	if updatePhysicsStep(1.0) {
+		checkGameOverAndTransition()
+	} else {
+		gameState.mu.Unlock()
+	}
 
 	gameState.mu.Lock()
 	if _, exists := gameState.Leaderboard["TargetBot"]; exists {
-		gameState.mu.Unlock()
 		t.Fatalf("expected TargetBot never to appear on leaderboard after winning, got %v", gameState.Leaderboard)
+	}
+	// Alice score should still be 3
+	if gameState.Leaderboard["Alice"] != 3 {
+		t.Fatalf("expected Alice score to remain 3, got %v", gameState.Leaderboard["Alice"])
 	}
 	gameState.mu.Unlock()
 }
@@ -2006,44 +1950,6 @@ func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
 		t.Fatalf("expected immediate phaseAction after all humans fired, got %s", gameState.Phase)
-	}
-	gameState.mu.Unlock()
-}
-
-func TestActionPhaseFallbackAdvancesWithoutUI(t *testing.T) {
-	resetGameStateForTest()
-	actionFallbackDuration = 300 * time.Millisecond
-	defer func() { actionFallbackDuration = 5 * time.Second }()
-
-	// Alice joins and starts game with bots
-	processCommand("Alice", "%join Kappa", nil)
-	processCommand("Alice", "%startgame", nil)
-	time.Sleep(50 * time.Millisecond)
-
-	// Execute action phase for Round 1
-	gameState.mu.Lock()
-	rID := gameState.RoundID
-	gameState.mu.Unlock()
-	executeActionPhaseForRound(rID)
-
-	gameState.mu.Lock()
-	if gameState.Phase != phaseAction {
-		gameState.mu.Unlock()
-		t.Fatalf("expected phaseAction, got %s", gameState.Phase)
-	}
-	gameState.mu.Unlock()
-
-	// Wait 600ms for the 300ms authoritative fallback timer to trigger without any UI sending ACTION_COMPLETE
-	time.Sleep(600 * time.Millisecond)
-
-	gameState.mu.Lock()
-	if gameState.Phase != phaseInput {
-		gameState.mu.Unlock()
-		t.Fatalf("expected server to advance back to phaseInput after fallback timeout, got %s", gameState.Phase)
-	}
-	if gameState.RoundID != 2 {
-		gameState.mu.Unlock()
-		t.Fatalf("expected RoundID to advance to 2, got %d", gameState.RoundID)
 	}
 	gameState.mu.Unlock()
 }

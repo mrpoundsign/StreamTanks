@@ -69,7 +69,6 @@ func init() {
 }
 
 func resetMatchState() {
-	cancelActionFallback()
 	gameState.mu.Lock()
 	if gameState.Phase != phaseCelebration {
 		gameState.mu.Unlock()
@@ -78,6 +77,8 @@ func resetMatchState() {
 	gameState.Phase = phaseIdle
 	gameState.Winner = ""
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
+	gameState.Projectiles = []Projectile{}
+	gameState.Explosions = []Explosion{}
 
 	// Clean up bots from match so next match fills fresh based on current humans
 	for key, p := range gameState.Players {
@@ -113,19 +114,7 @@ var (
 	fastForwardTimer      *time.Timer
 	autoRoundTimerMu       sync.Mutex
 	autoRoundTimer         *time.Timer
-	actionFallbackDuration = 5 * time.Second
-	actionFallbackTimerMu  sync.Mutex
-	actionFallbackTimer    *time.Timer
 )
-
-func cancelActionFallback() {
-	actionFallbackTimerMu.Lock()
-	defer actionFallbackTimerMu.Unlock()
-	if actionFallbackTimer != nil {
-		actionFallbackTimer.Stop()
-		actionFallbackTimer = nil
-	}
-}
 
 func cancelFastForward() {
 	fastForwardTimerMu.Lock()
@@ -198,7 +187,6 @@ func triggerAutoRound() {
 func startInputPhase() {
 	cancelAutoRoundTimer()
 	cancelFastForward()
-	cancelActionFallback()
 
 	gameState.mu.Lock()
 
@@ -528,25 +516,521 @@ func executeActionPhaseForRound(roundID int) {
 			p.Fired = true
 		}
 	}
+
+	// Initialize projectiles and movement targets
+	gameState.Projectiles = []Projectile{}
+	gameState.Explosions = []Explosion{}
+
+	for name, p := range gameState.Players {
+		if p.IsDead {
+			continue
+		}
+
+		switch p.ActionType {
+		case actionFire:
+			rad := float64(p.Angle) * math.Pi / 180.0
+			powerClamped := p.Power
+			if powerClamped < 1 {
+				powerClamped = 1
+			} else if powerClamped > 100 {
+				powerClamped = 100
+			}
+			powerScaled := float64(powerClamped) / 5.0
+			vx := math.Cos(rad) * powerScaled
+			vy := -math.Sin(rad) * powerScaled
+			shotId := fmt.Sprintf("%d_%s", gameState.RoundID, name)
+
+			muzzleDist := 25.0
+			spawnX := p.X + math.Cos(rad)*muzzleDist
+			spawnY := p.Y - 10.0 - math.Sin(rad)*muzzleDist
+
+			gameState.Projectiles = append(gameState.Projectiles, Projectile{
+				ID:       shotId,
+				X:        spawnX,
+				Y:        spawnY,
+				VX:       vx,
+				VY:       vy,
+				Owner:    name,
+				EmoteURL: p.EmoteURL,
+			})
+		case actionLeft:
+			p.MoveTarget = p.X - float64(gameState.MoveDistance)
+			p.Moving = true
+			p.SpeedMultiplier = 1.0
+			p.HasBounced = false
+		case actionRight:
+			p.MoveTarget = p.X + float64(gameState.MoveDistance)
+			p.Moving = true
+			p.SpeedMultiplier = 1.0
+			p.HasBounced = false
+		}
+	}
+
 	gameState.mu.Unlock()
 
-	// Send state update which tells frontend to execute the shots/moves
+	// Send initial state update
 	broadcast(msgStateUpdate, &gameState)
-	broadcast(msgExecuteActions, nil)
 
-	// Authoritative safety fallback timer: if frontend animations hang or ACTION_COMPLETE is never sent, advance after actionFallbackDuration
-	cancelActionFallback()
-	actionFallbackTimerMu.Lock()
-	actionFallbackTimer = time.AfterFunc(actionFallbackDuration, func() {
-		gameState.mu.Lock()
-		if gameState.Phase == phaseAction && gameState.RoundID == roundID {
-			gameState.mu.Unlock()
-			startInputPhase()
-		} else {
-			gameState.mu.Unlock()
-		}
+	go runPhysicsLoop(roundID)
+}
+
+func createWallSpark(cx, cy float64) {
+	gameState.Explosions = append(gameState.Explosions, Explosion{
+		X:         cx,
+		Y:         cy,
+		Radius:    0,
+		MaxRadius: 30,
+		Alpha:     1.0,
+		IsSpark:   true,
 	})
-	actionFallbackTimerMu.Unlock()
+}
+
+func destroyTerrain(cx, cy, radius float64, shotId string) {
+	appliedCratersMu.Lock()
+	if !appliedCraters[shotId] {
+		appliedCraters[shotId] = true
+		applyCrater(gameState.Terrain, cx, cy, radius)
+	}
+	appliedCratersMu.Unlock()
+
+	gameState.Explosions = append(gameState.Explosions, Explosion{
+		X:         cx,
+		Y:         cy,
+		Radius:    0,
+		MaxRadius: radius,
+		Alpha:     1.0,
+		IsSpark:   false,
+	})
+	broadcastExcept(nil, msgTerrainCrater, CraterPayload{
+		ID:     shotId,
+		X:      cx,
+		Y:      cy,
+		Radius: radius,
+	})
+}
+
+func checkTankCollisions(cx, cy, radius float64, owner string) {
+	for name, p := range gameState.Players {
+		if name == owner || p.IsDead {
+			continue
+		}
+		dist := math.Hypot(p.X-cx, p.Y-cy)
+		if dist < radius+20.0 {
+			p.IsDead = true
+
+			// Handle kill attribution
+			killerPlayer := gameState.Players[owner]
+			if killerPlayer != nil && !killerPlayer.IsBot {
+				pts := 1
+				if p.IsBot {
+					pts = gameState.BotPoints
+				}
+				if pts > 0 {
+					gameState.Leaderboard[owner] += pts
+					addScore(owner, pts)
+				}
+			}
+		}
+	}
+}
+
+func updatePhysicsStep(dtScale float64) bool {
+	anyMoving := false
+	bouncyWalls := gameState.BouncyWalls
+
+	for _, p := range gameState.Players {
+		if p.IsDead {
+			continue
+		}
+
+		// Execute Action Movement
+		if gameState.Phase == phaseAction && p.Moving {
+			anyMoving = true
+			currentSpeed := p.SpeedMultiplier * 2.0 * dtScale
+			switch p.ActionType {
+			case actionLeft:
+				p.X -= currentSpeed
+				if p.X <= 20 {
+					if bouncyWalls && !p.HasBounced {
+						p.X = 20
+						p.ActionType = actionRight
+						p.MoveTarget = p.X + float64(gameState.MoveDistance)
+						p.SpeedMultiplier = 1.5
+						p.HasBounced = true
+						createWallSpark(20, p.Y)
+					} else if p.MoveTarget != 0 && p.X <= p.MoveTarget || p.X <= 20 {
+						p.Moving = false
+						if p.X < 20 {
+							p.X = 20
+						}
+					}
+				} else if p.MoveTarget != 0 && p.X <= p.MoveTarget {
+					p.Moving = false
+				}
+			case actionRight:
+				p.X += currentSpeed
+				if p.X >= defaultTerrainWidth-20 {
+					if bouncyWalls && !p.HasBounced {
+						p.X = defaultTerrainWidth - 20
+						p.ActionType = actionLeft
+						p.MoveTarget = p.X - float64(gameState.MoveDistance)
+						p.SpeedMultiplier = 1.5
+						p.HasBounced = true
+						createWallSpark(defaultTerrainWidth-20, p.Y)
+					} else if p.MoveTarget != 0 && p.X >= p.MoveTarget || p.X >= defaultTerrainWidth-20 {
+						p.Moving = false
+						if p.X > defaultTerrainWidth-20 {
+							p.X = defaultTerrainWidth - 20
+						}
+					}
+				} else if p.MoveTarget != 0 && p.X >= p.MoveTarget {
+					p.Moving = false
+				}
+			}
+		}
+
+		// Boundary clamping
+		if p.X < 20 {
+			p.X = 20
+		}
+		if p.X > defaultTerrainWidth-20 {
+			p.X = defaultTerrainWidth - 20
+		}
+
+		// Falling / Ground snapping
+		floorY := getTerrainHeight(gameState.Terrain, p.X)
+		if p.Y < floorY {
+			p.Y += 5.0 * dtScale
+			if p.Y > floorY {
+				p.Y = floorY
+			}
+		} else {
+			p.Y = floorY
+		}
+
+		// Fall off bottom of screen
+		if p.Y >= defaultTerrainHeight {
+			p.IsDead = true
+		}
+	}
+
+	// Projectile logic
+	gravity := 0.2
+	for i := len(gameState.Projectiles) - 1; i >= 0; i-- {
+		proj := &gameState.Projectiles[i]
+		proj.X += proj.VX * dtScale
+		proj.VY += gravity * dtScale
+		proj.Y += proj.VY * dtScale
+
+		hit := false
+
+		if proj.Y < 0 {
+			if bouncyWalls {
+				proj.Y = 0
+				proj.VY = math.Abs(proj.VY) * 1.1
+				proj.VX *= 1.1
+				proj.Bounces++
+				cx := proj.X
+				if cx < 0 {
+					cx = 0
+				} else if cx > defaultTerrainWidth {
+					cx = defaultTerrainWidth
+				}
+				createWallSpark(cx, 0)
+				if proj.Bounces > 15 {
+					hit = true
+				}
+			}
+		} else if proj.Y > defaultTerrainHeight {
+			if bouncyWalls {
+				proj.Y = defaultTerrainHeight
+				proj.VY = -math.Abs(proj.VY) * 1.1
+				proj.VX *= 1.1
+				proj.Bounces++
+				cx := proj.X
+				if cx < 0 {
+					cx = 0
+				} else if cx > defaultTerrainWidth {
+					cx = defaultTerrainWidth
+				}
+				createWallSpark(cx, defaultTerrainHeight)
+				if proj.Bounces > 15 {
+					hit = true
+				}
+			} else {
+				hit = true
+			}
+		}
+
+		if !hit {
+			if proj.X < 0 {
+				if bouncyWalls {
+					proj.X = 0
+					proj.VX = math.Abs(proj.VX) * 1.1
+					proj.VY *= 1.1
+					proj.Bounces++
+					cy := proj.Y
+					if cy < 0 {
+						cy = 0
+					} else if cy > defaultTerrainHeight {
+						cy = defaultTerrainHeight
+					}
+					createWallSpark(0, cy)
+					if proj.Bounces > 15 {
+						hit = true
+					}
+				} else {
+					hit = true
+				}
+			} else if proj.X > defaultTerrainWidth {
+				if bouncyWalls {
+					proj.X = defaultTerrainWidth
+					proj.VX = -math.Abs(proj.VX) * 1.1
+					proj.VY *= 1.1
+					proj.Bounces++
+					cy := proj.Y
+					if cy < 0 {
+						cy = 0
+					} else if cy > defaultTerrainHeight {
+						cy = defaultTerrainHeight
+					}
+					createWallSpark(defaultTerrainWidth, cy)
+					if proj.Bounces > 15 {
+						hit = true
+					}
+				} else {
+					hit = true
+				}
+			}
+		}
+
+		// Terrain collision
+		if !hit && proj.Y >= 0 && proj.Y >= getTerrainHeight(gameState.Terrain, proj.X) {
+			hit = true
+			destroyTerrain(proj.X, proj.Y, 50.0, proj.ID) // EXPLOSION_RADIUS = 50
+			checkTankCollisions(proj.X, proj.Y, 50.0, proj.Owner)
+		}
+
+		// Direct tank collision
+		if !hit {
+			for name, p := range gameState.Players {
+				if name == proj.Owner || p.IsDead {
+					continue
+				}
+				if math.Hypot(p.X-proj.X, p.Y-proj.Y) < 20 {
+					hit = true
+					destroyTerrain(proj.X, proj.Y, 50.0, proj.ID)
+					checkTankCollisions(proj.X, proj.Y, 50.0, proj.Owner)
+					break
+				}
+			}
+		}
+
+		if hit {
+			gameState.Projectiles = append(gameState.Projectiles[:i], gameState.Projectiles[i+1:]...)
+		}
+	}
+
+	// Update explosions
+	for i := len(gameState.Explosions) - 1; i >= 0; i-- {
+		exp := &gameState.Explosions[i]
+		exp.Radius += 2.0 * dtScale
+		exp.Alpha -= 0.05 * dtScale
+		if exp.Alpha <= 0 {
+			gameState.Explosions = append(gameState.Explosions[:i], gameState.Explosions[i+1:]...)
+		}
+	}
+
+	// Phase transition check
+	if gameState.Phase == phaseAction && len(gameState.Projectiles) == 0 && len(gameState.Explosions) == 0 && !anyMoving {
+		anyFalling := false
+		for _, p := range gameState.Players {
+			if !p.IsDead && p.Y < getTerrainHeight(gameState.Terrain, p.X) {
+				anyFalling = true
+				break
+			}
+		}
+		if !anyFalling {
+			return true // Action is finished
+		}
+	}
+
+	return false
+}
+
+func runPhysicsLoop(roundID int) {
+	ticker := time.NewTicker(time.Second / 60)
+	defer ticker.Stop()
+	lastTime := time.Now()
+
+	for {
+		<-ticker.C
+		now := time.Now()
+		rawDt := float64(now.Sub(lastTime).Milliseconds())
+		lastTime = now
+
+		if rawDt < 0 {
+			rawDt = 0
+		} else if rawDt > 100 {
+			rawDt = 100
+		}
+		baseDtScale := rawDt / (1000.0 / 60.0)
+
+		gameState.mu.Lock()
+		if gameState.Phase != phaseAction || gameState.RoundID != roundID {
+			gameState.mu.Unlock()
+			return
+		}
+
+		dtScale := baseDtScale * gameState.PhysicsSpeed
+
+		isDone := updatePhysicsStep(dtScale)
+
+		if isDone {
+			checkGameOverAndTransition()
+			return
+		}
+
+		gameState.mu.Unlock()
+		
+		// Send physics updates to clients
+		broadcast(msgStateUpdate, &gameState)
+	}
+}
+
+func checkGameOverAndTransition() {
+	// determine win condition
+	aliveCount := 0
+	aliveName := ""
+	totalPlayers := 0
+	humanAliveCount := 0
+	humanTotalCount := 0
+
+	for key, p := range gameState.Players {
+		totalPlayers++
+		if !p.IsBot {
+			humanTotalCount++
+			if !p.IsDead {
+				humanAliveCount++
+			}
+		}
+		if !p.IsDead {
+			aliveCount++
+			aliveName = key
+		}
+	}
+
+	isGameOver := (aliveCount <= 1 && totalPlayers > 1) || (totalPlayers == 1 && aliveCount == 0) || (humanTotalCount > 0 && humanAliveCount == 0)
+
+	if isGameOver {
+		winner := "AI"
+		if aliveCount == 1 && !gameState.Players[aliveName].IsBot {
+			winner = aliveName
+		}
+		gameState.Phase = phaseCelebration
+		gameState.Winner = winner
+		if winner != "AI" && winner != "" {
+			gameState.Leaderboard[winner] += 5
+			addScore(winner, 5)
+		}
+
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+
+		// Spawn fireworks server-side
+		go runCelebrationLoop(winner)
+	} else {
+		gameState.mu.Unlock()
+		startInputPhase()
+	}
+}
+
+func runCelebrationLoop(winner string) {
+	ticker := time.NewTicker(time.Second / 60)
+	defer ticker.Stop()
+	lastTime := time.Now()
+	startTime := time.Now()
+
+	for {
+		<-ticker.C
+		now := time.Now()
+		elapsed := now.Sub(startTime)
+
+		if elapsed > 4*time.Second {
+			gameState.mu.Lock()
+			if gameState.Phase == phaseCelebration {
+				gameState.mu.Unlock()
+				resetMatchState()
+			} else {
+				gameState.mu.Unlock()
+			}
+			return
+		}
+
+		rawDt := float64(now.Sub(lastTime).Milliseconds())
+		lastTime = now
+
+		if rawDt < 0 {
+			rawDt = 0
+		} else if rawDt > 100 {
+			rawDt = 100
+		}
+		baseDtScale := rawDt / (1000.0 / 60.0)
+
+		gameState.mu.Lock()
+		if gameState.Phase != phaseCelebration {
+			gameState.mu.Unlock()
+			return
+		}
+
+		dtScale := baseDtScale * gameState.PhysicsSpeed
+
+		if winner != "" && winner != "AI" && elapsed < 3500*time.Millisecond && rand.Float64() < 0.2 {
+			p := gameState.Players[winner]
+			if p != nil {
+				gameState.Projectiles = append(gameState.Projectiles, Projectile{
+					ID:       fmt.Sprintf("celeb_%d", rand.IntN(1000000)),
+					X:        rand.Float64() * defaultTerrainWidth,
+					Y:        -30,
+					VX:       (rand.Float64() - 0.5) * 5,
+					VY:       rand.Float64()*5 + 5,
+					Owner:    winner,
+					EmoteURL: p.EmoteURL,
+				})
+			}
+		}
+
+		// Run physics step without collision/tank checks, just explosion fading and moving
+		for i := len(gameState.Projectiles) - 1; i >= 0; i-- {
+			proj := &gameState.Projectiles[i]
+			proj.X += proj.VX * dtScale
+			proj.VY += 0.2 * dtScale
+			proj.Y += proj.VY * dtScale
+
+			if proj.Y >= getTerrainHeight(gameState.Terrain, proj.X) {
+				gameState.Explosions = append(gameState.Explosions, Explosion{
+					X:         proj.X,
+					Y:         proj.Y,
+					Radius:    0,
+					MaxRadius: 50.0,
+					Alpha:     1.0,
+					IsSpark:   false,
+				})
+				gameState.Projectiles = append(gameState.Projectiles[:i], gameState.Projectiles[i+1:]...)
+			}
+		}
+		for i := len(gameState.Explosions) - 1; i >= 0; i-- {
+			exp := &gameState.Explosions[i]
+			exp.Radius += 2.0 * dtScale
+			exp.Alpha -= 0.05 * dtScale
+			if exp.Alpha <= 0 {
+				gameState.Explosions = append(gameState.Explosions[:i], gameState.Explosions[i+1:]...)
+			}
+		}
+
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+	}
 }
 
 func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt ...*twitch.User) {
