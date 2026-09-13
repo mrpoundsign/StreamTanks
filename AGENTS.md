@@ -25,32 +25,39 @@
 
 ```
 StreamTanks/
-├── main.go               # Entrypoint, CLI flags, asset server, graceful lifecycle
-├── types.go              # GameState, Player, WSMessage structs & typed constants
-├── game.go               # Phase state machine, timers, commands processor
-├── storage.go            # SQLite database schema, settings & leaderboard persistence
-├── ws.go                 # WebSocket client pool, message pump, thread-safe broadcast
-├── bot.go                # Twitch IRC anonymous client listener
-├── main_test.go          # Go test suite covering commands, config, bots, and concurrency
+├── cmd/
+│   └── streamtanks/
+│       └── main.go       # CLI entrypoint, flag parsing, server bootstrap
+├── internal/
+│   └── app/              # Core backend engine & services
+│       ├── game.go       # Phase state machine, game loop, physics, commands
+│       ├── types.go      # GameState, Player, WSMessage structs & typed constants
+│       ├── terrain.go    # Heightmap generation, math, crater deformation
+│       ├── storage.go    # SQLite database schema, settings & leaderboard persistence
+│       ├── bot.go        # Twitch IRC anonymous client listener
+│       ├── ws.go         # WebSocket client pool, message pump, thread-safe broadcast
+│       ├── server.go     # HTTP asset router, static/embedded FS server, app lifecycle
+│       └── app_test.go   # Go test suite covering commands, config, bots, and concurrency
+├── web/                  # Frontend overlay & assets
+│   ├── embed.go          # //go:embed public/* exporter
+│   ├── src/              # TypeScript source files (bundled to web/public/game.js)
+│   │   ├── game.ts       # Game loop, physics updates, command dispatching, debug controls
+│   │   ├── network.ts    # WebSocket client with auto-reconnect polling
+│   │   ├── renderer.ts   # Canvas rendering: terrain, protractor, tanks, projectiles, sparks
+│   │   ├── terrain.ts    # Heightmap generation, slope calculation, crater deformation
+│   │   └── types.ts      # Frontend TypeScript types and exported constants
+│   └── public/           # Frontend overlay files served via HTTP and OBS browser source
+│       ├── index.html    # HTML layout with canvas, HUD layers, leaderboard & cache-control tags
+│       ├── game.js       # Production bundled JavaScript (compiled from web/src/)
+│       ├── style.css     # Neon cyberpunk styling, transparent OBS background, animations
+│       └── admin/        # Dedicated Commander Admin Console (/admin)
+│           ├── index.html# Dashboard layout: controls, player table, leaderboard, console
+│           ├── admin.css # Cyberpunk neon dashboard styling
+│           └── admin.js  # Live WebSocket sync, command dispatcher, history
 ├── build.ps1             # PowerShell script: TypeScript build, Go tests, lint, compilation
 ├── build.bat             # Batch launcher for build.ps1
 ├── go.mod                # Go module definitions
 ├── go.sum                # Checksums
-├── streamtanks.db        # SQLite database storing player win statistics (ignored from git)
-├── src/                  # TypeScript source files (bundled to public/game.js)
-│   ├── game.ts           # Game loop, physics updates, command dispatching, debug controls
-│   ├── network.ts        # WebSocket client with auto-reconnect polling
-│   ├── renderer.ts       # Canvas rendering: terrain, protractor, tanks, projectiles, sparks
-│   ├── terrain.ts        # Heightmap generation, slope calculation, crater deformation
-│   └── types.ts          # Frontend TypeScript types and exported constants
-├── public/               # Frontend overlay files served via HTTP and OBS browser source
-│   ├── index.html        # HTML layout with canvas, HUD layers, leaderboard & cache-control tags
-│   ├── game.js           # Production bundled JavaScript (compiled from src/)
-│   ├── style.css         # Neon cyberpunk styling, transparent OBS background, animations
-│   └── admin/            # Dedicated Commander Admin Console (/admin)
-│       ├── index.html    # Dashboard layout: controls, player table, leaderboard, console
-│       ├── admin.css     # Cyberpunk neon dashboard styling
-│       └── admin.js      # Live WebSocket sync, command dispatcher, history
 ├── package.json          # Frontend build tooling (TypeScript, esbuild)
 ├── tsconfig.json         # Strict TypeScript configuration (ES2022)
 ├── AGENTS.md             # Coding standards, architecture documentation, agent instructions
@@ -102,12 +109,12 @@ All commands default to the `%` prefix (configurable via `%prefix`):
    ```cmd
    .\build.bat
    ```
-   Runs TypeScript build (`npm run build:prod`), Go unit test suite (`go test -v ./...`), linter (`golangci-lint-v2 run ./...`), and binary compilation (`go build -o streamtanks.exe .`).
+   Runs TypeScript build (`npm run build:prod`), Go unit test suite (`go test -v ./...`), linter (`golangci-lint-v2 run ./...`), and binary compilation (`go build -o streamtanks.exe ./cmd/streamtanks`).
 2. **Running the Server**:
    ```bash
-   go run . -channel <channel_name> -addr :8102
+   go run ./cmd/streamtanks -channel <channel_name> -addr :8102
    # or with debug mode enabled:
-   go run . -debug -addr :8102
+   go run ./cmd/streamtanks -debug -addr :8102
    ```
 3. **Overlay Access**:
    Open `http://localhost:8102` in a browser or add as an OBS Browser Source (Width: 1920, Height: 1080).

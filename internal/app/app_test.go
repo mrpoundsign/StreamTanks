@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"database/sql"
@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"streamtanks/web"
 
 	"github.com/gempir/go-twitch-irc/v4"
 	"golang.org/x/net/websocket"
@@ -588,7 +590,7 @@ func TestIdleMessageConfiguration(t *testing.T) {
 
 func TestEmbeddedPublicAssets(t *testing.T) {
 	// Verify embedded public files can be read
-	subFS, err := fs.Sub(embeddedPublic, "public")
+	subFS, err := web.FS()
 	if err != nil {
 		t.Fatalf("failed to open embedded subFS: %v", err)
 	}
@@ -614,7 +616,7 @@ func TestEmbeddedPublicAssets(t *testing.T) {
 
 func TestAdminDashboardEndpoint(t *testing.T) {
 	// Test FileServer handling of /admin and /admin/
-	subFS, err := fs.Sub(embeddedPublic, "public")
+	subFS, err := web.FS()
 	if err != nil {
 		t.Fatalf("failed to open embedded subFS: %v", err)
 	}

@@ -10,7 +10,7 @@ before:
 
 builds:
   - id: streamtanks
-    main: .
+    main: ./cmd/streamtanks
     binary: StreamTanks
     env:
       - CGO_ENABLED=0
