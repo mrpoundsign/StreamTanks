@@ -85,6 +85,7 @@ export interface GameState {
   botFill?: boolean;
   botPoints?: number;
   botList?: string[];
+  winner?: string;
 }
 
 export interface Projectile {

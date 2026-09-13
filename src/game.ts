@@ -393,7 +393,6 @@ function updatePhysics(dtScale: number): void {
     }
     if (!anyFalling) {
       currentPhase = PhaseWaitingNextPhase;
-      net.send({ type: MsgActionComplete });
 
       // Check win condition
       let aliveCount = 0;
@@ -415,41 +414,25 @@ function updatePhysics(dtScale: number): void {
         }
       }
 
-      if (
+      const isGameOver =
         (aliveCount <= 1 && totalPlayers > 1) ||
         (totalPlayers === 1 && aliveCount === 0) ||
-        (humanTotalCount > 0 && humanAliveCount === 0)
-      ) {
-        // Only human players can be declared match winner!
-        const winner = (aliveCount === 1 && !players[aliveName]?.isBot) ? aliveName : '';
+        (humanTotalCount > 0 && humanAliveCount === 0);
+
+      if (isGameOver) {
+        const winner = (aliveCount === 1 && !players[aliveName]?.isBot)
+          ? aliveName
+          : 'AI';
         celebrationWinner = winner;
         net.send({ type: MsgGameOver, payload: winner });
 
-        celebrationAvatar.style.display = 'none';
-
-        if (winner) {
-          showKillMessage(`${winner} WINS THE GAME!`);
-          celebrationText.innerText = `${winner} WINS!`;
-
-          if (avatarCache[winner] && avatarCache[winner] !== 'fetching') {
-            celebrationAvatar.src = avatarCache[winner];
-            celebrationAvatar.style.display = 'block';
-          } else {
-            fetch(`https://decapi.me/twitch/avatar/${winner}`)
-              .then((r) => r.text())
-              .then((url) => {
-                avatarCache[winner] = url;
-                celebrationAvatar.src = url;
-                celebrationAvatar.style.display = 'block';
-              });
-          }
-        } else if (humanTotalCount > 0 && humanAliveCount === 0 && aliveCount > 0) {
-          showKillMessage(`DEFEAT! BOTS WIN!`);
-          celebrationText.innerText = `GAME OVER`;
+        if (winner === 'AI') {
+          showKillMessage('Humanity failed to defeat the AI');
         } else {
-          showKillMessage(`DRAW! Everyone died.`);
-          celebrationText.innerText = `DRAW!`;
+          showKillMessage(`${winner} WINS THE GAME!`);
         }
+      } else {
+        net.send({ type: MsgActionComplete });
       }
     }
   }
@@ -671,8 +654,33 @@ function updateUI(): void {
       phaseBadge.innerText = 'GAME OVER';
       phaseBadge.className = 'hud-badge celebration';
     }
-    if (hudInstructions) {
-      hudInstructions.innerHTML = celebrationWinner ? `${celebrationWinner} WINS!` : 'DRAW!';
+    const win = (stateRef?.winner !== undefined && stateRef.winner !== '') ? stateRef.winner : celebrationWinner;
+    celebrationAvatar.style.display = 'none';
+
+    if (win && win !== 'AI') {
+      celebrationText.classList.remove('bot-win');
+      celebrationText.innerText = `${win} WINS!`;
+      if (hudInstructions) {
+        hudInstructions.innerHTML = `${win} WINS!`;
+      }
+      if (avatarCache[win] && avatarCache[win] !== 'fetching') {
+        celebrationAvatar.src = avatarCache[win];
+        celebrationAvatar.style.display = 'block';
+      } else {
+        fetch(`https://decapi.me/twitch/avatar/${win}`)
+          .then((r) => r.text())
+          .then((url) => {
+            avatarCache[win] = url;
+            celebrationAvatar.src = url;
+            celebrationAvatar.style.display = 'block';
+          });
+      }
+    } else {
+      celebrationText.classList.add('bot-win');
+      celebrationText.innerText = 'Humanity failed to defeat the AI';
+      if (hudInstructions) {
+        hudInstructions.innerHTML = 'Humanity failed to defeat the AI';
+      }
     }
     timerDisplay.style.display = 'none';
     celebrationDisplay.style.display = 'block';
@@ -717,6 +725,15 @@ net.onMessage((msg: WSMessage) => {
   if (msg.type === MsgStateUpdate) {
     const state = msg.payload as GameState;
     stateRef = state;
+    if (state.phase === PhaseCelebration && currentPhase !== PhaseCelebration) {
+      celebrationStartTime = performance.now();
+      celebrationSentComplete = false;
+    }
+    if (state.phase === PhaseIdle && currentPhase !== PhaseIdle) {
+      celebrationWinner = '';
+      celebrationSentComplete = false;
+      celebrationText.innerText = '';
+    }
     currentPhase = state.phase;
 
     if (state.leaderboard) {
@@ -746,6 +763,7 @@ net.onMessage((msg: WSMessage) => {
           emoteCache[emoteUrl] = img;
         }
       } else {
+        players[name].isBot = newPlayers[name].isBot;
         players[name].lastAngle = newPlayers[name].lastAngle;
         players[name].lastPower = newPlayers[name].lastPower;
         players[name].fired = newPlayers[name].fired;
