@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"strconv"
 	"strings"
@@ -68,6 +69,7 @@ func init() {
 }
 
 func resetMatchState() {
+	cancelActionFallback()
 	gameState.mu.Lock()
 	if gameState.Phase != phaseCelebration {
 		gameState.mu.Unlock()
@@ -102,16 +104,28 @@ func resetMatchState() {
 }
 
 var (
-	inputCancel          chan struct{}
-	inputStartTime       time.Time
-	prevRoundHadCommands bool
-	fastForwardScheduled bool
-	minWaitTimer         *time.Timer
-	fastForwardTimerMu   sync.Mutex
-	fastForwardTimer     *time.Timer
-	autoRoundTimerMu     sync.Mutex
-	autoRoundTimer       *time.Timer
+	inputCancel           chan struct{}
+	inputStartTime        time.Time
+	prevRoundHadCommands  bool
+	fastForwardScheduled  bool
+	minWaitTimer          *time.Timer
+	fastForwardTimerMu    sync.Mutex
+	fastForwardTimer      *time.Timer
+	autoRoundTimerMu       sync.Mutex
+	autoRoundTimer         *time.Timer
+	actionFallbackDuration = 5 * time.Second
+	actionFallbackTimerMu  sync.Mutex
+	actionFallbackTimer    *time.Timer
 )
+
+func cancelActionFallback() {
+	actionFallbackTimerMu.Lock()
+	defer actionFallbackTimerMu.Unlock()
+	if actionFallbackTimer != nil {
+		actionFallbackTimer.Stop()
+		actionFallbackTimer = nil
+	}
+}
 
 func cancelFastForward() {
 	fastForwardTimerMu.Lock()
@@ -184,6 +198,7 @@ func triggerAutoRound() {
 func startInputPhase() {
 	cancelAutoRoundTimer()
 	cancelFastForward()
+	cancelActionFallback()
 
 	gameState.mu.Lock()
 
@@ -264,15 +279,24 @@ func startInputPhase() {
 		minWaitTimer = nil
 	}
 
-	prevRoundHadCommands = false
+	activeHumansLastRound := 0
 	if gameState.RoundID > 1 {
 		for _, p := range gameState.Players {
-			if !p.IsDead && p.LastActiveRound == gameState.RoundID-1 {
-				prevRoundHadCommands = true
-				break
+			if !p.IsDead && !p.IsBot && p.LastActiveRound == gameState.RoundID-1 {
+				activeHumansLastRound++
 			}
 		}
 	}
+	prevRoundHadCommands = (activeHumansLastRound > 0)
+
+	// In Round 2+, if no humans commanded in the previous round, only wait 10 seconds total from round start
+	initialDurationSec := gameState.InputDuration
+	if gameState.RoundID > 1 && activeHumansLastRound == 0 {
+		if initialDurationSec > 10 {
+			initialDurationSec = 10
+		}
+	}
+	gameState.TimerRemaining = initialDurationSec
 
 	// Reset fired status and action for all players, ensuring valid terrain coordinates
 	for _, p := range gameState.Players {
@@ -337,9 +361,10 @@ func startInputPhase() {
 
 	// Start timer for input phase
 	roundID := gameState.RoundID
+	roundDuration := time.Duration(initialDurationSec) * time.Second
 	go func() {
 		select {
-		case <-time.After(time.Duration(gameState.InputDuration) * time.Second):
+		case <-time.After(roundDuration):
 			executeActionPhaseForRound(roundID)
 		case <-cancelChan:
 			return
@@ -353,29 +378,42 @@ func checkAllPlayersFired() {
 		return
 	}
 
-	aliveCount := 0
-	firedCount := 0
-	unfiredActiveCount := 0
+	aliveHumanCount := 0
+	firedHumanCount := 0
+	activeHumansLastRound := 0
+	unfiredActiveHumans := 0
 
 	for _, p := range gameState.Players {
-		if !p.IsDead {
-			aliveCount++
+		if !p.IsDead && !p.IsBot {
+			aliveHumanCount++
 			if p.Fired {
-				firedCount++
-			} else if p.LastActiveRound == gameState.RoundID-1 {
-				unfiredActiveCount++
+				firedHumanCount++
+			}
+			if gameState.RoundID > 1 && p.LastActiveRound == gameState.RoundID-1 {
+				activeHumansLastRound++
+				if !p.Fired {
+					unfiredActiveHumans++
+				}
 			}
 		}
 	}
 
-	if aliveCount == 0 {
+	if aliveHumanCount == 0 {
+		// Only bots are alive; fast-forward immediately
+		if minWaitTimer != nil {
+			minWaitTimer.Stop()
+			minWaitTimer = nil
+		}
+		close(inputCancel)
+		inputCancel = nil
+		scheduleFastForward(gameState.RoundID)
 		return
 	}
 
 	roundID := gameState.RoundID
 
-	// If all alive players have fired, fast-forward immediately regardless
-	if firedCount == aliveCount {
+	// Rule 1: If all alive humans have fired, fast-forward immediately regardless
+	if firedHumanCount == aliveHumanCount {
 		if minWaitTimer != nil {
 			minWaitTimer.Stop()
 			minWaitTimer = nil
@@ -386,18 +424,14 @@ func checkAllPlayersFired() {
 		return
 	}
 
-	// If players were active in the previous round, fast-forward once all active players have fired
-	if prevRoundHadCommands {
-		if firedCount > 0 && unfiredActiveCount == 0 {
-			close(inputCancel)
-			inputCancel = nil
-			scheduleFastForward(roundID)
-		}
+	// Rule 2: In Round 1, timer runs all the way unless all humans fire (handled above)
+	if roundID <= 1 {
 		return
 	}
 
-	// If no players entered a command in the previous round, enforce a 10s minimum before fast-forwarding
-	if firedCount > 0 && !fastForwardScheduled {
+	// Rule 3: In Round 2+, if all humans who commanded last round have commanded this round:
+	// Wait only until at least 10 seconds after the start of the round to begin.
+	if unfiredActiveHumans == 0 {
 		minDuration := 10 * time.Second
 		if dur := time.Duration(gameState.InputDuration) * time.Second; dur < minDuration {
 			minDuration = dur
@@ -405,15 +439,31 @@ func checkAllPlayersFired() {
 
 		elapsed := time.Since(inputStartTime)
 		if elapsed >= minDuration {
+			// At least 10s has already elapsed: fast-forward immediately
+			if minWaitTimer != nil {
+				minWaitTimer.Stop()
+				minWaitTimer = nil
+			}
 			close(inputCancel)
 			inputCancel = nil
 			scheduleFastForward(roundID)
 			return
 		}
 
-		fastForwardScheduled = true
+		// Less than 10s elapsed: schedule countdown to the 10s mark and update HUD timer
 		remaining := minDuration - elapsed
+		remSec := int(math.Ceil(remaining.Seconds()))
+		if remSec <= 0 {
+			remSec = 1
+		}
+
+		fastForwardScheduled = true
+		gameState.TimerRemaining = remSec
+
 		cancelChan := inputCancel
+		if minWaitTimer != nil {
+			minWaitTimer.Stop()
+		}
 		minWaitTimer = time.AfterFunc(remaining, func() {
 			gameState.mu.Lock()
 			defer gameState.mu.Unlock()
@@ -483,6 +533,20 @@ func executeActionPhaseForRound(roundID int) {
 	// Send state update which tells frontend to execute the shots/moves
 	broadcast(msgStateUpdate, &gameState)
 	broadcast(msgExecuteActions, nil)
+
+	// Authoritative safety fallback timer: if frontend animations hang or ACTION_COMPLETE is never sent, advance after actionFallbackDuration
+	cancelActionFallback()
+	actionFallbackTimerMu.Lock()
+	actionFallbackTimer = time.AfterFunc(actionFallbackDuration, func() {
+		gameState.mu.Lock()
+		if gameState.Phase == phaseAction && gameState.RoundID == roundID {
+			gameState.mu.Unlock()
+			startInputPhase()
+		} else {
+			gameState.mu.Unlock()
+		}
+	})
+	actionFallbackTimerMu.Unlock()
 }
 
 func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt ...*twitch.User) {

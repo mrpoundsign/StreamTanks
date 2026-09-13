@@ -632,11 +632,29 @@ function updateUI(): void {
     celebrationDisplay.style.display = 'none';
     if (leaderboardEl) leaderboardEl.style.display = 'none';
     if (previousPhase !== PhaseInput) {
-      inputTimer = stateRef?.inputDuration ?? 20;
+      inputTimer = stateRef?.timerRemaining ?? stateRef?.inputDuration ?? 20;
       timerDisplay.innerText = inputTimer.toString();
-      timerDisplay.style.color = '#fff';
-      timerDisplay.style.animation = 'none';
-      timerDisplay.style.textShadow = '0 0 8px #00ffcc';
+      if (inputTimer <= 5 && inputTimer > 0) {
+        timerDisplay.style.color = '#ff003c';
+        timerDisplay.style.animation = 'pulse 0.5s infinite alternate';
+        timerDisplay.style.textShadow = '0 0 15px #ff003c';
+      } else {
+        timerDisplay.style.color = '#fff';
+        timerDisplay.style.animation = 'none';
+        timerDisplay.style.textShadow = '0 0 8px #00ffcc';
+      }
+    } else if (stateRef?.timerRemaining !== undefined && stateRef.timerRemaining < inputTimer) {
+      inputTimer = stateRef.timerRemaining;
+      timerDisplay.innerText = inputTimer.toString();
+      if (inputTimer <= 5 && inputTimer > 0) {
+        timerDisplay.style.color = '#ff003c';
+        timerDisplay.style.animation = 'pulse 0.5s infinite alternate';
+        timerDisplay.style.textShadow = '0 0 15px #ff003c';
+      } else {
+        timerDisplay.style.color = '#fff';
+        timerDisplay.style.animation = 'none';
+        timerDisplay.style.textShadow = '0 0 8px #00ffcc';
+      }
     }
   } else if (currentPhase === PhaseAction) {
     if (phaseBadge) {

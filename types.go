@@ -75,7 +75,8 @@ type GameState struct {
 	BotFill       bool               `json:"botFill"`    // whether to fill empty slots up to MinPlayers with bots
 	BotPoints     int                `json:"botPoints"`  // points awarded when human kills a bot (default: 1)
 	BotList       []string           `json:"botList"`    // list of named bots to spawn before nameless bots
-	Winner        string             `json:"winner"`     // winner of the current match ("Alice", "AI", or "")
+	Winner         string             `json:"winner"`         // winner of the current match ("Alice", "AI", or "")
+	TimerRemaining int                `json:"timerRemaining,omitempty"` // remaining input seconds when clock is truncated
 }
 
 var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}

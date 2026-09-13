@@ -121,6 +121,7 @@ func handleWebSocket(ws *websocket.Conn) {
 
 		switch msg.Type {
 		case msgActionComplete:
+			cancelActionFallback()
 			gameState.mu.Lock()
 			if gameState.Phase == phaseAction {
 				gameState.mu.Unlock()
@@ -180,6 +181,7 @@ func handleWebSocket(ws *websocket.Conn) {
 						gameState.mu.Unlock()
 						break
 					}
+					cancelActionFallback()
 					gameState.Phase = phaseCelebration
 					gameState.Winner = winner
 					if winner != "" && winner != "AI" {
