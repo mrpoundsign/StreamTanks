@@ -55,7 +55,7 @@ try {
 
     # 4. Build Go Binary
     Write-Step "Compiling StreamTanks binary..."
-    & go build -o streamtanks.exe .
+    & go build -o streamtanks.exe ./cmd/streamtanks
     if ($LASTEXITCODE -ne 0) { throw "Go build failed." }
     Write-Success "StreamTanks binary compiled: streamtanks.exe"
 

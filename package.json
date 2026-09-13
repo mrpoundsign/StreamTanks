@@ -4,9 +4,9 @@
   "private": true,
   "description": "Interactive Twitch chat artillery game and OBS browser overlay",
   "scripts": {
-    "build": "tsc --noEmit && esbuild src/game.ts --bundle --outfile=public/game.js --sourcemap",
-    "build:prod": "tsc --noEmit && esbuild src/game.ts --bundle --outfile=public/game.js --minify --sourcemap",
-    "watch": "esbuild src/game.ts --bundle --outfile=public/game.js --sourcemap --watch",
+    "build": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap",
+    "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap",
+    "watch": "esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap --watch",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

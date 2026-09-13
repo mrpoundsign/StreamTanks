@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ func hasPermission(user *twitch.User, requiredRole string) bool {
 	if user == nil {
 		return true
 	}
-	if user.IsBroadcaster || (channelFlag != nil && *channelFlag != "" && strings.EqualFold(user.Name, *channelFlag)) {
+	if user.IsBroadcaster || (channelName != "" && strings.EqualFold(user.Name, channelName)) {
 		return true
 	}
 
