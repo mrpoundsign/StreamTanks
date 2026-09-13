@@ -3,6 +3,7 @@ import {
   HEIGHT,
   Player,
   GameState,
+  Projectile,
   Explosion,
   GamePhase,
   WSMessage,
@@ -11,12 +12,16 @@ import {
   PhaseAction,
   PhaseCelebration,
   MsgStateUpdate,
+  MsgExecuteActions,
   MsgResetTerrain,
   MsgPlayerDied,
   PlayerDiedPayload,
   MsgChatCommand,
   MsgTerrainCrater,
   CraterPayload,
+  ActionFire,
+  ActionLeft,
+  ActionRight,
 } from './types';
 import { createDefaultTerrain, getTerrainHeight, applyCrater } from './terrain';
 import { NetworkManager } from './network';
@@ -52,11 +57,14 @@ const debugSendBtn = document.getElementById('debug-send-btn') as HTMLElement;
 // Game State
 let terrain: number[] = createDefaultTerrain();
 const players: Record<string, Player> = {};
+let projectiles: Projectile[] = [];
 const explosions: Explosion[] = [];
 let currentPhase: GamePhase = PhaseIdle;
 let previousPhase: GamePhase = PhaseIdle;
 let inputTimer = 0;
 let celebrationWinner = '';
+let celebrationStartTime = 0;
+let lastTime = performance.now();
 let stateRef: GameState | null = null;
 const appliedCraterIds = new Set<string>();
 
@@ -78,7 +86,259 @@ function showKillMessage(msg: string): void {
   }, 5000);
 }
 
+function createWallSpark(cx: number, cy: number): void {
+  explosions.push({ x: cx, y: cy, radius: 0, maxRadius: 30, alpha: 1, isSpark: true });
+}
 
+function checkTankCollisions(cx: number, cy: number, radius: number, owner: string): void {
+  for (const name in players) {
+    if (name === owner) continue; // No self-damage
+    const p = players[name];
+    if (p.isDead) continue;
+    const dist = Math.hypot(p.x - cx, p.y - cy);
+    if (dist < radius + 20) {
+      p.isDead = true;
+      const imgEl = document.getElementById('emote-' + name);
+      if (imgEl) imgEl.style.display = 'none';
+    }
+  }
+}
+
+function destroyTerrain(cx: number, cy: number, radius: number, shotId?: string): void {
+  if (shotId) {
+    if (appliedCraterIds.has(shotId)) {
+      return;
+    }
+    appliedCraterIds.add(shotId);
+  }
+  applyCrater(terrain, cx, cy, radius);
+  explosions.push({ x: cx, y: cy, radius: 0, maxRadius: radius, alpha: 1 });
+}
+
+function executeActions(): void {
+  projectiles = [];
+  for (const name in players) {
+    const p = players[name];
+    if (p.isDead) continue;
+
+    if (p.actionType === ActionFire) {
+      const rad = ((p.angle ?? 45) * Math.PI) / 180;
+      const powerClamped = Math.min(Math.max(p.power ?? 50, 1), 100);
+      const powerScaled = powerClamped / 5;
+      const vx = Math.cos(rad) * powerScaled;
+      const vy = -Math.sin(rad) * powerScaled;
+      const shotId = `${stateRef?.roundId ?? 0}_${name}`;
+
+      const muzzleDist = 25;
+      const spawnX = p.x + Math.cos(rad) * muzzleDist;
+      const spawnY = p.y - 10 - Math.sin(rad) * muzzleDist;
+
+      projectiles.push({
+        id: shotId,
+        x: spawnX,
+        y: spawnY,
+        vx,
+        vy,
+        owner: name,
+        emoteUrl: p.emoteUrl,
+      });
+    } else if (p.actionType === ActionLeft) {
+      p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
+      p.moving = true;
+      p.speedMultiplier = 1.0;
+      p.hasBounced = false;
+    } else if (p.actionType === ActionRight) {
+      p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
+      p.moving = true;
+      p.speedMultiplier = 1.0;
+      p.hasBounced = false;
+    }
+  }
+}
+
+function updatePhysics(dtScale: number): void {
+  const bouncyWalls = !!stateRef?.bouncyWalls;
+
+  for (const name in players) {
+    const p = players[name];
+    if (p.isDead) continue;
+
+    // Execute Action Movement
+    if (currentPhase === PhaseAction && p.moving) {
+      const currentSpeed = (p.speedMultiplier ?? 1.0) * 2.0 * dtScale;
+      if (p.actionType === ActionLeft) {
+        p.x -= currentSpeed;
+        if (p.x <= 20) {
+          if (bouncyWalls && !p.hasBounced) {
+            p.x = 20;
+            p.actionType = ActionRight;
+            p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
+            p.speedMultiplier = 1.5; // +50% speed boost
+            p.hasBounced = true;
+            createWallSpark(20, p.y);
+          } else if ((p.moveTarget !== undefined && p.x <= p.moveTarget) || p.x <= 20) {
+            p.moving = false;
+            if (p.x < 20) p.x = 20;
+          }
+        } else if (p.moveTarget !== undefined && p.x <= p.moveTarget) {
+          p.moving = false;
+        }
+      } else if (p.actionType === ActionRight) {
+        p.x += currentSpeed;
+        if (p.x >= WIDTH - 20) {
+          if (bouncyWalls && !p.hasBounced) {
+            p.x = WIDTH - 20;
+            p.actionType = ActionLeft;
+            p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
+            p.speedMultiplier = 1.5; // +50% speed boost
+            p.hasBounced = true;
+            createWallSpark(WIDTH - 20, p.y);
+          } else if ((p.moveTarget !== undefined && p.x >= p.moveTarget) || p.x >= WIDTH - 20) {
+            p.moving = false;
+            if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+          }
+        } else if (p.moveTarget !== undefined && p.x >= p.moveTarget) {
+          p.moving = false;
+        }
+      }
+    }
+
+    // Boundary clamping
+    if (p.x < 20) p.x = 20;
+    if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+
+    // Falling / Ground snapping
+    const floorY = getTerrainHeight(terrain, p.x);
+    if (p.y < floorY) {
+      p.y += 5.0 * dtScale;
+      if (p.y > floorY) p.y = floorY;
+    } else {
+      p.y = floorY;
+    }
+
+    // Fall off bottom of screen
+    if (p.y >= HEIGHT) {
+      p.isDead = true;
+      const imgEl = document.getElementById('emote-' + name);
+      if (imgEl) imgEl.style.display = 'none';
+    }
+  }
+
+  // Projectile logic
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const proj = projectiles[i];
+    proj.x += proj.vx * dtScale;
+    proj.vy += 0.2 * dtScale; // Matching server gravity 0.2
+    proj.y += proj.vy * dtScale;
+
+    let hit = false;
+
+    if (proj.y < 0) {
+      if (bouncyWalls) {
+        proj.y = 0;
+        proj.vy = Math.abs(proj.vy) * 1.1; // +10% speed boost downward
+        proj.vx *= 1.1;
+        proj.bounces = (proj.bounces ?? 0) + 1;
+        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), 0);
+        if (proj.bounces > 15) hit = true;
+      }
+    } else if (proj.y > HEIGHT) {
+      if (bouncyWalls) {
+        proj.y = HEIGHT;
+        proj.vy = -Math.abs(proj.vy) * 1.1; // +10% speed boost upward
+        proj.vx *= 1.1;
+        proj.bounces = (proj.bounces ?? 0) + 1;
+        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), HEIGHT);
+        if (proj.bounces > 15) hit = true;
+      } else {
+        hit = true;
+      }
+    }
+
+    // Side walls bounce
+    if (!hit) {
+      if (proj.x < 0) {
+        if (bouncyWalls) {
+          proj.x = 0;
+          proj.vx = Math.abs(proj.vx) * 1.1;
+          proj.vy *= 1.1;
+          proj.bounces = (proj.bounces ?? 0) + 1;
+          createWallSpark(0, Math.max(0, Math.min(HEIGHT, proj.y)));
+          if (proj.bounces > 15) hit = true;
+        } else {
+          hit = true;
+        }
+      } else if (proj.x > WIDTH) {
+        if (bouncyWalls) {
+          proj.x = WIDTH;
+          proj.vx = -Math.abs(proj.vx) * 1.1;
+          proj.vy *= 1.1;
+          proj.bounces = (proj.bounces ?? 0) + 1;
+          createWallSpark(WIDTH, Math.max(0, Math.min(HEIGHT, proj.y)));
+          if (proj.bounces > 15) hit = true;
+        } else {
+          hit = true;
+        }
+      }
+    }
+
+    // Terrain collision
+    if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(terrain, proj.x)) {
+      hit = true;
+      if (currentPhase === PhaseCelebration) {
+        explosions.push({ x: proj.x, y: proj.y, radius: 0, maxRadius: 50, alpha: 1 });
+      } else {
+        destroyTerrain(proj.x, proj.y, 50, proj.id);
+        checkTankCollisions(proj.x, proj.y, 50, proj.owner);
+      }
+    }
+
+    // Direct tank collision
+    if (!hit) {
+      for (const name in players) {
+        if (name === proj.owner) continue;
+        const p = players[name];
+        if (p.isDead) continue;
+        if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
+          hit = true;
+          destroyTerrain(proj.x, proj.y, 50, proj.id);
+          checkTankCollisions(proj.x, proj.y, 50, proj.owner);
+          break;
+        }
+      }
+    }
+
+    if (hit) {
+      projectiles.splice(i, 1);
+    }
+  }
+
+  // Update explosions
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    const exp = explosions[i];
+    exp.radius += 2.0 * dtScale;
+    exp.alpha -= 0.05 * dtScale;
+    if (exp.alpha <= 0) {
+      explosions.splice(i, 1);
+    }
+  }
+
+  // Celebration random emote bombs
+  if (currentPhase === PhaseCelebration) {
+    const elapsed = celebrationStartTime > 0 ? performance.now() - celebrationStartTime : 0;
+    if (celebrationWinner && celebrationWinner !== 'AI' && elapsed < 3500 && Math.random() < 0.2) {
+      const p = players[celebrationWinner];
+      projectiles.push({
+        x: Math.random() * WIDTH,
+        y: -30,
+        vx: (Math.random() - 0.5) * 5,
+        vy: Math.random() * 5 + 5,
+        owner: celebrationWinner,
+        emoteUrl: p?.emoteUrl ?? '',
+      });
+    }
+  }
+}
 
 function updateLeaderboard(lb: Record<string, number>): void {
   if (!leaderboardList) return;
@@ -385,6 +645,12 @@ net.onMessage((msg: WSMessage) => {
   if (msg.type === MsgStateUpdate) {
     const state = msg.payload as GameState;
     stateRef = state;
+    if (state.phase === PhaseAction && currentPhase !== PhaseAction) {
+      executeActions();
+    }
+    if (state.phase === PhaseCelebration && currentPhase !== PhaseCelebration) {
+      celebrationStartTime = performance.now();
+    }
     if (state.phase === PhaseIdle && currentPhase !== PhaseIdle) {
       celebrationWinner = '';
       celebrationText.innerText = '';
@@ -418,6 +684,12 @@ net.onMessage((msg: WSMessage) => {
           emoteCache[emoteUrl] = img;
         }
       } else {
+        players[name].x = newPlayers[name].x;
+        players[name].y = newPlayers[name].y;
+        players[name].moving = newPlayers[name].moving;
+        players[name].moveTarget = newPlayers[name].moveTarget;
+        players[name].speedMultiplier = newPlayers[name].speedMultiplier;
+        players[name].hasBounced = newPlayers[name].hasBounced;
         players[name].isBot = newPlayers[name].isBot;
         players[name].lastAngle = newPlayers[name].lastAngle;
         players[name].lastPower = newPlayers[name].lastPower;
@@ -455,14 +727,18 @@ net.onMessage((msg: WSMessage) => {
     }
 
     updateUI();
+  } else if (msg.type === MsgExecuteActions) {
+    executeActions();
   } else if (msg.type === MsgResetTerrain) {
     if (stateRef && Array.isArray(stateRef.terrain) && stateRef.terrain.length === WIDTH) {
       terrain = stateRef.terrain;
     } else {
       terrain = createDefaultTerrain();
     }
+    projectiles = [];
     explosions.length = 0;
     appliedCraterIds.clear();
+    celebrationStartTime = 0;
     for (const name in players) {
       if (stateRef && stateRef.players && stateRef.players[name] && typeof stateRef.players[name].x === 'number') {
         players[name].x = stateRef.players[name].x;
@@ -477,6 +753,11 @@ net.onMessage((msg: WSMessage) => {
       showKillMessage(`${payload.killer} destroyed ${payload.victim}!`);
     } else {
       showKillMessage(`${payload.victim} fell into the abyss!`);
+    }
+    if (players[payload.victim]) {
+      players[payload.victim].isDead = true;
+      const imgEl = document.getElementById('emote-' + payload.victim);
+      if (imgEl) imgEl.style.display = 'none';
     }
   } else if (msg.type === MsgTerrainCrater) {
     const crater = msg.payload as CraterPayload;
@@ -506,16 +787,22 @@ function draw(): void {
     drawGiantProtractor(ctx);
   }
   drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache);
-  
-  const activeProjectiles = stateRef?.projectiles || [];
-  const activeExplosions = stateRef?.explosions || [];
-  
-  drawProjectiles(ctx, activeProjectiles, emoteCache);
-  drawExplosions(ctx, activeExplosions);
+  drawProjectiles(ctx, projectiles, emoteCache);
+  drawExplosions(ctx, explosions);
 }
 
-function gameLoop(): void {
+function gameLoop(time: number): void {
+  const rawDt = time - lastTime;
+  lastTime = time;
+
+  const dtClamped = Math.min(Math.max(rawDt, 0), 100);
+  const baseDtScale = dtClamped / (1000 / 60);
+  const speedMultiplier = stateRef && typeof stateRef.physicsSpeed === 'number' ? stateRef.physicsSpeed : 0.5;
+  const dtScale = baseDtScale * speedMultiplier;
+
+  updatePhysics(dtScale);
   draw();
+
   requestAnimationFrame(gameLoop);
 }
 

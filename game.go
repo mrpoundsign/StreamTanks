@@ -570,6 +570,7 @@ func executeActionPhaseForRound(roundID int) {
 
 	// Send initial state update
 	broadcast(msgStateUpdate, &gameState)
+	broadcast(msgExecuteActions, nil)
 
 	go runPhysicsLoop(roundID)
 }
@@ -630,6 +631,10 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 					addScore(owner, pts)
 				}
 			}
+			broadcast(msgPlayerDied, PlayerDiedPayload{
+				Victim: name,
+				Killer: owner,
+			})
 		}
 	}
 }
@@ -638,7 +643,7 @@ func updatePhysicsStep(dtScale float64) bool {
 	anyMoving := false
 	bouncyWalls := gameState.BouncyWalls
 
-	for _, p := range gameState.Players {
+	for name, p := range gameState.Players {
 		if p.IsDead {
 			continue
 		}
@@ -710,7 +715,12 @@ func updatePhysicsStep(dtScale float64) bool {
 
 		// Fall off bottom of screen
 		if p.Y >= defaultTerrainHeight {
-			p.IsDead = true
+			if !p.IsDead {
+				p.IsDead = true
+				broadcast(msgPlayerDied, PlayerDiedPayload{
+					Victim: name,
+				})
+			}
 		}
 	}
 
@@ -892,9 +902,6 @@ func runPhysicsLoop(roundID int) {
 		}
 
 		gameState.mu.Unlock()
-		
-		// Send physics updates to clients
-		broadcast(msgStateUpdate, &gameState)
 	}
 }
 
@@ -937,99 +944,13 @@ func checkGameOverAndTransition() {
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
 
-		// Spawn fireworks server-side
-		go runCelebrationLoop(winner)
+		// Wait 4 seconds for celebration then reset to idle/next match
+		time.AfterFunc(4*time.Second, func() {
+			resetMatchState()
+		})
 	} else {
 		gameState.mu.Unlock()
 		startInputPhase()
-	}
-}
-
-func runCelebrationLoop(winner string) {
-	ticker := time.NewTicker(time.Second / 60)
-	defer ticker.Stop()
-	lastTime := time.Now()
-	startTime := time.Now()
-
-	for {
-		<-ticker.C
-		now := time.Now()
-		elapsed := now.Sub(startTime)
-
-		if elapsed > 4*time.Second {
-			gameState.mu.Lock()
-			if gameState.Phase == phaseCelebration {
-				gameState.mu.Unlock()
-				resetMatchState()
-			} else {
-				gameState.mu.Unlock()
-			}
-			return
-		}
-
-		rawDt := float64(now.Sub(lastTime).Milliseconds())
-		lastTime = now
-
-		if rawDt < 0 {
-			rawDt = 0
-		} else if rawDt > 100 {
-			rawDt = 100
-		}
-		baseDtScale := rawDt / (1000.0 / 60.0)
-
-		gameState.mu.Lock()
-		if gameState.Phase != phaseCelebration {
-			gameState.mu.Unlock()
-			return
-		}
-
-		dtScale := baseDtScale * gameState.PhysicsSpeed
-
-		if winner != "" && winner != "AI" && elapsed < 3500*time.Millisecond && rand.Float64() < 0.2 {
-			p := gameState.Players[winner]
-			if p != nil {
-				gameState.Projectiles = append(gameState.Projectiles, Projectile{
-					ID:       fmt.Sprintf("celeb_%d", rand.IntN(1000000)),
-					X:        rand.Float64() * defaultTerrainWidth,
-					Y:        -30,
-					VX:       (rand.Float64() - 0.5) * 5,
-					VY:       rand.Float64()*5 + 5,
-					Owner:    winner,
-					EmoteURL: p.EmoteURL,
-				})
-			}
-		}
-
-		// Run physics step without collision/tank checks, just explosion fading and moving
-		for i := len(gameState.Projectiles) - 1; i >= 0; i-- {
-			proj := &gameState.Projectiles[i]
-			proj.X += proj.VX * dtScale
-			proj.VY += 0.2 * dtScale
-			proj.Y += proj.VY * dtScale
-
-			if proj.Y >= getTerrainHeight(gameState.Terrain, proj.X) {
-				gameState.Explosions = append(gameState.Explosions, Explosion{
-					X:         proj.X,
-					Y:         proj.Y,
-					Radius:    0,
-					MaxRadius: 50.0,
-					Alpha:     1.0,
-					IsSpark:   false,
-				})
-				gameState.Projectiles = append(gameState.Projectiles[:i], gameState.Projectiles[i+1:]...)
-			}
-		}
-		for i := len(gameState.Explosions) - 1; i >= 0; i-- {
-			exp := &gameState.Explosions[i]
-			exp.Radius += 2.0 * dtScale
-			exp.Alpha -= 0.05 * dtScale
-			if exp.Alpha <= 0 {
-				gameState.Explosions = append(gameState.Explosions[:i], gameState.Explosions[i+1:]...)
-			}
-		}
-
-		gameState.mu.Unlock()
-		broadcast(msgStateUpdate, &gameState)
 	}
 }
 
