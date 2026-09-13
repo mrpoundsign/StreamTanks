@@ -76,6 +76,15 @@ All settings automatically save to the local database and persist across restart
 
 ---
 
+## 🎛️ Commander Admin Console (`/admin`)
+
+StreamTanks provides a dedicated web control dashboard at `http://localhost:8102/admin`:
+- **Live Match Monitor**: Current round phase, active players, and leaderboard rankings.
+- **Interactive Command Console**: Always-visible terminal console with command history (Up/Down arrow keys) and quick-command pills.
+- **One-Click Streamer Controls**: Quick buttons to start matches, toggle bouncy walls, toggle idle HUD, re-roll terrain, and manage players/leaderboard.
+
+---
+
 ## 🛠️ Testing Locally (Debug Mode)
 
 You can try StreamTanks locally without connecting to Twitch:

@@ -46,7 +46,11 @@ StreamTanks/
 ├── public/               # Frontend overlay files served via HTTP and OBS browser source
 │   ├── index.html        # HTML layout with canvas, HUD layers, leaderboard & cache-control tags
 │   ├── game.js           # Production bundled JavaScript (compiled from src/)
-│   └── style.css         # Neon cyberpunk styling, transparent OBS background, animations
+│   ├── style.css         # Neon cyberpunk styling, transparent OBS background, animations
+│   └── admin/            # Dedicated Commander Admin Console (/admin)
+│       ├── index.html    # Dashboard layout: controls, player table, leaderboard, console
+│       ├── admin.css     # Cyberpunk neon dashboard styling
+│       └── admin.js      # Live WebSocket sync, command dispatcher, history
 ├── package.json          # Frontend build tooling (TypeScript, esbuild)
 ├── tsconfig.json         # Strict TypeScript configuration (ES2022)
 ├── AGENTS.md             # Coding standards, architecture documentation, agent instructions
@@ -105,3 +109,6 @@ All commands default to the `%` prefix (configurable via `%prefix`):
    Open `http://localhost:8102` in a browser or add as an OBS Browser Source (Width: 1920, Height: 1080).
 4. **Connection Resilience**:
    The frontend automatically detects server disconnects, hides the overlay transparently, polls the server, and triggers a full page reload when the server comes back online.
+5. **Admin Console Access**:
+   Open `http://localhost:8102/admin` for the dedicated command console, live match monitoring, and streamer management dashboard.
+

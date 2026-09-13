@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -588,7 +589,14 @@ func TestEmbeddedPublicAssets(t *testing.T) {
 		t.Fatalf("failed to open embedded subFS: %v", err)
 	}
 
-	requiredFiles := []string{"index.html", "game.js", "style.css"}
+	requiredFiles := []string{
+		"index.html",
+		"game.js",
+		"style.css",
+		"admin/index.html",
+		"admin/admin.css",
+		"admin/admin.js",
+	}
 	for _, fname := range requiredFiles {
 		content, err := fs.ReadFile(subFS, fname)
 		if err != nil {
@@ -599,6 +607,38 @@ func TestEmbeddedPublicAssets(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminDashboardEndpoint(t *testing.T) {
+	// Test FileServer handling of /admin and /admin/
+	subFS, err := fs.Sub(embeddedPublic, "public")
+	if err != nil {
+		t.Fatalf("failed to open embedded subFS: %v", err)
+	}
+	fileHandler := http.FileServer(http.FS(subFS))
+
+	// 1. Test /admin/ directly returns HTTP 200 and contains admin dashboard title
+	req := httptest.NewRequest("GET", "/admin/", nil)
+	w := httptest.NewRecorder()
+	fileHandler.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected HTTP 200 for /admin/, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Commander Admin Console") {
+		t.Errorf("expected /admin/ body to contain 'Commander Admin Console', got: %s", body)
+	}
+
+	// 2. Test /admin redirects to /admin/ (HTTP 301 Moved Permanently)
+	reqRedirect := httptest.NewRequest("GET", "/admin", nil)
+	wRedirect := httptest.NewRecorder()
+	fileHandler.ServeHTTP(wRedirect, reqRedirect)
+
+	if wRedirect.Code != 301 {
+		t.Fatalf("expected HTTP 301 redirect for /admin, got %d", wRedirect.Code)
+	}
+}
+
 
 func TestInactivePlayerRandomDirection(t *testing.T) {
 	leftCount := 0
