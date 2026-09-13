@@ -181,6 +181,13 @@ func handleWebSocket(ws *websocket.Conn) {
 						break
 					}
 					gameState.Phase = phaseCelebration
+					gameState.Winner = winner
+					if winner != "" && winner != "AI" {
+						if p, exists := gameState.Players[winner]; exists && !p.IsBot {
+							gameState.Leaderboard[winner] += 5
+							addScore(winner, 5)
+						}
+					}
 					gameState.mu.Unlock()
 					broadcast(msgStateUpdate, &gameState)
 

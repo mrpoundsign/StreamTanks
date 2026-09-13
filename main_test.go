@@ -1214,7 +1214,7 @@ func TestScoringPerKill(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 4. Game over does not award extra points
+	// 4. Game over awards 5 points to human winner
 	gameOverMsg := WSMessage{
 		Type:    msgGameOver,
 		Payload: "Alice",
@@ -1226,8 +1226,8 @@ func TestScoringPerKill(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	gameState.mu.Lock()
-	if gameState.Leaderboard["Alice"] != 1 {
-		t.Errorf("expected Alice score to remain 1 on game over (no win bonus), got %d", gameState.Leaderboard["Alice"])
+	if gameState.Leaderboard["Alice"] != 6 {
+		t.Errorf("expected Alice score to be 6 (1 kill + 5 win bonus) on game over, got %d", gameState.Leaderboard["Alice"])
 	}
 	if gameState.Phase != phaseCelebration {
 		t.Errorf("expected Phase to be CELEBRATION, got %s", gameState.Phase)
@@ -1715,10 +1715,21 @@ func TestBotScoringAndLeaderboardExclusion(t *testing.T) {
 
 	time.Sleep(150 * time.Millisecond)
 
+	// 3. Game over with bot winner -> TargetBot must NOT earn points
+	botGameOverMsg := WSMessage{
+		Type:    msgGameOver,
+		Payload: "TargetBot",
+	}
+	if err := websocket.JSON.Send(wsClient, botGameOverMsg); err != nil {
+		t.Fatalf("failed to send game over message: %v", err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
 	gameState.mu.Lock()
 	if _, exists := gameState.Leaderboard["TargetBot"]; exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected TargetBot never to appear on leaderboard, got %v", gameState.Leaderboard)
+		t.Fatalf("expected TargetBot never to appear on leaderboard after winning, got %v", gameState.Leaderboard)
 	}
 	gameState.mu.Unlock()
 }

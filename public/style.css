@@ -230,11 +230,18 @@ canvas {
 }
 
 #celebration-text {
-    font-size: 8rem;
+    font-size: clamp(2.8rem, 5.5vw, 6.5rem);
+    max-width: 1600px;
+    line-height: 1.15;
     margin: 0;
     color: #00ffcc; /* Cyan neon */
     text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc, 0 0 40px #00ffcc;
     animation: pulse 1s infinite alternate;
+}
+
+#celebration-text.bot-win {
+    color: #ff003c;
+    text-shadow: 0 0 10px #ff003c, 0 0 20px #ff003c, 0 0 40px #ff003c;
 }
 
 @keyframes pulse {

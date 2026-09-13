@@ -74,6 +74,7 @@ func resetMatchState() {
 		return
 	}
 	gameState.Phase = phaseIdle
+	gameState.Winner = ""
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 
 	// Clean up bots from match so next match fills fresh based on current humans
