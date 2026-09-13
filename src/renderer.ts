@@ -144,13 +144,16 @@ export function drawTanks(
       imgEl.style.transform = `rotate(${angle}rad)`;
     }
 
-    // Draw Name (unrotated)
-    ctx.fillStyle = '#fff';
-    ctx.font = '16px Orbitron';
-    ctx.textAlign = 'center';
-    ctx.shadowBlur = 5;
-    ctx.shadowColor = '#000';
-    ctx.fillText(name, p.x, p.y + 20);
+    // Draw Name (unrotated) - nameless bots have no name text rendered
+    const displayName = (p.name && !p.name.startsWith('_bot_')) ? p.name : (!name.startsWith('_bot_') && !p.isBot ? name : '');
+    if (displayName) {
+      ctx.fillStyle = '#fff';
+      ctx.font = '16px Orbitron';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#000';
+      ctx.fillText(displayName, p.x, p.y + 20);
+    }
 
     // Draw Protractor & Firing state in INPUT phase
     if (currentPhase === 'INPUT') {

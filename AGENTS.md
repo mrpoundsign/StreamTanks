@@ -89,6 +89,10 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - `%perm <start|config> <role>`: Unified permission management command.
 - `%clearleaderboard` / `%resetleaderboard`: Clears all leaderboard statistics from SQLite and connected overlays.
 - `%deleteplayer <user>` / `%removeplayer <user>`: Removes a specific player from SQLite leaderboard and connected overlays.
+- `%minplayers <N>`: Configures minimum player count to fill with bots on match start (default: `5`, range `2`–`20`).
+- `%botfill on|off`: Toggles automatic bot filling up to minimum players (default: `true`).
+- `%botpoints <N>`: Configures leaderboard points awarded to human players for destroying a bot tank (default: `1`, range `0`–`10`).
+- `%botlist <add|remove|list> [name]`: Manages the named bot pool in persistent SQLite database.
 
 ---
 

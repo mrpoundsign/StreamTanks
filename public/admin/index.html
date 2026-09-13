@@ -68,18 +68,37 @@
                             </div>
                         </div>
 
+                        <div class="form-group span-2">
+                            <label>Auto Round: <span id="autoround-current-val" class="highlight-val">Off</span></label>
+                            <div class="autoround-container">
+                                <div class="preset-buttons">
+                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="0">Off</button>
+                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="-1">Instant</button>
+                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="1">1m</button>
+                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="2">2m</button>
+                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="3">3m</button>
+                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="5">5m</button>
+                                </div>
+                                <div class="input-with-action">
+                                    <input type="number" id="cfg-autoround-custom" min="1" max="60" placeholder="Custom minutes (1-60)" />
+                                    <button id="btn-apply-autoround-custom" class="btn btn-small">Set Min</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-group">
-                            <label for="cfg-autoround">Auto Round</label>
+                            <label for="cfg-minplayers">Min Players</label>
                             <div class="input-with-action">
-                                <select id="cfg-autoround">
-                                    <option value="0">Off (Manual %startgame)</option>
-                                    <option value="-1">Immediate (-1)</option>
-                                    <option value="1">1 Minute</option>
-                                    <option value="2">2 Minutes</option>
-                                    <option value="3">3 Minutes</option>
-                                    <option value="5">5 Minutes</option>
-                                </select>
-                                <button id="btn-apply-autoround" class="btn btn-small">Set</button>
+                                <input type="number" id="cfg-minplayers" min="2" max="20" placeholder="5" />
+                                <button id="btn-apply-minplayers" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-botpoints">Kill Bot Points</label>
+                            <div class="input-with-action">
+                                <input type="number" id="cfg-botpoints" min="0" max="10" placeholder="1" />
+                                <button id="btn-apply-botpoints" class="btn btn-small">Set</button>
                             </div>
                         </div>
 
@@ -111,7 +130,7 @@
                             </div>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group span-2">
                             <label for="cfg-configperm">Config Perm</label>
                             <div class="input-with-action">
                                 <select id="cfg-configperm">
@@ -136,10 +155,13 @@
 
                         <div class="form-group span-2 toggle-row">
                             <button id="btn-toggle-idle" class="btn btn-secondary">
-                                Idle HUD Overlay: <span id="idle-status-text">On</span>
+                                Idle HUD: <span id="idle-status-text">On</span>
+                            </button>
+                            <button id="btn-toggle-botfill" class="btn btn-secondary">
+                                Bot Fill: <span id="botfill-status-text">On</span>
                             </button>
                             <button id="btn-reset-terrain" class="btn btn-secondary">
-                                Re-roll Terrain Map
+                                Re-roll Terrain
                             </button>
                         </div>
                     </div>

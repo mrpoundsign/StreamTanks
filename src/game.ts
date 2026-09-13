@@ -222,6 +222,9 @@ function updatePhysics(dtScale: number): void {
 
     // Roaming in IDLE
     if (currentPhase === PhaseIdle) {
+      if (!p.dx) {
+        p.dx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+      }
       p.x += p.dx * dtScale;
       if (p.x < 50) {
         p.x = 50;
@@ -396,16 +399,29 @@ function updatePhysics(dtScale: number): void {
       let aliveCount = 0;
       let aliveName = '';
       let totalPlayers = 0;
+      let humanAliveCount = 0;
+      let humanTotalCount = 0;
       for (const key in players) {
         totalPlayers++;
+        if (!players[key].isBot) {
+          humanTotalCount++;
+          if (!players[key].isDead) {
+            humanAliveCount++;
+          }
+        }
         if (!players[key].isDead) {
           aliveCount++;
           aliveName = key;
         }
       }
 
-      if ((aliveCount <= 1 && totalPlayers > 1) || (totalPlayers === 1 && aliveCount === 0)) {
-        const winner = aliveCount === 1 ? aliveName : '';
+      if (
+        (aliveCount <= 1 && totalPlayers > 1) ||
+        (totalPlayers === 1 && aliveCount === 0) ||
+        (humanTotalCount > 0 && humanAliveCount === 0)
+      ) {
+        // Only human players can be declared match winner!
+        const winner = (aliveCount === 1 && !players[aliveName]?.isBot) ? aliveName : '';
         celebrationWinner = winner;
         net.send({ type: MsgGameOver, payload: winner });
 
@@ -427,6 +443,9 @@ function updatePhysics(dtScale: number): void {
                 celebrationAvatar.style.display = 'block';
               });
           }
+        } else if (humanTotalCount > 0 && humanAliveCount === 0 && aliveCount > 0) {
+          showKillMessage(`DEFEAT! BOTS WIN!`);
+          celebrationText.innerText = `GAME OVER`;
         } else {
           showKillMessage(`DRAW! Everyone died.`);
           celebrationText.innerText = `DRAW!`;
@@ -558,6 +577,23 @@ function renderConfigModal(prefix: string): void {
       label: 'Config Perm',
       value: `<span class="config-val badge-on">${stateRef?.configPerm ?? 'broadcaster'}</span>`,
       cmd: `<span class="config-cmd">${prefix}configperm <span class="cmd-param">&lt;role&gt;</span></span>`,
+    },
+    {
+      label: 'Min Players',
+      value: `<span class="config-val">${stateRef?.minPlayers ?? 5}</span>`,
+      cmd: `<span class="config-cmd">${prefix}minplayers <span class="cmd-param">&lt;2-20&gt;</span></span>`,
+    },
+    {
+      label: 'Bot Fill',
+      value: (stateRef?.botFill ?? true)
+        ? '<span class="config-val badge-on">ON</span>'
+        : '<span class="config-val badge-off">OFF</span>',
+      cmd: `<span class="config-cmd">${prefix}botfill <span class="cmd-param">&lt;on|off&gt;</span></span>`,
+    },
+    {
+      label: 'Bot Points',
+      value: `<span class="config-val">${stateRef?.botPoints ?? 1}</span>`,
+      cmd: `<span class="config-cmd">${prefix}botpoints <span class="cmd-param">&lt;0-10&gt;</span></span>`,
     },
     {
       label: 'Clear Leaderboard',
@@ -697,11 +733,6 @@ net.onMessage((msg: WSMessage) => {
         let spawnX = typeof newPlayers[name].x === 'number' && newPlayers[name].x > 0 ? newPlayers[name].x : Math.random() * (WIDTH - 100) + 50;
         let spawnY = typeof newPlayers[name].y === 'number' ? newPlayers[name].y : getTerrainHeight(terrain, spawnX);
         let moveDx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
-        if (stateRef && stateRef.debug) {
-          spawnX = name === 'TargetBot' ? WIDTH / 2 + 100 : WIDTH / 2 - 100;
-          spawnY = getTerrainHeight(terrain, spawnX);
-          moveDx = 0;
-        }
         players[name] = {
           ...newPlayers[name],
           x: spawnX,
@@ -767,8 +798,6 @@ net.onMessage((msg: WSMessage) => {
     for (const name in players) {
       if (stateRef && stateRef.players && stateRef.players[name] && typeof stateRef.players[name].x === 'number') {
         players[name].x = stateRef.players[name].x;
-      } else if (stateRef && stateRef.debug) {
-        players[name].x = name === 'TargetBot' ? WIDTH / 2 + 100 : WIDTH / 2 - 100;
       } else {
         players[name].x = Math.random() * (WIDTH - 100) + 50;
       }

@@ -24,6 +24,10 @@ var gameState = GameState{
 	TerrainMax:    75,
 	StartPerm:     "broadcaster",
 	ConfigPerm:    "broadcaster",
+	MinPlayers:    5,
+	BotFill:       true,
+	BotPoints:     1,
+	BotList:       defaultBotList,
 }
 
 func hasPermission(user *twitch.User, requiredRole string) bool {
@@ -72,21 +76,20 @@ func resetMatchState() {
 	gameState.Phase = phaseIdle
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 
+	// Clean up bots from match so next match fills fresh based on current humans
+	for key, p := range gameState.Players {
+		if p.IsBot && (!gameState.Debug || key != "TargetBot") {
+			delete(gameState.Players, key)
+		}
+	}
+
 	// Revive all players for next game and reposition
-	for name, p := range gameState.Players {
+	for _, p := range gameState.Players {
 		p.IsDead = false
 		p.Fired = false
 		p.ActionType = ""
 		p.LastActiveRound = gameState.RoundID
-		if gameState.Debug {
-			if name == "TargetBot" {
-				p.X = float64(defaultTerrainWidth)/2.0 + 100.0
-			} else {
-				p.X = float64(defaultTerrainWidth)/2.0 - 100.0
-			}
-		} else {
-			p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
-		}
+		p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
 		p.Y = getTerrainHeight(gameState.Terrain, p.X)
 	}
 	gameState.mu.Unlock()
@@ -149,28 +152,25 @@ func triggerAutoRound() {
 
 	cancelAutoRoundTimer()
 
+	delay := time.Duration(ar) * time.Minute
 	if ar == -1 {
-		// Immediate next round
-		autoRoundTimerMu.Lock()
-		autoRoundTimer = time.AfterFunc(500*time.Millisecond, func() {
-			gameState.mu.Lock()
-			if gameState.Phase == phaseIdle {
-				gameState.mu.Unlock()
-				startInputPhase()
-			} else {
-				gameState.mu.Unlock()
-			}
-		})
-		autoRoundTimerMu.Unlock()
-		return
+		delay = 500 * time.Millisecond
 	}
 
-	// Scheduled minutes
-	delay := time.Duration(ar) * time.Minute
 	autoRoundTimerMu.Lock()
 	autoRoundTimer = time.AfterFunc(delay, func() {
 		gameState.mu.Lock()
 		if gameState.Phase == phaseIdle {
+			humanCount := 0
+			for _, p := range gameState.Players {
+				if !p.IsBot {
+					humanCount++
+				}
+			}
+			if humanCount == 0 {
+				gameState.mu.Unlock()
+				return
+			}
 			gameState.mu.Unlock()
 			startInputPhase()
 		} else {
@@ -185,6 +185,75 @@ func startInputPhase() {
 	cancelFastForward()
 
 	gameState.mu.Lock()
+
+	// Check if at least 1 real human is in the game
+	humanCount := 0
+	for _, p := range gameState.Players {
+		if !p.IsBot {
+			humanCount++
+		}
+	}
+	if humanCount == 0 {
+		gameState.Phase = phaseIdle
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+		return
+	}
+
+	// Bot fill logic: if BotFill is enabled, fill up to MinPlayers
+	if gameState.BotFill && len(gameState.Players) < gameState.MinPlayers {
+		needed := gameState.MinPlayers - len(gameState.Players)
+		// 1. Try to spawn named bots from BotList
+		for _, botName := range gameState.BotList {
+			if needed <= 0 {
+				break
+			}
+			if _, exists := gameState.Players[botName]; !exists {
+				randIdx := rand.IntN(len(defaultEmotes))
+				defEmote := defaultEmotes[randIdx]
+				spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+				spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+				gameState.Players[botName] = &Player{
+					Name:            botName,
+					IsBot:           true,
+					Emote:           defEmote.Name,
+					EmoteURL:        defEmote.URL,
+					LastAngle:       rand.IntN(131) + 20,
+					LastPower:       rand.IntN(41) + 40,
+					X:               spawnX,
+					Y:               spawnY,
+					LastActiveRound: gameState.RoundID + 1,
+				}
+				needed--
+			}
+		}
+
+		// 2. If still needed, spawn nameless bots (_bot_N)
+		botIdx := 1
+		for needed > 0 {
+			botKey := fmt.Sprintf("_bot_%d", botIdx)
+			botIdx++
+			if _, exists := gameState.Players[botKey]; !exists {
+				randIdx := rand.IntN(len(defaultEmotes))
+				defEmote := defaultEmotes[randIdx]
+				spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+				spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+				gameState.Players[botKey] = &Player{
+					Name:            "", // nameless!
+					IsBot:           true,
+					Emote:           defEmote.Name,
+					EmoteURL:        defEmote.URL,
+					LastAngle:       rand.IntN(131) + 20,
+					LastPower:       rand.IntN(41) + 40,
+					X:               spawnX,
+					Y:               spawnY,
+					LastActiveRound: gameState.RoundID + 1,
+				}
+				needed--
+			}
+		}
+	}
+
 	gameState.Phase = phaseInput
 	gameState.RoundID++
 	inputStartTime = time.Now()
@@ -212,6 +281,25 @@ func startInputPhase() {
 			p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
 		}
 		p.Y = getTerrainHeight(gameState.Terrain, p.X)
+
+		// Bots auto-fire/move immediately so human players don't wait for them
+		if p.IsBot && !p.IsDead {
+			p.Fired = true
+			p.LastActiveRound = gameState.RoundID
+			actionChoice := rand.IntN(3)
+			switch actionChoice {
+			case 0:
+				p.ActionType = actionLeft
+			case 1:
+				p.ActionType = actionRight
+			case 2:
+				p.ActionType = actionFire
+				p.Angle = rand.IntN(131) + 20
+				p.Power = rand.IntN(41) + 40
+				p.LastAngle = p.Angle
+				p.LastPower = p.Power
+			}
+		}
 	}
 	if inputCancel != nil {
 		close(inputCancel)
@@ -406,16 +494,60 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	// Ensure player exists in state
 	if _, exists := gameState.Players[username]; !exists {
-		randIdx := rand.IntN(len(defaultEmotes))
-		defEmote := defaultEmotes[randIdx]
+		// A new human player is joining!
+		// Check if we can cull/replace a bot:
+		// Priority 1: Named bots (p.IsBot && p.Name != "")
+		// Priority 2: Nameless bots (p.IsBot && p.Name == "")
+		var botToReplaceKey string
+		var botToReplace *Player
+
+		// Check for named bots first (following BotList order)
+		for _, botName := range gameState.BotList {
+			if p, exists := gameState.Players[botName]; exists && p.IsBot {
+				botToReplaceKey = botName
+				botToReplace = p
+				break
+			}
+		}
+		if botToReplace == nil {
+			for k, p := range gameState.Players {
+				if p.IsBot && p.Name != "" {
+					botToReplaceKey = k
+					botToReplace = p
+					break
+				}
+			}
+		}
+		// If no named bot found, check for nameless bots
+		if botToReplace == nil {
+			for k, p := range gameState.Players {
+				if p.IsBot {
+					botToReplaceKey = k
+					botToReplace = p
+					break
+				}
+			}
+		}
+
 		spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
 		spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+
+		if botToReplace != nil {
+			// Inherit bot's position
+			spawnX = botToReplace.X
+			spawnY = botToReplace.Y
+			delete(gameState.Players, botToReplaceKey)
+		}
+
+		randIdx := rand.IntN(len(defaultEmotes))
+		defEmote := defaultEmotes[randIdx]
 		lastRound := 0
 		if gameState.Phase != phaseIdle {
 			lastRound = gameState.RoundID
 		}
 		gameState.Players[username] = &Player{
 			Name:            username,
+			IsBot:           false,
 			Emote:           defEmote.Name,
 			EmoteURL:        defEmote.URL,
 			LastAngle:       45,
@@ -629,6 +761,19 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		if len(parts) > 1 {
 			arg1 := strings.ToLower(parts[1])
 			switch {
+			case arg1 == "reroll" || arg1 == "roll":
+				if gameState.Phase == phaseIdle {
+					gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
+					for _, p := range gameState.Players {
+						p.Y = getTerrainHeight(gameState.Terrain, p.X)
+					}
+					gameState.mu.Unlock()
+					broadcast(msgStateUpdate, &gameState)
+					broadcast(msgResetTerrain, nil)
+				} else {
+					gameState.mu.Unlock()
+				}
+				return
 			case arg1 == "reset" || arg1 == "default":
 				gameState.TerrainMin = 20
 				gameState.TerrainMax = 75
@@ -797,12 +942,138 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		broadcast(msgStateUpdate, &gameState)
 		return
 
+	case "minplayers":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			var mp int
+			if _, err := fmt.Sscanf(parts[1], "%d", &mp); err == nil {
+				if mp < 2 {
+					mp = 2
+				} else if mp > 20 {
+					mp = 20
+				}
+				gameState.MinPlayers = mp
+				gameState.mu.Unlock()
+				saveSetting("min_players", strconv.Itoa(mp))
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+		gameState.mu.Unlock()
+		return
+
+	case "botfill":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		var val bool
+		if len(parts) > 1 {
+			arg := strings.ToLower(parts[1])
+			if arg == "off" || arg == "false" || arg == "0" {
+				val = false
+			} else {
+				val = true
+			}
+		} else {
+			val = !gameState.BotFill
+		}
+		gameState.BotFill = val
+		gameState.mu.Unlock()
+		dbVal := "0"
+		if val {
+			dbVal = "1"
+		}
+		saveSetting("bot_fill", dbVal)
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "botpoints":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			var bp int
+			if _, err := fmt.Sscanf(parts[1], "%d", &bp); err == nil {
+				if bp < 0 {
+					bp = 0
+				} else if bp > 10 {
+					bp = 10
+				}
+				gameState.BotPoints = bp
+				gameState.mu.Unlock()
+				saveSetting("bot_points", strconv.Itoa(bp))
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+		gameState.mu.Unlock()
+		return
+
+	case "botlist":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 2 {
+			subCmd := strings.ToLower(parts[1])
+			botName := strings.TrimPrefix(parts[2], "@")
+			if botName != "" {
+				switch subCmd {
+				case "add":
+					alreadyExists := false
+					for _, b := range gameState.BotList {
+						if strings.EqualFold(b, botName) {
+							alreadyExists = true
+							break
+						}
+					}
+					if !alreadyExists {
+						gameState.BotList = append(gameState.BotList, botName)
+						addBotToList(botName)
+					}
+					gameState.mu.Unlock()
+					broadcast(msgStateUpdate, &gameState)
+					return
+				case "remove", "del", "delete":
+					updated := make([]string, 0, len(gameState.BotList))
+					for _, b := range gameState.BotList {
+						if !strings.EqualFold(b, botName) {
+							updated = append(updated, b)
+						}
+					}
+					gameState.BotList = updated
+					removeBotFromList(botName)
+					gameState.mu.Unlock()
+					broadcast(msgStateUpdate, &gameState)
+					return
+				}
+			}
+		}
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+		return
+
 	case "startgame", "start":
 		if !hasPermission(user, gameState.StartPerm) {
 			gameState.mu.Unlock()
 			return
 		}
 		if gameState.Phase == phaseIdle {
+			humanCount := 0
+			for _, p := range gameState.Players {
+				if !p.IsBot {
+					humanCount++
+				}
+			}
+			if humanCount == 0 {
+				gameState.mu.Unlock()
+				return
+			}
 			gameState.mu.Unlock()
 			startInputPhase()
 			return
