@@ -45,6 +45,8 @@ func resetGameStateForTest() {
 
 	cancelAutoRoundTimer()
 	cancelFastForward()
+	cancelActionFallback()
+	actionFallbackDuration = 5 * time.Second
 
 	if inputCancel != nil {
 		close(inputCancel)
@@ -705,13 +707,13 @@ func TestInactivePlayerNotWaitedOn(t *testing.T) {
 	// Alice fires
 	processCommand("Alice", "%fire 45 50", nil)
 
-	// Since Bob was inactive last round, we do not wait on Bob!
-	// Alice firing should immediately trigger executeActionPhase within 700ms
-	time.Sleep(700 * time.Millisecond)
+	// Since Bob was inactive last round, we do not wait for the full round time on Bob.
+	// Alice firing truncates the timer to minDuration (clamped to InputDuration=2s in test).
+	time.Sleep(2500 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
-		t.Errorf("expected phaseAction after sole active player Alice fired, got %s", gameState.Phase)
+		t.Errorf("expected phaseAction after sole active player Alice fired and window elapsed, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 }
@@ -1261,7 +1263,7 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. Alice fires at T=0. Because prevRoundHadCommands is false and Bob hasn't fired,
+	// 2. Alice fires at T=0. Because this is round 1 and Bob hasn't fired,
 	// it should NOT fast forward immediately.
 	processCommand("Alice", "%fire 45 50", nil)
 	time.Sleep(200 * time.Millisecond)
@@ -1269,11 +1271,7 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
 		gameState.mu.Unlock()
-		t.Fatalf("expected phaseInput to remain active due to minimum wait window, got %s", gameState.Phase)
-	}
-	if !fastForwardScheduled {
-		gameState.mu.Unlock()
-		t.Errorf("expected fastForwardScheduled to be true")
+		t.Fatalf("expected phaseInput to remain active in round 1 until all humans fire, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 
@@ -1292,12 +1290,12 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	resetGameStateForTest()
 	processCommand("Alice", "%join Kappa", nil)
 	processCommand("Bob", "%join LUL", nil)
-	processCommand("Alice", "%startgame", nil)
-	time.Sleep(50 * time.Millisecond)
-
 	gameState.mu.Lock()
 	gameState.InputDuration = 1 // minDuration will be clamped to 1s
 	gameState.mu.Unlock()
+
+	processCommand("Alice", "%startgame", nil)
+	time.Sleep(50 * time.Millisecond)
 
 	// Alice fires; Bob does not
 	processCommand("Alice", "%fire 45 50", nil)
@@ -1844,6 +1842,213 @@ func TestAutoRoundCustomMinutes(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1 human joins against bots
+	processCommand("Alice", "%join Kappa", nil)
+
+	gameState.mu.Lock()
+	gameState.InputDuration = 1 // Use 1s so test executes rapidly
+	gameState.mu.Unlock()
+
+	// Start game -> Round 1
+	processCommand("Alice", "%startgame", nil)
+	time.Sleep(50 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput in Round 1, got %s", gameState.Phase)
+	}
+	if prevRoundHadCommands {
+		gameState.mu.Unlock()
+		t.Fatalf("expected prevRoundHadCommands to be false in round 1")
+	}
+	gameState.mu.Unlock()
+
+	// Alice does NOT enter a command in Round 1.
+	// Wait for Round 1 to complete and execute actions:
+	time.Sleep(1600 * time.Millisecond)
+
+	// Simulate start of Round 2
+	startInputPhase()
+	time.Sleep(50 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.RoundID != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected RoundID=2, got %d", gameState.RoundID)
+	}
+	// Alice was inactive in Round 1, bots shouldn't mark prevRoundHadCommands = true!
+	if prevRoundHadCommands {
+		gameState.mu.Unlock()
+		t.Fatalf("expected prevRoundHadCommands to be false because human Alice was inactive in round 1")
+	}
+	// In Round 2 with bots and inactive human, TimerRemaining should be clamped to 1s
+	if gameState.TimerRemaining != 1 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected TimerRemaining to be 1, got %d", gameState.TimerRemaining)
+	}
+	// At 200ms, should still be in INPUT phase during window
+	gameState.mu.Unlock()
+	time.Sleep(200 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput during inactivity window at 250ms, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// After 1s duration + 500ms delay, should have transitioned to phaseAction
+	time.Sleep(1500 * time.Millisecond)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseAction after inactivity window elapsed, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestBotGame_InactivePlayerFiresDuringWindow(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1 human joins against bots
+	processCommand("Alice", "%join Kappa", nil)
+
+	gameState.mu.Lock()
+	gameState.InputDuration = 10
+	gameState.RoundID = 1
+	// Alice was inactive in Round 1 (LastActiveRound = 0)
+	alice := gameState.Players["Alice"]
+	alice.LastActiveRound = 0
+	gameState.mu.Unlock()
+
+	// Start Round 2
+	startInputPhase()
+	time.Sleep(50 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if prevRoundHadCommands {
+		gameState.mu.Unlock()
+		t.Fatalf("expected prevRoundHadCommands to be false")
+	}
+	gameState.mu.Unlock()
+
+	// Alice wakes up and fires during the window
+	processCommand("Alice", "%fire 45 60", nil)
+
+	// All alive humans (Alice) have fired, should fast-forward immediately within 700ms
+	time.Sleep(700 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseAction after Alice fired, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
+	resetGameStateForTest()
+
+	// 2 humans join with bots: Human A and Human B
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("Bob", "%join LUL", nil)
+
+	gameState.mu.Lock()
+	gameState.InputDuration = 30
+	gameState.RoundID = 1
+	// Human A was idle in Round 1 (LastActiveRound = 0), Human B was active (LastActiveRound = 1)
+	gameState.Players["Alice"].LastActiveRound = 0
+	gameState.Players["Bob"].LastActiveRound = 1
+	gameState.mu.Unlock()
+
+	// Start Round 2
+	startInputPhase()
+	time.Sleep(50 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if !prevRoundHadCommands {
+		gameState.mu.Unlock()
+		t.Fatalf("expected prevRoundHadCommands to be true because Bob was active in round 1")
+	}
+	if gameState.TimerRemaining != 30 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected initial TimerRemaining to be 30, got %d", gameState.TimerRemaining)
+	}
+	gameState.mu.Unlock()
+
+	// Simulate 1.5s elapsed, then Human B (the only active human from round 1) enters a command
+	time.Sleep(1500 * time.Millisecond)
+	processCommand("Bob", "%fire 45 60", nil)
+
+	gameState.mu.Lock()
+	// All active humans from last round have now commanded!
+	// Elapsed is ~1.5s, so remaining to reach 10s should be ~8 or 9 seconds
+	if gameState.TimerRemaining < 8 || gameState.TimerRemaining > 9 {
+		t.Errorf("expected TimerRemaining to be 8 or 9 seconds after Bob fires, got %d", gameState.TimerRemaining)
+	}
+	if !fastForwardScheduled {
+		t.Errorf("expected fastForwardScheduled to be true")
+	}
+	if gameState.Phase != phaseInput {
+		t.Errorf("expected phaseInput still active during the 10s minimum window, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// If Alice also fires now, all alive humans have fired -> immediate fast-forward!
+	processCommand("Alice", "%left", nil)
+	time.Sleep(700 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		t.Fatalf("expected immediate phaseAction after all humans fired, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestActionPhaseFallbackAdvancesWithoutUI(t *testing.T) {
+	resetGameStateForTest()
+	actionFallbackDuration = 300 * time.Millisecond
+	defer func() { actionFallbackDuration = 5 * time.Second }()
+
+	// Alice joins and starts game with bots
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("Alice", "%startgame", nil)
+	time.Sleep(50 * time.Millisecond)
+
+	// Execute action phase for Round 1
+	gameState.mu.Lock()
+	rID := gameState.RoundID
+	gameState.mu.Unlock()
+	executeActionPhaseForRound(rID)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseAction {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseAction, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// Wait 600ms for the 300ms authoritative fallback timer to trigger without any UI sending ACTION_COMPLETE
+	time.Sleep(600 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected server to advance back to phaseInput after fallback timeout, got %s", gameState.Phase)
+	}
+	if gameState.RoundID != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected RoundID to advance to 2, got %d", gameState.RoundID)
+	}
+	gameState.mu.Unlock()
+}
+
+
 
 
 
