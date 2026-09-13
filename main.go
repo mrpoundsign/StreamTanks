@@ -78,6 +78,7 @@ func main() {
 		}
 		gameState.Players["TargetBot"] = &Player{
 			Name:            "TargetBot",
+			IsBot:           true,
 			Emote:           "PogChamp",
 			EmoteURL:        "https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/2.0",
 			LastAngle:       135,

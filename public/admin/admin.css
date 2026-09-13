@@ -420,8 +420,39 @@ input[type="range"] {
 }
 
 .btn-tiny:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.15);
     color: #fff;
+}
+
+.autoround-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.btn-preset.active {
+    background: rgba(0, 255, 204, 0.2);
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
+}
+
+.bot-badge {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255, 170, 0, 0.2);
+    color: #ffaa00;
+    border: 1px solid rgba(255, 170, 0, 0.4);
+    margin-left: 6px;
+    font-weight: 600;
 }
 
 /* Tables */

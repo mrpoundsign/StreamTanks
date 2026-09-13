@@ -43,7 +43,8 @@ type Player struct {
 	Fired      bool    `json:"fired"`
 	Angle      int     `json:"angle"`
 	Power      int     `json:"power"`
-	IsDead     bool    `json:"isDead"`
+	IsDead          bool    `json:"isDead"`
+	IsBot           bool    `json:"isBot"`
 	X               float64 `json:"x"`
 	Y               float64 `json:"y"`
 	LastActiveRound int     `json:"lastActiveRound"`
@@ -70,7 +71,13 @@ type GameState struct {
 	RoundID       int                `json:"roundId"`
 	StartPerm     string             `json:"startPerm"`  // broadcaster, mod, vip, sub, all
 	ConfigPerm    string             `json:"configPerm"` // broadcaster, mod, vip, sub, all
+	MinPlayers    int                `json:"minPlayers"` // minimum player count target for bot fill (default: 5)
+	BotFill       bool               `json:"botFill"`    // whether to fill empty slots up to MinPlayers with bots
+	BotPoints     int                `json:"botPoints"`  // points awarded when human kills a bot (default: 1)
+	BotList       []string           `json:"botList"`    // list of named bots to spawn before nameless bots
 }
+
+var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
 
 // CraterPayload carries crater coordinates and radius for terrain deformation
 type CraterPayload struct {

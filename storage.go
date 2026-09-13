@@ -30,6 +30,12 @@ func initDB(dataSourceName string) error {
 		return err
 	}
 
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS bot_list (username TEXT PRIMARY KEY)`)
+	if err != nil {
+		_ = db.Close()
+		return err
+	}
+
 	return nil
 }
 
@@ -60,12 +66,16 @@ func loadLeaderboard() {
 }
 
 func incrementWin(username string) {
-	if db == nil {
+	addScore(username, 1)
+}
+
+func addScore(username string, points int) {
+	if db == nil || points <= 0 {
 		return
 	}
-	_, err := db.Exec(`INSERT INTO leaderboard (username, wins) VALUES (?, 1) ON CONFLICT(username) DO UPDATE SET wins = wins + 1`, username)
+	_, err := db.Exec(`INSERT INTO leaderboard (username, wins) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET wins = wins + excluded.wins`, username, points)
 	if err != nil {
-		log.Println("DB error:", err)
+		log.Println("DB addScore error:", err)
 	}
 }
 
@@ -136,10 +146,28 @@ func loadSettings() {
 					if clean == "broadcaster" || clean == "mod" || clean == "vip" || clean == "sub" || clean == "all" {
 						gameState.ConfigPerm = clean
 					}
+				case "min_players":
+					var mp int
+					if _, err := fmt.Sscanf(v, "%d", &mp); err == nil && mp >= 2 && mp <= 20 {
+						gameState.MinPlayers = mp
+					}
+				case "bot_fill":
+					switch v {
+					case "0", "false", "off":
+						gameState.BotFill = false
+					case "1", "true", "on":
+						gameState.BotFill = true
+					}
+				case "bot_points":
+					var bp int
+					if _, err := fmt.Sscanf(v, "%d", &bp); err == nil && bp >= 0 && bp <= 10 {
+						gameState.BotPoints = bp
+					}
 				}
 			}
 		}
 	}
+	gameState.BotList = loadBotList()
 }
 
 func saveSetting(key, value string) {
@@ -171,5 +199,52 @@ func deletePlayerDB(username string) {
 		log.Println("DB deletePlayer error:", err)
 	}
 }
+
+func loadBotList() []string {
+	if db == nil {
+		return defaultBotList
+	}
+	rows, err := db.Query(`SELECT username FROM bot_list`)
+	if err != nil {
+		return defaultBotList
+	}
+	defer func() { _ = rows.Close() }()
+
+	var bots []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil && name != "" {
+			bots = append(bots, name)
+		}
+	}
+	if len(bots) == 0 {
+		for _, b := range defaultBotList {
+			addBotToList(b)
+		}
+		return defaultBotList
+	}
+	return bots
+}
+
+func addBotToList(username string) {
+	if db == nil || username == "" {
+		return
+	}
+	_, err := db.Exec(`INSERT OR IGNORE INTO bot_list (username) VALUES (?)`, username)
+	if err != nil {
+		log.Println("DB addBotToList error:", err)
+	}
+}
+
+func removeBotFromList(username string) {
+	if db == nil || username == "" {
+		return
+	}
+	_, err := db.Exec(`DELETE FROM bot_list WHERE LOWER(username) = LOWER(?)`, username)
+	if err != nil {
+		log.Println("DB removeBotFromList error:", err)
+	}
+}
+
 
 

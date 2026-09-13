@@ -62,6 +62,10 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 			RoundID:       gameState.RoundID,
 			StartPerm:     gameState.StartPerm,
 			ConfigPerm:    gameState.ConfigPerm,
+			MinPlayers:    gameState.MinPlayers,
+			BotFill:       gameState.BotFill,
+			BotPoints:     gameState.BotPoints,
+			BotList:       gameState.BotList,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -133,8 +137,19 @@ func handleWebSocket(ws *websocket.Conn) {
 					if p, exists := gameState.Players[death.Victim]; exists && !p.IsDead {
 						p.IsDead = true
 						if death.Killer != "" && death.Killer != death.Victim {
-							gameState.Leaderboard[death.Killer]++
-							incrementWin(death.Killer)
+							killerPlayer := gameState.Players[death.Killer]
+							victimPlayer := gameState.Players[death.Victim]
+							// Bots never receive points or appear on the leaderboard
+							if killerPlayer != nil && !killerPlayer.IsBot {
+								pts := 1
+								if victimPlayer != nil && victimPlayer.IsBot {
+									pts = gameState.BotPoints
+								}
+								if pts > 0 {
+									gameState.Leaderboard[death.Killer] += pts
+									addScore(death.Killer, pts)
+								}
+							}
 						}
 						gameState.mu.Unlock()
 						broadcast(msgStateUpdate, &gameState)

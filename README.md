@@ -72,6 +72,10 @@ All settings automatically save to the local database and persist across restart
 | `%bouncywalls` | `[on\|off]` | Enables bouncy screen walls with a +10% speed boost for bullets and +50% speed boost for tanks. | `%bouncywalls on` |
 | `%clearleaderboard` | _none_ | Clears all player wins from SQLite database and live overlay leaderboard. | `%clearleaderboard` |
 | `%deleteplayer` | `<user>` | Removes an individual player from SQLite database and live overlay leaderboard. | `%deleteplayer troll123` |
+| `%minplayers` | `<2 - 20>` | Configures minimum player count to fill with bots on match start (default: `5`). | `%minplayers 6` |
+| `%botfill` | `[on\|off]` | Toggles filling open slots with bots up to minimum players (default: `on`). | `%botfill off` |
+| `%botpoints` | `<0 - 10>` | Points awarded to players for destroying a bot tank (default: `1`). | `%botpoints 2` |
+| `%botlist` | `<add\|remove> <name>` | Manages the named bot pool in persistent database. | `%botlist add CyberDrone` |
 | `%prefix` | `<symbol>` | Changes the command prefix for all commands. | `%prefix !` |
 
 ---

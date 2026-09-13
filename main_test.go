@@ -38,6 +38,10 @@ func resetGameStateForTest() {
 	gameState.Terrain = generateTerrain(20, 75)
 	gameState.StartPerm = "broadcaster"
 	gameState.ConfigPerm = "broadcaster"
+	gameState.MinPlayers = 5
+	gameState.BotFill = true
+	gameState.BotPoints = 1
+	gameState.BotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
 
 	cancelAutoRoundTimer()
 	cancelFastForward()
@@ -1497,6 +1501,339 @@ func TestDeletePlayer(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestBotFillSystem(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1. Zero humans: startInputPhase must abort and remain in phaseIdle
+	startInputPhase()
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseIdle when 0 humans are present, got %s", gameState.Phase)
+	}
+	if len(gameState.Players) != 0 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 0 players, got %d", len(gameState.Players))
+	}
+	gameState.mu.Unlock()
+
+	// 2. Add 1 human player and verify bot fill up to MinPlayers (5)
+	processCommand("Alice", "%join", nil)
+	startInputPhase()
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput after starting with human player, got %s", gameState.Phase)
+	}
+	if len(gameState.Players) != 5 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 5 players filled, got %d", len(gameState.Players))
+	}
+
+	// Verify Alice is human and bots have IsBot=true and Fired=true
+	alice := gameState.Players["Alice"]
+	if alice == nil || alice.IsBot {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to be human (!IsBot)")
+	}
+
+	botCount := 0
+	for name, p := range gameState.Players {
+		if p.IsBot {
+			botCount++
+			if !p.Fired {
+				gameState.mu.Unlock()
+				t.Errorf("expected bot %s to have Fired=true", name)
+			}
+		}
+	}
+	if botCount != 4 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 4 bots filled, got %d", botCount)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Test bot fill with MinPlayers > len(BotList) to verify nameless bots
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	gameState.MinPlayers = 7
+	gameState.mu.Unlock()
+
+	processCommand("Bob", "%join", nil)
+	startInputPhase()
+
+	gameState.mu.Lock()
+	if len(gameState.Players) != 7 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 7 players filled, got %d", len(gameState.Players))
+	}
+
+	namelessCount := 0
+	for k, p := range gameState.Players {
+		if p.IsBot && (p.Name == "" || strings.HasPrefix(k, "_bot_")) {
+			namelessCount++
+		}
+	}
+	// 1 human + 5 named bots = 6; 7th must be nameless
+	if namelessCount != 1 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 1 nameless bot, got %d", namelessCount)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestBotCullAndReplacement(t *testing.T) {
+	resetGameStateForTest()
+
+	// Start game with 1 human + 4 bots (MinPlayers = 5)
+	processCommand("Alice", "%join", nil)
+	startInputPhase()
+
+	gameState.mu.Lock()
+	if len(gameState.Players) != 5 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 5 players, got %d", len(gameState.Players))
+	}
+
+	// Record bots present before Bob joins
+	botsBefore := make(map[string]*Player)
+	for k, p := range gameState.Players {
+		if p.IsBot {
+			botsBefore[k] = p
+		}
+	}
+	gameState.mu.Unlock()
+
+	// Bob joins: should cull a named bot and inherit its position
+	processCommand("Bob", "%join", nil)
+
+	gameState.mu.Lock()
+	if len(gameState.Players) != 5 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 5 players preserved after replacement, got %d", len(gameState.Players))
+	}
+
+	var culledBot *Player
+	var culledKey string
+	for k, p := range botsBefore {
+		if _, exists := gameState.Players[k]; !exists {
+			culledBot = p
+			culledKey = k
+			break
+		}
+	}
+	if culledBot == nil {
+		gameState.mu.Unlock()
+		t.Fatalf("expected a bot to be culled")
+	}
+	if culledBot.Name == "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected a named bot to be culled first, but culled was nameless key %s", culledKey)
+	}
+
+	bob := gameState.Players["Bob"]
+	if bob == nil || bob.IsBot {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to exist as a human player")
+	}
+	if bob.X != culledBot.X || bob.Y != culledBot.Y {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to inherit bot position (%.2f, %.2f), got (%.2f, %.2f)", culledBot.X, culledBot.Y, bob.X, bob.Y)
+	}
+
+	// Real players are never culled: Alice and Bob must both exist
+	if _, exists := gameState.Players["Alice"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to not be culled")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestBotScoringAndLeaderboardExclusion(t *testing.T) {
+	resetGameStateForTest()
+	_ = initDB(":memory:")
+	defer closeDB()
+
+	// Setup: human Alice, bot TargetBot, configured BotPoints = 3
+	gameState.mu.Lock()
+	gameState.BotPoints = 3
+	gameState.Players["Alice"] = &Player{Name: "Alice", IsBot: false}
+	gameState.Players["TargetBot"] = &Player{Name: "TargetBot", IsBot: true}
+	gameState.mu.Unlock()
+
+	// Start overlay WS server
+	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsClient, err := websocket.Dial(wsURL, "", server.URL)
+	if err != nil {
+		t.Fatalf("failed to connect websocket: %v", err)
+	}
+	defer func() { _ = wsClient.Close() }()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// 1. Alice kills TargetBot -> Alice earns BotPoints (3)
+	killBotMsg := WSMessage{
+		Type: msgPlayerDied,
+		Payload: PlayerDiedPayload{
+			Victim: "TargetBot",
+			Killer: "Alice",
+		},
+	}
+	if err := websocket.JSON.Send(wsClient, killBotMsg); err != nil {
+		t.Fatalf("failed to send kill message: %v", err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Leaderboard["Alice"] != 3 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to have 3 points from bot kill, got %d", gameState.Leaderboard["Alice"])
+	}
+	if _, exists := gameState.Leaderboard["TargetBot"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected TargetBot not to appear on leaderboard")
+	}
+	gameState.mu.Unlock()
+
+	// 2. TargetBot kills Alice -> TargetBot must NOT earn points
+	killHumanMsg := WSMessage{
+		Type: msgPlayerDied,
+		Payload: PlayerDiedPayload{
+			Victim: "Alice",
+			Killer: "TargetBot",
+		},
+	}
+	if err := websocket.JSON.Send(wsClient, killHumanMsg); err != nil {
+		t.Fatalf("failed to send kill message: %v", err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["TargetBot"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected TargetBot never to appear on leaderboard, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestBotConfigurationCommands(t *testing.T) {
+	resetGameStateForTest()
+	_ = initDB(":memory:")
+	defer closeDB()
+
+	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+
+	// 1. %minplayers
+	processCommand("Streamer", "%minplayers 8", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.MinPlayers != 8 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected MinPlayers to be 8, got %d", gameState.MinPlayers)
+	}
+	gameState.mu.Unlock()
+
+	// Verify persistence in SQLite
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.MinPlayers != 8 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected MinPlayers=8 to persist in SQLite, got %d", gameState.MinPlayers)
+	}
+	gameState.mu.Unlock()
+
+	// 2. %botfill
+	processCommand("Streamer", "%botfill off", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.BotFill != false {
+		gameState.mu.Unlock()
+		t.Fatalf("expected BotFill to be false, got %v", gameState.BotFill)
+	}
+	gameState.mu.Unlock()
+
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.BotFill != false {
+		gameState.mu.Unlock()
+		t.Fatalf("expected BotFill=false to persist in SQLite")
+	}
+	gameState.mu.Unlock()
+
+	// 3. %botpoints
+	processCommand("Streamer", "%botpoints 5", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.BotPoints != 5 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected BotPoints to be 5, got %d", gameState.BotPoints)
+	}
+	gameState.mu.Unlock()
+
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.BotPoints != 5 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected BotPoints=5 to persist in SQLite")
+	}
+	gameState.mu.Unlock()
+
+	// 4. %botlist add / remove
+	processCommand("Streamer", "%botlist add EliteSniper", nil, broadcaster)
+	gameState.mu.Lock()
+	found := false
+	for _, b := range gameState.BotList {
+		if b == "EliteSniper" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		gameState.mu.Unlock()
+		t.Fatalf("expected EliteSniper to be added to BotList")
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Streamer", "%botlist remove EliteSniper", nil, broadcaster)
+	gameState.mu.Lock()
+	for _, b := range gameState.BotList {
+		if b == "EliteSniper" {
+			gameState.mu.Unlock()
+			t.Fatalf("expected EliteSniper to be removed from BotList")
+		}
+	}
+	gameState.mu.Unlock()
+}
+
+func TestAutoRoundCustomMinutes(t *testing.T) {
+	resetGameStateForTest()
+	_ = initDB(":memory:")
+	defer closeDB()
+
+	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+
+	processCommand("Streamer", "%autoround 12", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.AutoRound != 12 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected AutoRound to be 12, got %d", gameState.AutoRound)
+	}
+	gameState.mu.Unlock()
+
+	// Verify persistence in SQLite
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.AutoRound != 12 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected AutoRound=12 to persist in SQLite")
+	}
+	gameState.mu.Unlock()
+}
+
 
 
 

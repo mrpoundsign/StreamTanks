@@ -49,6 +49,7 @@ export interface Player {
   angle?: number;
   power?: number;
   isDead?: boolean;
+  isBot?: boolean;
 
   // Client-side physics & animation state
   x: number;
@@ -80,6 +81,10 @@ export interface GameState {
   roundId?: number;
   startPerm?: string;
   configPerm?: string;
+  minPlayers?: number;
+  botFill?: boolean;
+  botPoints?: number;
+  botList?: string[];
 }
 
 export interface Projectile {

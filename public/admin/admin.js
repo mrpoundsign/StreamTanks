@@ -6,6 +6,7 @@
     const avatarCache = {};
     const commandHistory = JSON.parse(localStorage.getItem('st_admin_history') || '[]');
     let historyIdx = -1;
+    let isTerrainDirty = false;
 
     // DOM Elements
     const phaseBadge = document.getElementById('phase-badge');
@@ -17,13 +18,18 @@
     const btnQuickJoin = document.getElementById('btn-quick-join');
     const btnToggleIdle = document.getElementById('btn-toggle-idle');
     const idleStatusText = document.getElementById('idle-status-text');
+    const btnToggleBotfill = document.getElementById('btn-toggle-botfill');
+    const botfillStatusText = document.getElementById('botfill-status-text');
     const btnResetTerrain = document.getElementById('btn-reset-terrain');
     const btnClearLb = document.getElementById('btn-clear-lb');
 
     // Config Inputs
     const cfgPrefix = document.getElementById('cfg-prefix');
     const cfgCommandtime = document.getElementById('cfg-commandtime');
-    const cfgAutoround = document.getElementById('cfg-autoround');
+    const autoroundCurrentVal = document.getElementById('autoround-current-val');
+    const cfgAutoroundCustom = document.getElementById('cfg-autoround-custom');
+    const cfgMinplayers = document.getElementById('cfg-minplayers');
+    const cfgBotpoints = document.getElementById('cfg-botpoints');
     const cfgSpeed = document.getElementById('cfg-speed');
     const cfgStartperm = document.getElementById('cfg-startperm');
     const cfgConfigperm = document.getElementById('cfg-configperm');
@@ -155,19 +161,42 @@
         idleStatusText.innerText = isIdle ? 'On' : 'Off';
         btnToggleIdle.className = isIdle ? 'btn btn-outline' : 'btn btn-secondary';
 
+        const isBotFill = state.botFill !== false;
+        botfillStatusText.innerText = isBotFill ? 'On' : 'Off';
+        btnToggleBotfill.className = isBotFill ? 'btn btn-outline' : 'btn btn-secondary';
+
+        // Auto Round Display & Preset Highlights
+        const ar = state.autoRound !== undefined ? state.autoRound : 0;
+        let arText = 'Off';
+        if (ar === -1) arText = 'Instant';
+        else if (ar > 0) arText = `${ar}m`;
+        autoroundCurrentVal.innerText = arText;
+
+        document.querySelectorAll('.btn-preset').forEach((btn) => {
+            const val = parseInt(btn.dataset.ar, 10);
+            if (val === ar) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
         // Populate Form Controls (only if user is not actively focused on them)
         if (document.activeElement !== cfgPrefix) cfgPrefix.value = prefix;
         if (document.activeElement !== cfgCommandtime) cfgCommandtime.value = state.inputDuration || 20;
-        if (document.activeElement !== cfgAutoround) cfgAutoround.value = state.autoRound !== undefined ? state.autoRound.toString() : '0';
+        if (document.activeElement !== cfgMinplayers) cfgMinplayers.value = state.minPlayers || 5;
+        if (document.activeElement !== cfgBotpoints) cfgBotpoints.value = state.botPoints !== undefined ? state.botPoints : 1;
         if (document.activeElement !== cfgSpeed) cfgSpeed.value = state.physicsSpeed || 0.5;
         if (document.activeElement !== cfgStartperm) cfgStartperm.value = state.startPerm || 'broadcaster';
         if (document.activeElement !== cfgConfigperm) cfgConfigperm.value = state.configPerm || 'broadcaster';
 
-        const tMin = state.terrainMin || 20;
-        const tMax = state.terrainMax || 75;
-        if (document.activeElement !== cfgTerrainMin) cfgTerrainMin.value = tMin;
-        if (document.activeElement !== cfgTerrainMax) cfgTerrainMax.value = tMax;
-        terrainRangeVal.innerText = `${tMin}% — ${tMax}%`;
+        if (!isTerrainDirty) {
+            const tMin = state.terrainMin || 20;
+            const tMax = state.terrainMax || 75;
+            cfgTerrainMin.value = tMin;
+            cfgTerrainMax.value = tMax;
+            terrainRangeVal.innerText = `${tMin}% — ${tMax}%`;
+        }
 
         // Render Active Players Table
         const players = state.players || {};
@@ -185,6 +214,7 @@
                 const p = players[name];
                 const isDead = !!p.isDead;
                 const fired = !!p.fired;
+                const isBot = !!p.isBot;
                 let statusClass = 'alive';
                 let statusText = 'Aiming';
                 if (isDead) {
@@ -196,13 +226,17 @@
                 }
 
                 const emoteUrl = p.emoteUrl || 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0';
+                const displayName = (p.name && !p.name.startsWith('_bot_')) ? p.name : (!name.startsWith('_bot_') && !isBot ? name : '');
+                const playerLabel = isBot
+                    ? `${escapeHtml(displayName || 'Nameless Bot')} <span class="bot-badge">BOT</span>`
+                    : escapeHtml(name);
 
                 return `
                     <tr>
                         <td>
                             <div class="player-cell">
                                 <img class="player-avatar" src="${emoteUrl}" alt="" />
-                                <span class="player-name">${escapeHtml(name)}</span>
+                                <span class="player-name">${playerLabel}</span>
                             </div>
                         </td>
                         <td>${p.angle ?? p.lastAngle ?? 45}°</td>
@@ -284,12 +318,17 @@
         sendCommand(`idlemessage ${nextVal}`);
     });
 
+    btnToggleBotfill.addEventListener('click', () => {
+        const nextVal = stateRef?.botFill ? 'off' : 'on';
+        sendCommand(`botfill ${nextVal}`);
+    });
+
     btnQuickJoin.addEventListener('click', () => {
         sendCommand('join TargetBot');
     });
 
     btnResetTerrain.addEventListener('click', () => {
-        sendCommand('terrain reset');
+        sendCommand('terrain reroll');
     });
 
     btnClearLb.addEventListener('click', () => {
@@ -297,6 +336,27 @@
             sendCommand('clearleaderboard');
         }
     });
+
+    // Event Listeners: Auto Round Presets & Custom Input
+    document.querySelectorAll('.btn-preset').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const ar = btn.dataset.ar;
+            if (ar !== undefined) {
+                sendCommand(`autoround ${ar}`);
+            }
+        });
+    });
+
+    const btnApplyAutoRoundCustom = document.getElementById('btn-apply-autoround-custom');
+    if (btnApplyAutoRoundCustom) {
+        btnApplyAutoRoundCustom.addEventListener('click', () => {
+            const val = parseInt(cfgAutoroundCustom.value, 10);
+            if (val >= 1 && val <= 60) {
+                sendCommand(`autoround ${val}`);
+                cfgAutoroundCustom.value = '';
+            }
+        });
+    }
 
     // Event Listeners: Config Apply Buttons
     document.getElementById('btn-apply-prefix').addEventListener('click', () => {
@@ -309,9 +369,21 @@
         if (val >= 5 && val <= 120) sendCommand(`roundtime ${val}`);
     });
 
-    document.getElementById('btn-apply-autoround').addEventListener('click', () => {
-        sendCommand(`autoround ${cfgAutoround.value}`);
-    });
+    const btnApplyMinPlayers = document.getElementById('btn-apply-minplayers');
+    if (btnApplyMinPlayers) {
+        btnApplyMinPlayers.addEventListener('click', () => {
+            const val = parseInt(cfgMinplayers.value, 10);
+            if (val >= 2 && val <= 20) sendCommand(`minplayers ${val}`);
+        });
+    }
+
+    const btnApplyBotPoints = document.getElementById('btn-apply-botpoints');
+    if (btnApplyBotPoints) {
+        btnApplyBotPoints.addEventListener('click', () => {
+            const val = parseInt(cfgBotpoints.value, 10);
+            if (val >= 0 && val <= 10) sendCommand(`botpoints ${val}`);
+        });
+    }
 
     document.getElementById('btn-apply-speed').addEventListener('click', () => {
         sendCommand(`speed ${cfgSpeed.value}`);
@@ -327,6 +399,7 @@
 
     // Real-time slider update
     function syncTerrainSliderLabel() {
+        isTerrainDirty = true;
         let minVal = parseInt(cfgTerrainMin.value, 10);
         let maxVal = parseInt(cfgTerrainMax.value, 10);
         if (minVal > maxVal - 10) minVal = maxVal - 10;
@@ -336,6 +409,7 @@
     cfgTerrainMax.addEventListener('input', syncTerrainSliderLabel);
 
     document.getElementById('btn-apply-terrain').addEventListener('click', () => {
+        isTerrainDirty = false;
         let minVal = parseInt(cfgTerrainMin.value, 10);
         let maxVal = parseInt(cfgTerrainMax.value, 10);
         if (minVal > maxVal - 10) minVal = maxVal - 10;
