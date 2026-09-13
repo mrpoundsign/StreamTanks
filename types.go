@@ -47,7 +47,33 @@ type Player struct {
 	IsBot           bool    `json:"isBot"`
 	X               float64 `json:"x"`
 	Y               float64 `json:"y"`
+	MoveTarget      float64 `json:"moveTarget,omitempty"`
+	Moving          bool    `json:"moving,omitempty"`
+	SpeedMultiplier float64 `json:"speedMultiplier,omitempty"`
+	HasBounced      bool    `json:"hasBounced,omitempty"`
 	LastActiveRound int     `json:"lastActiveRound"`
+}
+
+// Projectile represents a tank shell in flight
+type Projectile struct {
+	ID       string  `json:"id"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	VX       float64 `json:"vx"`
+	VY       float64 `json:"vy"`
+	Owner    string  `json:"owner"`
+	EmoteURL string  `json:"emoteUrl"`
+	Bounces  int     `json:"bounces,omitempty"`
+}
+
+// Explosion represents a visual blast or spark
+type Explosion struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Radius    float64 `json:"radius"`
+	MaxRadius float64 `json:"maxRadius"`
+	Alpha     float64 `json:"alpha"`
+	IsSpark   bool    `json:"isSpark"`
 }
 
 // GameState holds all synchronized state for active players, phases, and settings
@@ -65,7 +91,7 @@ type GameState struct {
 	AutoRound     int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
 	IdleMessage   bool               `json:"idleMessage"`
 	BouncyWalls   bool               `json:"bouncyWalls"`
-	Terrain       []float64          `json:"terrain"`
+	Terrain       []float64          `json:"terrain,omitempty"`
 	TerrainMin    int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
 	TerrainMax    int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)
 	RoundID       int                `json:"roundId"`
@@ -77,6 +103,8 @@ type GameState struct {
 	BotList       []string           `json:"botList"`    // list of named bots to spawn before nameless bots
 	Winner         string             `json:"winner"`         // winner of the current match ("Alice", "AI", or "")
 	TimerRemaining int                `json:"timerRemaining,omitempty"` // remaining input seconds when clock is truncated
+	Projectiles    []Projectile       `json:"projectiles"`
+	Explosions     []Explosion        `json:"explosions"`
 }
 
 var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}

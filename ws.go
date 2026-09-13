@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
-	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -120,114 +119,7 @@ func handleWebSocket(ws *websocket.Conn) {
 		}
 
 		switch msg.Type {
-		case msgActionComplete:
-			cancelActionFallback()
-			gameState.mu.Lock()
-			if gameState.Phase == phaseAction {
-				gameState.mu.Unlock()
-				startInputPhase()
-			} else {
-				gameState.mu.Unlock()
-			}
-		case msgPlayerDied:
-			payloadBytes, err := json.Marshal(msg.Payload)
-			if err == nil {
-				var death PlayerDiedPayload
-				if err := json.Unmarshal(payloadBytes, &death); err == nil && death.Victim != "" {
-					gameState.mu.Lock()
-					if p, exists := gameState.Players[death.Victim]; exists && !p.IsDead {
-						p.IsDead = true
-						if death.Killer != "" && death.Killer != death.Victim {
-							killerPlayer := gameState.Players[death.Killer]
-							victimPlayer := gameState.Players[death.Victim]
-							// Bots never receive points or appear on the leaderboard
-							if killerPlayer != nil && !killerPlayer.IsBot {
-								pts := 1
-								if victimPlayer != nil && victimPlayer.IsBot {
-									pts = gameState.BotPoints
-								}
-								if pts > 0 {
-									gameState.Leaderboard[death.Killer] += pts
-									addScore(death.Killer, pts)
-								}
-							}
-						}
-						gameState.mu.Unlock()
-						broadcast(msgStateUpdate, &gameState)
-					} else {
-						gameState.mu.Unlock()
-					}
-				} else {
-					var victim string
-					if err := json.Unmarshal(payloadBytes, &victim); err == nil && victim != "" {
-						gameState.mu.Lock()
-						if p, exists := gameState.Players[victim]; exists && !p.IsDead {
-							p.IsDead = true
-							gameState.mu.Unlock()
-							broadcast(msgStateUpdate, &gameState)
-						} else {
-							gameState.mu.Unlock()
-						}
-					}
-				}
-			}
-		case msgGameOver:
-			payloadBytes, err := json.Marshal(msg.Payload)
-			if err == nil {
-				var winner string
-				if err := json.Unmarshal(payloadBytes, &winner); err == nil {
-					gameState.mu.Lock()
-					if gameState.Phase == phaseCelebration {
-						gameState.mu.Unlock()
-						break
-					}
-					cancelActionFallback()
-					gameState.Phase = phaseCelebration
-					gameState.Winner = winner
-					if winner != "" && winner != "AI" {
-						if p, exists := gameState.Players[winner]; exists && !p.IsBot {
-							gameState.Leaderboard[winner] += 5
-							addScore(winner, 5)
-						}
-					}
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
 
-					// Safety fallback: if no CELEBRATION_COMPLETE arrives within 12s, reset cleanly
-					go func() {
-						time.Sleep(12 * time.Second)
-						resetMatchState()
-					}()
-				}
-			}
-		case msgCelebrationComplete:
-			gameState.mu.Lock()
-			if gameState.Phase == phaseCelebration {
-				gameState.mu.Unlock()
-				resetMatchState()
-			} else {
-				gameState.mu.Unlock()
-			}
-		case msgTerrainCrater:
-			payloadBytes, err := json.Marshal(msg.Payload)
-			if err == nil {
-				var crater CraterPayload
-				if err := json.Unmarshal(payloadBytes, &crater); err == nil {
-					if crater.ID != "" {
-						appliedCratersMu.Lock()
-						if appliedCraters[crater.ID] {
-							appliedCratersMu.Unlock()
-							break
-						}
-						appliedCraters[crater.ID] = true
-						appliedCratersMu.Unlock()
-					}
-					gameState.mu.Lock()
-					applyCrater(gameState.Terrain, crater.X, crater.Y, crater.Radius)
-					gameState.mu.Unlock()
-					broadcastExcept(ws, msgTerrainCrater, crater)
-				}
-			}
 		case msgChatCommand, msgDebugCommand:
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err == nil {
