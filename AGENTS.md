@@ -84,6 +84,7 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - `%configperm <broadcaster|mod|vip|sub|all>`: Configures required role for settings commands (default: `broadcaster`).
 - `%perm <start|config> <role>`: Unified permission management command.
 - `%clearleaderboard` / `%resetleaderboard`: Clears all leaderboard statistics from SQLite and connected overlays.
+- `%deleteplayer <user>` / `%removeplayer <user>`: Removes a specific player from SQLite leaderboard and connected overlays.
 
 ---
 

@@ -1365,4 +1365,98 @@ func TestClearLeaderboard(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
+func TestDeletePlayer(t *testing.T) {
+	resetGameStateForTest()
+	_ = initDB(":memory:")
+	defer closeDB()
+
+	// Populate leaderboard
+	incrementWin("Alice")
+	incrementWin("Alice")
+	incrementWin("Bob")
+	incrementWin("Charlie")
+
+	gameState.mu.Lock()
+	gameState.Leaderboard["Alice"] = 2
+	gameState.Leaderboard["Bob"] = 1
+	gameState.Leaderboard["Charlie"] = 1
+	gameState.ConfigPerm = "broadcaster"
+	gameState.mu.Unlock()
+
+	regularUser := &twitch.User{Name: "David", Badges: map[string]int{}}
+	modUser := &twitch.User{Name: "ModUser", IsMod: true}
+	broadcasterUser := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+
+	// 1. Regular user cannot delete player
+	processCommand("David", "%deleteplayer Alice", nil, regularUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["Alice"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice not to be deleted by regular user")
+	}
+	gameState.mu.Unlock()
+
+	// 2. Mod user cannot delete player when ConfigPerm is broadcaster
+	processCommand("ModUser", "%deleteplayer Alice", nil, modUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["Alice"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice not to be deleted by mod when ConfigPerm is broadcaster")
+	}
+	gameState.mu.Unlock()
+
+	// 3. Broadcaster deletes player case-insensitively ("alice" removes "Alice")
+	processCommand("Streamer", "%deleteplayer alice", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["Alice"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to be removed by broadcaster case-insensitively")
+	}
+	if len(gameState.Leaderboard) != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 2 players remaining, got %d", len(gameState.Leaderboard))
+	}
+	gameState.mu.Unlock()
+
+	// Verify SQLite database
+	loadLeaderboard()
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["Alice"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to be removed from SQLite database")
+	}
+	gameState.mu.Unlock()
+
+	// 4. Test leading @ prefix and alias %removeplayer when ConfigPerm is mod
+	gameState.mu.Lock()
+	gameState.ConfigPerm = "mod"
+	gameState.mu.Unlock()
+
+	processCommand("ModUser", "%removeplayer @Bob", nil, modUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["Bob"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to be removed via %%removeplayer with @ prefix")
+	}
+	if len(gameState.Leaderboard) != 1 || gameState.Leaderboard["Charlie"] != 1 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected only Charlie remaining on leaderboard, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+
+	// Verify SQLite database
+	loadLeaderboard()
+	gameState.mu.Lock()
+	if _, exists := gameState.Leaderboard["Bob"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to be removed from SQLite database")
+	}
+	if gameState.Leaderboard["Charlie"] != 1 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Charlie to remain in SQLite database, got %v", gameState.Leaderboard)
+	}
+	gameState.mu.Unlock()
+}
+
+
 

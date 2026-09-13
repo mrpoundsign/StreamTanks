@@ -564,6 +564,11 @@ function renderConfigModal(prefix: string): void {
       value: `<span class="config-val badge-off">Wipe</span>`,
       cmd: `<span class="config-cmd">${prefix}clearleaderboard</span>`,
     },
+    {
+      label: 'Delete Player',
+      value: `<span class="config-val badge-off">Remove</span>`,
+      cmd: `<span class="config-cmd">${prefix}deleteplayer <span class="cmd-param">&lt;user&gt;</span></span>`,
+    },
   ];
 
   configTableBody.innerHTML = rows

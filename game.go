@@ -748,6 +748,28 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		broadcast(msgStateUpdate, &gameState)
 		return
 
+	case "deleteplayer", "removeplayer":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			target := strings.TrimPrefix(parts[1], "@")
+			if target != "" {
+				for key := range gameState.Leaderboard {
+					if strings.EqualFold(key, target) {
+						delete(gameState.Leaderboard, key)
+					}
+				}
+				gameState.mu.Unlock()
+				deletePlayerDB(target)
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+		gameState.mu.Unlock()
+		return
+
 	case "join":
 		player := gameState.Players[username]
 		if gameState.Phase != phaseIdle {
