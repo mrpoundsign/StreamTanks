@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>StreamTanks — Commander Admin Console</title>
+    <link rel="stylesheet" href="admin.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Top Navigation Header -->
+        <header class="admin-header">
+            <div class="header-left">
+                <div class="header-logo">
+                    <span class="logo-accent">STREAM</span>TANKS
+                </div>
+                <div class="header-subtitle">Commander Admin Console</div>
+            </div>
+
+            <div class="header-center">
+                <div id="phase-badge" class="phase-badge idle">IDLE</div>
+                <div id="connection-pill" class="connection-pill disconnected">
+                    <span class="pill-dot"></span>
+                    <span id="connection-text">Connecting...</span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <button id="btn-quick-start" class="btn btn-primary">
+                    <span class="btn-icon">&#9654;</span> Start Game
+                </button>
+                <button id="btn-quick-bouncy" class="btn btn-secondary">
+                    Bouncy Walls: <span id="bouncy-status-text">Off</span>
+                </button>
+                <a href="/" target="_blank" class="btn btn-outline">
+                    Launch Overlay &#8599;
+                </a>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content Grid -->
+        <main class="admin-grid">
+            <!-- Left Column: Settings & Configuration -->
+            <section class="card config-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">&#9881;</span> Match Configuration
+                    </div>
+                    <span class="card-badge">LIVE SYNC</span>
+                </div>
+                <div class="card-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="cfg-prefix">Command Prefix</label>
+                            <div class="input-with-action">
+                                <input type="text" id="cfg-prefix" maxlength="5" placeholder="%" />
+                                <button id="btn-apply-prefix" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-commandtime">Input Window (sec)</label>
+                            <div class="input-with-action">
+                                <input type="number" id="cfg-commandtime" min="5" max="120" placeholder="20" />
+                                <button id="btn-apply-commandtime" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-autoround">Auto Round</label>
+                            <div class="input-with-action">
+                                <select id="cfg-autoround">
+                                    <option value="0">Off (Manual %startgame)</option>
+                                    <option value="-1">Immediate (-1)</option>
+                                    <option value="1">1 Minute</option>
+                                    <option value="2">2 Minutes</option>
+                                    <option value="3">3 Minutes</option>
+                                    <option value="5">5 Minutes</option>
+                                </select>
+                                <button id="btn-apply-autoround" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-speed">Physics Speed</label>
+                            <div class="input-with-action">
+                                <select id="cfg-speed">
+                                    <option value="0.25">0.25x (Slow Mo)</option>
+                                    <option value="0.5">0.5x (Default)</option>
+                                    <option value="0.75">0.75x</option>
+                                    <option value="1.0">1.0x (Fast)</option>
+                                    <option value="1.5">1.5x (Turbo)</option>
+                                </select>
+                                <button id="btn-apply-speed" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-startperm">Start Game Perm</label>
+                            <div class="input-with-action">
+                                <select id="cfg-startperm">
+                                    <option value="broadcaster">Broadcaster</option>
+                                    <option value="mod">Mods & Broadcaster</option>
+                                    <option value="vip">VIPs, Mods, Broadcaster</option>
+                                    <option value="sub">Subscribers+</option>
+                                    <option value="all">Everyone</option>
+                                </select>
+                                <button id="btn-apply-startperm" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-configperm">Config Perm</label>
+                            <div class="input-with-action">
+                                <select id="cfg-configperm">
+                                    <option value="broadcaster">Broadcaster</option>
+                                    <option value="mod">Mods & Broadcaster</option>
+                                    <option value="vip">VIPs, Mods, Broadcaster</option>
+                                    <option value="sub">Subscribers+</option>
+                                    <option value="all">Everyone</option>
+                                </select>
+                                <button id="btn-apply-configperm" class="btn btn-small">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group span-2">
+                            <label>Terrain Bounds: <span id="terrain-range-val" class="highlight-val">20% — 75%</span></label>
+                            <div class="range-dual">
+                                <input type="range" id="cfg-terrain-min" min="10" max="80" value="20" />
+                                <input type="range" id="cfg-terrain-max" min="20" max="90" value="75" />
+                                <button id="btn-apply-terrain" class="btn btn-small">Apply Terrain</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group span-2 toggle-row">
+                            <button id="btn-toggle-idle" class="btn btn-secondary">
+                                Idle HUD Overlay: <span id="idle-status-text">On</span>
+                            </button>
+                            <button id="btn-reset-terrain" class="btn btn-secondary">
+                                Re-roll Terrain Map
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Center Column: Active Players in Round -->
+            <section class="card players-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">&#127919;</span> Active Players
+                        <span id="player-count-badge" class="count-badge">0</span>
+                    </div>
+                    <div class="card-actions">
+                        <button id="btn-quick-join" class="btn btn-small btn-outline">+ Join Bot</button>
+                    </div>
+                </div>
+                <div class="card-body scrollable-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Aim</th>
+                                <th>Power</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="players-table-body">
+                            <tr class="empty-row">
+                                <td colspan="5">No active players. Waiting for match or %join commands.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Right Column: Persistent Leaderboard -->
+            <section class="card leaderboard-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon">&#127942;</span> Stream Leaderboard
+                    </div>
+                    <div class="card-actions">
+                        <button id="btn-clear-lb" class="btn btn-small btn-danger">Clear All</button>
+                    </div>
+                </div>
+                <div class="card-body scrollable-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">#</th>
+                                <th>Commander</th>
+                                <th style="width: 70px;">Wins</th>
+                                <th style="width: 80px;">Manage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-table-body">
+                            <tr class="empty-row">
+                                <td colspan="4">No scores recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- Always-Visible Command Console at Bottom -->
+        <footer class="admin-console">
+            <div class="console-header">
+                <div class="console-title">
+                    <span class="console-icon">&#9002;</span> Interactive Command Console
+                </div>
+                <div class="console-quick-pills">
+                    <span class="pill-label">Quick Commands:</span>
+                    <button class="console-pill" data-cmd="%startgame">%startgame</button>
+                    <button class="console-pill" data-cmd="%fire 45 60">%fire 45 60</button>
+                    <button class="console-pill" data-cmd="%left">%left</button>
+                    <button class="console-pill" data-cmd="%right">%right</button>
+                    <button class="console-pill" data-cmd="%bouncywalls on">%bouncywalls on</button>
+                    <button class="console-pill" data-cmd="%roundtime 20">%roundtime 20</button>
+                    <button class="console-pill" data-cmd="%clearleaderboard">%clearleaderboard</button>
+                    <button class="console-pill" data-cmd="%config on">%config on</button>
+                </div>
+                <button id="btn-clear-console" class="btn btn-tiny">Clear Log</button>
+            </div>
+
+            <div id="console-output" class="console-output">
+                <div class="console-line system">[SYSTEM] StreamTanks Commander Console initialized. Connect to /ws...</div>
+            </div>
+
+            <form id="console-form" class="console-input-bar">
+                <span class="console-prompt">&gt;</span>
+                <input type="text" id="console-input" placeholder="Type a chat command (%startgame, %fire 45 70, %roundtime 15, %deleteplayer <user>)..." autocomplete="off" spellcheck="false" />
+                <button type="submit" id="console-send-btn" class="btn btn-primary">Execute</button>
+            </form>
+        </footer>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

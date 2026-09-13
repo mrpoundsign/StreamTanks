@@ -124,6 +124,7 @@ func main() {
 		displayURL = "http://" + displayURL
 	}
 	log.Printf("StreamTanks overlay running at: %s", displayURL)
+	log.Printf("StreamTanks admin console running at: %s/admin", displayURL)
 	if err := http.ListenAndServe(*listenAddr, nil); err != nil {
 		log.Println("Server stopped:", err)
 	}
