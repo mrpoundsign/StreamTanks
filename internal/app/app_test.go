@@ -24,6 +24,7 @@ func resetGameStateForTest() {
 
 	gameState.Phase = phaseIdle
 	gameState.RoundID = 0
+	gameState.MatchKills = nil
 	gameState.Players = make(map[string]*Player)
 	gameState.InputDuration = 2
 	gameState.MoveDistance = 100
@@ -708,8 +709,8 @@ func TestInactivePlayerNotWaitedOn(t *testing.T) {
 	processCommand("Alice", "%fire 45 50", nil)
 
 	// Since Bob was inactive last round, we do not wait for the full round time on Bob.
-	// Alice firing truncates the timer to minDuration (clamped to InputDuration=2s in test).
-	time.Sleep(2500 * time.Millisecond)
+	// Alice firing truncates the timer to minDuration (clamped to InputDuration=2s in test) + 500ms fast-forward.
+	time.Sleep(3000 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -1956,8 +1957,96 @@ func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
+func TestMatchKillsRecap(t *testing.T) {
+	resetGameStateForTest()
 
+	// Human Alice and bot TargetBot
+	processCommand("Alice", "%join Kappa", nil)
+	processCommand("TargetBot", "%join", nil)
 
+	gameState.mu.Lock()
+	gameState.Players["Alice"].X = 100
+	gameState.Players["Alice"].Y = 500
+	gameState.Players["Alice"].Angle = 45
+	gameState.Players["Alice"].Power = 60
+	gameState.Players["Alice"].IsBot = false
 
+	gameState.Players["TargetBot"].X = 200
+	gameState.Players["TargetBot"].Y = 500
+	gameState.Players["TargetBot"].IsBot = true
 
+	gameState.Players["AbyssBot"] = &Player{
+		Name:  "AbyssBot",
+		IsBot: true,
+		X:     300,
+		Y:     float64(defaultTerrainHeight) + 10,
+	}
+	gameState.Terrain[300] = 2000.0 // Hole in terrain so tank falls into abyss
 
+	gameState.RoundID = 1
+	gameState.Phase = phaseAction
+
+	// 1. Check direct tank collision: Alice kills TargetBot
+	checkTankCollisions(200, 500, 50.0, "Alice")
+
+	if len(gameState.MatchKills) != 1 {
+		t.Fatalf("expected 1 kill event, got %d", len(gameState.MatchKills))
+	}
+	k1 := gameState.MatchKills[0]
+	if k1.Killer != "Alice" || k1.KillerIsBot != false {
+		t.Errorf("expected killer Alice (human), got %s (isBot=%v)", k1.Killer, k1.KillerIsBot)
+	}
+	if k1.Victim != "TargetBot" || k1.VictimIsBot != true {
+		t.Errorf("expected victim TargetBot (bot), got %s (isBot=%v)", k1.Victim, k1.VictimIsBot)
+	}
+	if k1.Angle != 45 || k1.Power != 60 {
+		t.Errorf("expected angle 45, power 60, got angle %d, power %d", k1.Angle, k1.Power)
+	}
+
+	// 2. Check abyss fall: AbyssBot falls off screen
+	updatePhysicsStep(1.0)
+	if len(gameState.MatchKills) != 2 {
+		t.Fatalf("expected 2 kill events after abyss fall, got %d", len(gameState.MatchKills))
+	}
+	k2 := gameState.MatchKills[1]
+	if k2.Killer != "" {
+		t.Errorf("expected empty killer for abyss death, got %s", k2.Killer)
+	}
+	if k2.Victim != "AbyssBot" || k2.VictimIsBot != true {
+		t.Errorf("expected victim AbyssBot (bot), got %s (isBot=%v)", k2.Victim, k2.VictimIsBot)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Verify WebSocket broadcast carries MatchKills in stateCopy
+	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	defer server.Close()
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, err := websocket.Dial(wsURL, "", server.URL)
+	if err != nil {
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	var initMsg struct {
+		Type    string    `json:"type"`
+		Payload GameState `json:"payload"`
+	}
+	if err := websocket.JSON.Receive(conn, &initMsg); err != nil {
+		t.Fatalf("failed to receive initial state update: %v", err)
+	}
+	if len(initMsg.Payload.MatchKills) != 2 {
+		t.Errorf("expected 2 MatchKills in broadcast GameState payload, got %d", len(initMsg.Payload.MatchKills))
+	}
+
+	// 4. Resetting match state clears MatchKills
+	gameState.mu.Lock()
+	gameState.Phase = phaseCelebration
+	gameState.mu.Unlock()
+	resetMatchState()
+
+	gameState.mu.Lock()
+	if len(gameState.MatchKills) != 0 {
+		t.Errorf("expected MatchKills to be cleared after resetMatchState, got %d", len(gameState.MatchKills))
+	}
+	gameState.mu.Unlock()
+}

@@ -249,6 +249,105 @@ canvas {
     to { transform: scale(1.1); }
 }
 
+/* Post-Game Casualty Recap */
+#celebration-recap {
+    margin-top: 24px;
+    background: rgba(8, 12, 22, 0.94);
+    border: 2px solid rgba(0, 255, 204, 0.5);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85), 0 0 25px rgba(0, 255, 204, 0.2);
+    backdrop-filter: blur(12px);
+    padding: 16px 28px;
+    min-width: 520px;
+    max-width: 800px;
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: recapFadeIn 0.4s ease-out;
+}
+
+@keyframes recapFadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.recap-header {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #00ffcc;
+    border-bottom: 1px solid rgba(0, 255, 204, 0.3);
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+    width: 100%;
+    text-shadow: 0 0 8px rgba(0, 255, 204, 0.6);
+}
+
+#recap-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.recap-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.recap-name.player {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #00ffcc;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(0, 255, 204, 0.7);
+}
+
+.recap-name.bot {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #ff6685;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+    text-shadow: 0 0 5px rgba(255, 102, 133, 0.5);
+}
+
+.bot-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #ff003c;
+    border: 1px solid #ff003c;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 1px;
+}
+
+.recap-action {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #a0aec0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.recap-action.abyss {
+    color: #ffaa00;
+}
+
 /* Config & Settings Modal (Centered Overlay) */
 #config-modal {
     position: absolute;

@@ -47,6 +47,8 @@ const emotesLayer = document.getElementById('emotes-layer') as HTMLElement;
 const celebrationDisplay = document.getElementById('celebration-display') as HTMLElement;
 const celebrationText = document.getElementById('celebration-text') as HTMLElement;
 const celebrationAvatar = document.getElementById('celebration-avatar') as HTMLImageElement;
+const celebrationRecap = document.getElementById('celebration-recap') as HTMLElement | null;
+const recapList = document.getElementById('recap-list') as HTMLElement | null;
 const configModal = document.getElementById('config-modal') as HTMLElement;
 const configTableBody = document.getElementById('config-table-body') as HTMLElement;
 const configDismissHint = document.getElementById('config-dismiss-hint') as HTMLElement;
@@ -73,6 +75,12 @@ const emoteCache: Record<string, HTMLImageElement> = {};
 
 // Network
 const net = new NetworkManager();
+
+function escapeHtml(str: string): string {
+  const div = document.createElement('div');
+  div.innerText = str;
+  return div.innerHTML;
+}
 
 function showKillMessage(msg: string): void {
   const el = document.createElement('div');
@@ -604,6 +612,35 @@ function updateUI(): void {
     }
     timerDisplay.style.display = 'none';
     celebrationDisplay.style.display = 'block';
+
+    if (celebrationRecap && recapList) {
+      recapList.innerHTML = '';
+      const kills = stateRef?.matchKills ?? [];
+      if (kills.length > 0) {
+        celebrationRecap.style.display = 'flex';
+        for (const k of kills) {
+          const li = document.createElement('li');
+          li.className = 'recap-item';
+
+          const victimIsBot = k.victimIsBot;
+          const victimClass = victimIsBot ? 'recap-name bot' : 'recap-name player';
+          const victimTag = victimIsBot ? '<span class="bot-tag">BOT</span>' : '';
+
+          if (k.killer) {
+            const killerIsBot = k.killerIsBot;
+            const killerClass = killerIsBot ? 'recap-name bot' : 'recap-name player';
+            const killerTag = killerIsBot ? '<span class="bot-tag">BOT</span>' : '';
+
+            li.innerHTML = `<span class="${killerClass}">${escapeHtml(k.killer)}${killerTag}</span><span class="recap-action">💥 destroyed</span><span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}</span>`;
+          } else {
+            li.innerHTML = `<span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}</span><span class="recap-action abyss">fell into the abyss</span>`;
+          }
+          recapList.appendChild(li);
+        }
+      } else {
+        celebrationRecap.style.display = 'none';
+      }
+    }
   }
 
   if (debugBar) {
@@ -654,6 +691,8 @@ net.onMessage((msg: WSMessage) => {
     if (state.phase === PhaseIdle && currentPhase !== PhaseIdle) {
       celebrationWinner = '';
       celebrationText.innerText = '';
+      if (recapList) recapList.innerHTML = '';
+      if (celebrationRecap) celebrationRecap.style.display = 'none';
     }
     currentPhase = state.phase;
 
