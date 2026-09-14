@@ -87,8 +87,22 @@ export interface GameState {
   botList?: string[];
   winner?: string;
   timerRemaining?: number;
+  matchKills?: KillEvent[];
   projectiles?: Projectile[];
   explosions?: Explosion[];
+}
+
+export interface KillEvent {
+  killer?: string;
+  killerIsBot?: boolean;
+  victim: string;
+  victimIsBot: boolean;
+  angle?: number;
+  power?: number;
+  impactX?: number;
+  impactY?: number;
+  roundId?: number;
+  timestamp?: number;
 }
 
 export interface Projectile {
@@ -120,7 +134,9 @@ export interface CraterPayload {
 
 export interface PlayerDiedPayload {
   victim: string;
+  victimIsBot?: boolean;
   killer?: string;
+  killerIsBot?: boolean;
 }
 
 export interface WSMessage<T = unknown> {

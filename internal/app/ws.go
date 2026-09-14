@@ -46,6 +46,8 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 		copy(projCopy, gameState.Projectiles)
 		expCopy := make([]Explosion, len(gameState.Explosions))
 		copy(expCopy, gameState.Explosions)
+		matchKillsCopy := make([]KillEvent, len(gameState.MatchKills))
+		copy(matchKillsCopy, gameState.MatchKills)
 		stateCopy := &GameState{
 			Phase:          gameState.Phase,
 			Players:        playersCopy,
@@ -71,6 +73,7 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 			BotList:        gameState.BotList,
 			Winner:         gameState.Winner,
 			TimerRemaining: gameState.TimerRemaining,
+			MatchKills:     matchKillsCopy,
 			Projectiles:    projCopy,
 			Explosions:     expCopy,
 		}

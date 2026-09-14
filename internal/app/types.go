@@ -103,11 +103,26 @@ type GameState struct {
 	BotList       []string           `json:"botList"`    // list of named bots to spawn before nameless bots
 	Winner         string             `json:"winner"`         // winner of the current match ("Alice", "AI", or "")
 	TimerRemaining int                `json:"timerRemaining,omitempty"` // remaining input seconds when clock is truncated
+	MatchKills     []KillEvent        `json:"matchKills,omitempty"`
 	Projectiles    []Projectile       `json:"projectiles"`
 	Explosions     []Explosion        `json:"explosions"`
 }
 
 var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
+
+// KillEvent records elimination details for post-game recap and future replays (#37)
+type KillEvent struct {
+	Killer      string  `json:"killer,omitempty"`
+	KillerIsBot bool    `json:"killerIsBot,omitempty"`
+	Victim      string  `json:"victim"`
+	VictimIsBot bool    `json:"victimIsBot"`
+	Angle       int     `json:"angle,omitempty"`
+	Power       int     `json:"power,omitempty"`
+	ImpactX     float64 `json:"impactX,omitempty"`
+	ImpactY     float64 `json:"impactY,omitempty"`
+	RoundID     int     `json:"roundId,omitempty"`
+	Timestamp   int64   `json:"timestamp,omitempty"`
+}
 
 // CraterPayload carries crater coordinates and radius for terrain deformation
 type CraterPayload struct {
@@ -119,8 +134,10 @@ type CraterPayload struct {
 
 // PlayerDiedPayload conveys death event information including the killer for point attribution
 type PlayerDiedPayload struct {
-	Victim string `json:"victim"`
-	Killer string `json:"killer,omitempty"`
+	Victim      string `json:"victim"`
+	VictimIsBot bool   `json:"victimIsBot,omitempty"`
+	Killer      string `json:"killer,omitempty"`
+	KillerIsBot bool   `json:"killerIsBot,omitempty"`
 }
 
 // WSMessage is the generic envelope sent over WebSocket

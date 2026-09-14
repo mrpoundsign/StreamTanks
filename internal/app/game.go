@@ -76,6 +76,8 @@ func resetMatchState() {
 	}
 	gameState.Phase = phaseIdle
 	gameState.Winner = ""
+	gameState.RoundID = 0
+	gameState.MatchKills = nil
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 	gameState.Projectiles = []Projectile{}
 	gameState.Explosions = []Explosion{}
@@ -258,6 +260,9 @@ func startInputPhase() {
 		}
 	}
 
+	if gameState.Phase == phaseIdle {
+		gameState.MatchKills = nil
+	}
 	gameState.Phase = phaseInput
 	gameState.RoundID++
 	inputStartTime = time.Now()
@@ -621,19 +626,41 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 
 			// Handle kill attribution
 			killerPlayer := gameState.Players[owner]
-			if killerPlayer != nil && !killerPlayer.IsBot {
-				pts := 1
-				if p.IsBot {
-					pts = gameState.BotPoints
-				}
-				if pts > 0 {
-					gameState.Leaderboard[owner] += pts
-					addScore(owner, pts)
+			killerIsBot := false
+			angle := 0
+			power := 0
+			if killerPlayer != nil {
+				killerIsBot = killerPlayer.IsBot
+				angle = killerPlayer.Angle
+				power = killerPlayer.Power
+				if !killerIsBot {
+					pts := 1
+					if p.IsBot {
+						pts = gameState.BotPoints
+					}
+					if pts > 0 {
+						gameState.Leaderboard[owner] += pts
+						addScore(owner, pts)
+					}
 				}
 			}
+			gameState.MatchKills = append(gameState.MatchKills, KillEvent{
+				Killer:      owner,
+				KillerIsBot: killerIsBot,
+				Victim:      name,
+				VictimIsBot: p.IsBot,
+				Angle:       angle,
+				Power:       power,
+				ImpactX:     cx,
+				ImpactY:     cy,
+				RoundID:     gameState.RoundID,
+				Timestamp:   time.Now().UnixMilli(),
+			})
 			broadcast(msgPlayerDied, PlayerDiedPayload{
-				Victim: name,
-				Killer: owner,
+				Victim:      name,
+				VictimIsBot: p.IsBot,
+				Killer:      owner,
+				KillerIsBot: killerIsBot,
 			})
 		}
 	}
@@ -717,8 +744,17 @@ func updatePhysicsStep(dtScale float64) bool {
 		if p.Y >= defaultTerrainHeight {
 			if !p.IsDead {
 				p.IsDead = true
+				gameState.MatchKills = append(gameState.MatchKills, KillEvent{
+					Victim:      name,
+					VictimIsBot: p.IsBot,
+					ImpactX:     p.X,
+					ImpactY:     p.Y,
+					RoundID:     gameState.RoundID,
+					Timestamp:   time.Now().UnixMilli(),
+				})
 				broadcast(msgPlayerDied, PlayerDiedPayload{
-					Victim: name,
+					Victim:      name,
+					VictimIsBot: p.IsBot,
 				})
 			}
 		}
@@ -944,8 +980,8 @@ func checkGameOverAndTransition() {
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
 
-		// Wait 4 seconds for celebration then reset to idle/next match
-		time.AfterFunc(4*time.Second, func() {
+		// Wait 18 seconds for celebration then reset to idle/next match
+		time.AfterFunc(18*time.Second, func() {
 			resetMatchState()
 		})
 	} else {
