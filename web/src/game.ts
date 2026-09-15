@@ -47,8 +47,7 @@ const timerDisplay = document.getElementById('timer-display') as HTMLElement;
 const killFeed = document.getElementById('kill-feed') as HTMLElement;
 const emotesLayer = document.getElementById('emotes-layer') as HTMLElement;
 const celebrationDisplay = document.getElementById('celebration-display') as HTMLElement;
-const celebrationText = document.getElementById('celebration-text') as HTMLElement;
-const celebrationAvatar = document.getElementById('celebration-avatar') as HTMLImageElement;
+const hudAvatar = document.getElementById('hud-avatar') as HTMLImageElement | null;
 const celebrationRecap = document.getElementById('celebration-recap') as HTMLElement | null;
 const recapList = document.getElementById('recap-list') as HTMLElement | null;
 const configModal = document.getElementById('config-modal') as HTMLElement;
@@ -551,6 +550,10 @@ function updateUI(): void {
     }
     timerDisplay.style.display = 'none';
     celebrationDisplay.style.display = 'none';
+    if (hudAvatar) {
+      hudAvatar.style.display = 'none';
+      hudAvatar.src = '';
+    }
     if (leaderboardEl) leaderboardEl.style.display = showIdle ? 'block' : 'none';
   } else if (currentPhase === PhaseInput) {
     if (hudTop) hudTop.style.display = 'flex';
@@ -560,6 +563,10 @@ function updateUI(): void {
     }
     if (hudInstructions) {
       hudInstructions.innerHTML = `<span class="cmd-highlight">${prefix}fire &lt;angle&gt; &lt;power&gt;</span> | <span class="cmd-highlight">${prefix}left</span> | <span class="cmd-highlight">${prefix}right</span>`;
+    }
+    if (hudAvatar) {
+      hudAvatar.style.display = 'none';
+      hudAvatar.src = '';
     }
     timerDisplay.style.display = 'block';
     celebrationDisplay.style.display = 'none';
@@ -597,6 +604,10 @@ function updateUI(): void {
     if (hudInstructions) {
       hudInstructions.innerHTML = 'Executing commands...';
     }
+    if (hudAvatar) {
+      hudAvatar.style.display = 'none';
+      hudAvatar.src = '';
+    }
     timerDisplay.style.display = 'none';
     celebrationDisplay.style.display = 'none';
     if (leaderboardEl) leaderboardEl.style.display = 'block';
@@ -606,35 +617,38 @@ function updateUI(): void {
       phaseBadge.className = 'hud-badge celebration';
     }
     const win = (stateRef?.winner !== undefined && stateRef.winner !== '') ? stateRef.winner : celebrationWinner;
-    celebrationAvatar.style.display = 'none';
 
     if (win && win !== 'AI') {
-      celebrationText.classList.remove('bot-win');
-      celebrationText.innerText = `${win} WINS!`;
       if (hudInstructions) {
-        hudInstructions.innerHTML = `${win} WINS!`;
+        hudInstructions.innerHTML = `<span class="hud-winner">${escapeHtml(win)} WINS!</span>`;
       }
-      if (avatarCache[win] && avatarCache[win] !== 'fetching') {
-        celebrationAvatar.src = avatarCache[win];
-        celebrationAvatar.style.display = 'block';
-      } else {
-        fetch(`https://decapi.me/twitch/avatar/${win}`)
-          .then((r) => r.text())
-          .then((url) => {
-            avatarCache[win] = url;
-            celebrationAvatar.src = url;
-            celebrationAvatar.style.display = 'block';
-          });
+      if (hudAvatar) {
+        if (avatarCache[win] && avatarCache[win] !== 'fetching') {
+          hudAvatar.src = avatarCache[win];
+          hudAvatar.style.display = 'block';
+        } else {
+          fetch(`https://decapi.me/twitch/avatar/${win}`)
+            .then((r) => r.text())
+            .then((url) => {
+              avatarCache[win] = url;
+              if (hudAvatar) {
+                hudAvatar.src = url;
+                hudAvatar.style.display = 'block';
+              }
+            });
+        }
       }
     } else {
-      celebrationText.classList.add('bot-win');
-      celebrationText.innerText = 'Humanity failed to defeat the AI';
+      if (hudAvatar) {
+        hudAvatar.style.display = 'none';
+        hudAvatar.src = '';
+      }
       if (hudInstructions) {
-        hudInstructions.innerHTML = 'Humanity failed to defeat the AI';
+        hudInstructions.innerHTML = '<span class="hud-ai-winner">Humanity failed to defeat the AI</span>';
       }
     }
     timerDisplay.style.display = 'none';
-    celebrationDisplay.style.display = 'block';
+    celebrationDisplay.style.display = 'flex';
 
     if (celebrationRecap && recapList) {
       recapList.innerHTML = '';
@@ -713,7 +727,10 @@ net.onMessage((msg: WSMessage) => {
     }
     if (state.phase === PhaseIdle && currentPhase !== PhaseIdle) {
       celebrationWinner = '';
-      celebrationText.innerText = '';
+      if (hudAvatar) {
+        hudAvatar.style.display = 'none';
+        hudAvatar.src = '';
+      }
       if (recapList) recapList.innerHTML = '';
       if (celebrationRecap) celebrationRecap.style.display = 'none';
     }

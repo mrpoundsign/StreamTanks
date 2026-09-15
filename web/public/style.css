@@ -92,6 +92,23 @@ canvas {
     border: 1px solid #00ffcc;
 }
 
+#hud-message-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+#hud-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid #00ffcc;
+    box-shadow: 0 0 10px #00ffcc;
+    flex-shrink: 0;
+}
+
 #hud-instructions {
     font-size: 1.25rem;
     font-weight: 600;
@@ -99,6 +116,22 @@ canvas {
     letter-spacing: 0.5px;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     white-space: nowrap;
+}
+
+.hud-winner {
+    color: #00ffcc;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.8);
+    font-size: 1.35rem;
+}
+
+.hud-ai-winner {
+    color: #ff003c;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-shadow: 0 0 10px rgba(255, 0, 60, 0.8);
+    font-size: 1.35rem;
 }
 
 .cmd-highlight {
@@ -292,35 +325,7 @@ canvas {
     display: flex;
     flex-direction: column;
     align-items: center;
-}
-
-#celebration-avatar {
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    border: 5px solid #00ffcc;
-    box-shadow: 0 0 20px #00ffcc;
-    margin-bottom: 20px;
-}
-
-#celebration-text {
-    font-size: clamp(2.8rem, 5.5vw, 6.5rem);
-    max-width: 1600px;
-    line-height: 1.15;
-    margin: 0;
-    color: #00ffcc; /* Cyan neon */
-    text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc, 0 0 40px #00ffcc;
-    animation: pulse 1s infinite alternate;
-}
-
-#celebration-text.bot-win {
-    color: #ff003c;
-    text-shadow: 0 0 10px #ff003c, 0 0 20px #ff003c, 0 0 40px #ff003c;
-}
-
-@keyframes pulse {
-    from { transform: scale(1); }
-    to { transform: scale(1.1); }
+    pointer-events: none;
 }
 
 /* Post-Game Casualty Recap */
