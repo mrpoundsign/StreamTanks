@@ -150,12 +150,13 @@ canvas {
     position: absolute;
     top: 40px;
     left: 40px;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.65);
     border: 2px solid #ff003c;
-    border-radius: 5px;
+    border-radius: 8px;
     padding: 15px;
-    width: 250px;
-    box-shadow: 0 0 10px #ff003c;
+    width: 350px;
+    box-shadow: 0 0 15px rgba(255, 0, 60, 0.6);
+    backdrop-filter: blur(8px);
 }
 
 #leaderboard h3 {
@@ -183,6 +184,8 @@ canvas {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .lb-avatar {
@@ -190,6 +193,77 @@ canvas {
     height: 30px;
     border-radius: 50%;
     border: 1px solid #ff003c;
+    flex-shrink: 0;
+}
+
+.lb-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
+.lb-score {
+    flex-shrink: 0;
+    margin-left: 12px;
+    font-weight: 700;
+    color: #00ffcc;
+    text-shadow: 0 0 6px rgba(0, 255, 204, 0.5);
+}
+
+/* Ticker across bottom for ranks 4-8 */
+#leaderboard-ticker {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 0, 60, 0.4);
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+}
+
+.ticker-track {
+    display: inline-flex;
+    white-space: nowrap;
+    animation: tickerScroll 18s linear infinite;
+    will-change: transform;
+}
+
+@keyframes tickerScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.95rem;
+    color: #e2e8f0;
+}
+
+.ticker-rank {
+    font-weight: 800;
+    color: #ff003c;
+    letter-spacing: 0.5px;
+}
+
+.ticker-name {
+    font-weight: 600;
+    color: #f7fafc;
+}
+
+.ticker-score {
+    font-weight: 700;
+    color: #00ffcc;
+    font-size: 0.9rem;
+}
+
+.ticker-sep {
+    color: rgba(255, 0, 60, 0.6);
+    margin: 0 12px;
+    font-weight: bold;
 }
 
 #emotes-layer {
