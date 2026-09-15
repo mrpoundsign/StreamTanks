@@ -41,6 +41,8 @@ const hudInstructions = document.getElementById('hud-instructions') as HTMLEleme
 const hudTop = document.getElementById('hud-top') as HTMLElement;
 const leaderboardEl = document.getElementById('leaderboard') as HTMLElement;
 const leaderboardList = document.getElementById('leaderboard-list') as HTMLElement;
+const leaderboardTicker = document.getElementById('leaderboard-ticker') as HTMLElement | null;
+const tickerTrack = document.getElementById('ticker-track') as HTMLElement | null;
 const timerDisplay = document.getElementById('timer-display') as HTMLElement;
 const killFeed = document.getElementById('kill-feed') as HTMLElement;
 const emotesLayer = document.getElementById('emotes-layer') as HTMLElement;
@@ -351,10 +353,12 @@ function updatePhysics(dtScale: number): void {
 function updateLeaderboard(lb: Record<string, number>): void {
   if (!leaderboardList) return;
   const sorted = Object.entries(lb)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+    .sort((a, b) => b[1] - a[1]);
 
-  leaderboardList.innerHTML = sorted
+  const top3 = sorted.slice(0, 3);
+  const runnersUp = sorted.slice(3, 8);
+
+  leaderboardList.innerHTML = top3
     .map(
       ([name, wins]) => {
         const hasUrl = avatarCache[name] && avatarCache[name] !== 'fetching';
@@ -363,16 +367,16 @@ function updateLeaderboard(lb: Record<string, number>): void {
         <li>
             <div class="lb-player">
                 <img id="lb-avatar-${name}" class="lb-avatar" src="${avatarUrl}" style="${hasUrl ? '' : 'display:none;'}">
-                <span>${name}</span>
+                <span class="lb-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
             </div>
-            <span>${wins}</span>
+            <span class="lb-score">${wins}</span>
         </li>
     `;
       }
     )
     .join('');
 
-  for (const [name] of sorted) {
+  for (const [name] of top3) {
     if (!avatarCache[name]) {
       avatarCache[name] = 'fetching';
       fetch(`https://decapi.me/twitch/avatar/${name}`)
@@ -385,6 +389,25 @@ function updateLeaderboard(lb: Record<string, number>): void {
             img.style.display = 'inline-block';
           }
         });
+    }
+  }
+
+  // Handle Ranks 4-8 scrolling ticker
+  if (leaderboardTicker && tickerTrack) {
+    if (runnersUp.length > 0) {
+      leaderboardTicker.style.display = 'block';
+      const itemsHtml = runnersUp
+        .map(([name, wins], idx) => {
+          const rank = idx + 4;
+          return `<span class="ticker-item"><span class="ticker-rank">#${rank}</span> <span class="ticker-name">${escapeHtml(name)}</span> <span class="ticker-score">(${wins})</span></span>`;
+        })
+        .join('<span class="ticker-sep">•</span>');
+
+      // Duplicate content to achieve a seamless, continuous -50% marquee loop
+      tickerTrack.innerHTML = itemsHtml + '<span class="ticker-sep">•</span>' + itemsHtml;
+    } else {
+      leaderboardTicker.style.display = 'none';
+      tickerTrack.innerHTML = '';
     }
   }
 }
