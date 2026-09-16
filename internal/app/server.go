@@ -17,6 +17,7 @@ type Config struct {
 	ListenAddr  string
 	DebugMode   bool
 	BouncyWalls bool
+	CCServerURL string
 	Version     string
 	Commit      string
 	Date        string
@@ -88,6 +89,10 @@ func Run(cfg Config) error {
 
 	// Setup Twitch Client only if channel is provided
 	startTwitchBot(cfg.Channel)
+
+	if cfg.CCServerURL != "" && cfg.Channel != "" {
+		go startCCClient(cfg.CCServerURL, cfg.Channel)
+	}
 
 	// Setup WebSocket and HTTP server with no-cache headers for overlay assets
 	mux := http.NewServeMux()

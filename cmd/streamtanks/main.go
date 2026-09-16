@@ -19,6 +19,7 @@ var (
 	listenAddr  = flag.String("addr", ":8102", "HTTP listen address")
 	debugMode   = flag.Bool("debug", false, "Enable debug mode with a test bot for single-player testing")
 	bouncyFlag  = flag.Bool("bouncy", false, "Enable bouncy walls for bullets (+10% speed) and tanks (+50% speed)")
+	ccServerURL = flag.String("cc", "", "URL of the Command & Control (C&C) WebSocket server (e.g., wss://st-cc.poundsigndesign.com)")
 )
 
 func main() {
@@ -29,6 +30,7 @@ func main() {
 		ListenAddr:  *listenAddr,
 		DebugMode:   *debugMode,
 		BouncyWalls: *bouncyFlag,
+		CCServerURL: *ccServerURL,
 		Version:     version,
 		Commit:      commit,
 		Date:        date,
