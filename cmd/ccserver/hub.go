@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"log"
+	"net/http"
 	"sync"
 
 	"golang.org/x/net/websocket"
@@ -10,13 +11,15 @@ import (
 
 // Hub manages active host connections and routes viewer messages to them.
 type Hub struct {
-	mu    sync.RWMutex
-	hosts map[string]*websocket.Conn
+	mu      sync.RWMutex
+	hosts   map[string]*websocket.Conn
+	viewers map[string]map[*websocket.Conn]bool
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		hosts: make(map[string]*websocket.Conn),
+		hosts:   make(map[string]*websocket.Conn),
+		viewers: make(map[string]map[*websocket.Conn]bool),
 	}
 }
 
@@ -46,6 +49,50 @@ func (h *Hub) UnregisterHost(channel string, ws *websocket.Conn) {
 	}
 }
 
+// RegisterViewer registers a viewer connection for a channel.
+func (h *Hub) RegisterViewer(channel string, ws *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, exists := h.viewers[channel]; !exists {
+		h.viewers[channel] = make(map[*websocket.Conn]bool)
+	}
+	h.viewers[channel][ws] = true
+}
+
+// UnregisterViewer removes a viewer connection.
+func (h *Hub) UnregisterViewer(channel string, ws *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, exists := h.viewers[channel]; exists {
+		delete(h.viewers[channel], ws)
+		if len(h.viewers[channel]) == 0 {
+			delete(h.viewers, channel)
+		}
+	}
+}
+
+// BroadcastToViewers sends a message to all viewers listening to a channel.
+func (h *Hub) BroadcastToViewers(channel string, payload interface{}) {
+	h.mu.RLock()
+	channelViewers, exists := h.viewers[channel]
+	if !exists {
+		h.mu.RUnlock()
+		return
+	}
+	// Copy connections so we don't hold the lock while sending over the network
+	conns := make([]*websocket.Conn, 0, len(channelViewers))
+	for ws := range channelViewers {
+		conns = append(conns, ws)
+	}
+	h.mu.RUnlock()
+
+	for _, ws := range conns {
+		if err := websocket.JSON.Send(ws, payload); err != nil {
+			log.Printf("Failed to broadcast to viewer on channel %s: %v", channel, err)
+		}
+	}
+}
+
 // RouteMessage forwards a JSON payload to the specific channel's host.
 func (h *Hub) RouteMessage(channel string, payload interface{}) error {
 	h.mu.RLock()
@@ -68,9 +115,14 @@ func (h *Hub) RouteMessage(channel string, payload interface{}) error {
 }
 
 // HandleHost is the WebSocket handler for incoming streamer (host) connections.
-func (h *Hub) HandleHost(auth HostAuthenticator) websocket.Handler {
-	return func(ws *websocket.Conn) {
-		req := ws.Request()
+func (h *Hub) HandleHost(auth HostAuthenticator) websocket.Server {
+	return websocket.Server{
+		Handshake: func(config *websocket.Config, req *http.Request) error {
+			// Accept any origin
+			return nil
+		},
+		Handler: func(ws *websocket.Conn) {
+			req := ws.Request()
 		channel, err := auth.Authenticate(req)
 		if err != nil {
 			log.Printf("Host authentication failed: %v", err)
@@ -88,15 +140,17 @@ func (h *Hub) HandleHost(auth HostAuthenticator) websocket.Handler {
 		}()
 
 		// Keep the connection alive and read incoming messages.
-		// The host might send status updates or pings in the future.
-		// For now, we just wait for it to disconnect.
+		// The host sends GAME_STATE updates here which we broadcast to all viewers.
 		for {
 			var msg interface{}
 			if err := websocket.JSON.Receive(ws, &msg); err != nil {
 				log.Printf("Host disconnected for channel %s", channel)
 				break
 			}
-			// We don't currently process messages FROM the host TO the C&C server.
+			
+			// Broadcast the message (e.g. GAME_STATE) to all viewers of this channel
+			h.BroadcastToViewers(channel, msg)
 		}
+	},
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
-
+	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/net/websocket"
@@ -46,8 +46,13 @@ func ViewerAuth(tokenString string, b64Secret string) (*ViewerClaims, error) {
 }
 
 // HandleViewer is the WebSocket handler for incoming viewer connections.
-func HandleViewer(hub *Hub, twitchSecret string) websocket.Handler {
-	return func(ws *websocket.Conn) {
+func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) websocket.Server {
+	return websocket.Server{
+		Handshake: func(config *websocket.Config, req *http.Request) error {
+			// Accept any origin
+			return nil
+		},
+		Handler: func(ws *websocket.Conn) {
 		// The viewer frontend connects and sends an initial auth payload
 		// For example: {"jwt": "eyJhbG..."}
 		
@@ -70,10 +75,27 @@ func HandleViewer(hub *Hub, twitchSecret string) websocket.Handler {
 		viewerID := claims.UserID
 		if viewerID == "" {
 			viewerID = claims.OpaqueUserID
+		} else if twitchClient != nil {
+			// If we have a numeric UserID and the API is configured, resolve it!
+			if name, err := twitchClient.GetUsername(viewerID); err == nil {
+				viewerID = name
+			} else {
+				log.Printf("Failed to resolve username for %s: %v", viewerID, err)
+			}
 		}
 		channelID := claims.ChannelID
+		if twitchClient != nil {
+			if name, err := twitchClient.GetUsername(channelID); err == nil {
+				channelID = name
+			} else {
+				log.Printf("Failed to resolve channel username for %s: %v", channelID, err)
+			}
+		}
 
 		log.Printf("Viewer %s connected for channel %s", viewerID, channelID)
+
+		hub.RegisterViewer(channelID, ws)
+		defer hub.UnregisterViewer(channelID, ws)
 
 		// Loop to receive commands and route them to the host
 		for {
@@ -98,10 +120,10 @@ func HandleViewer(hub *Hub, twitchSecret string) websocket.Handler {
 				},
 			}
 
-			if err := hub.RouteMessage(channelID, envelope); err != nil {
-				// The host is not connected or failed to receive.
-				// We could send an error back to the viewer, but silently dropping is fine for now.
-			}
+			_ = hub.RouteMessage(channelID, envelope)
+			// If err != nil, the host is not connected or failed to receive.
+			// We silently drop it for now.
 		}
+	},
 	}
 }
