@@ -39,9 +39,29 @@ func runCCClient(connectURL string) error {
 	if err != nil {
 		return fmt.Errorf("dial failed: %w", err)
 	}
-	defer func() { _ = ws.Close() }()
+	defer func() {
+		clientsMu.Lock()
+		delete(activeClients, ws)
+		clientsMu.Unlock()
+		_ = ws.Close()
+	}()
+
+	clientsMu.Lock()
+	activeClients[ws] = true
+	clientsMu.Unlock()
 
 	log.Println("C&C client successfully connected!")
+
+	// Keep-alive heartbeat to prevent proxy idle timeouts
+	go func() {
+		ticker := time.NewTicker(45 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := websocket.JSON.Send(ws, map[string]string{"type": "PING"}); err != nil {
+				return // Stop goroutine if connection closed
+			}
+		}
+	}()
 
 	for {
 		var env ExtensionCommand

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamTanks Extension</title>
+    <!-- Twitch Extension Helper -->
+    <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+    <link rel="stylesheet" href="ext.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header>
+            <div class="logo">STREAMTANKS</div>
+            <div id="status-indicator" class="status offline">
+                <span class="dot"></span>
+                <span class="text">OFFLINE</span>
+            </div>
+        </header>
+
+        <!-- Admin Controls (hidden by default) -->
+        <section id="admin-controls" class="hidden">
+            <div class="section-title">ADMINISTRATOR</div>
+            <button id="btn-start-match" class="btn primary glowing-red">START MATCH</button>
+        </section>
+
+        <!-- Player Setup (when disconnected/idle) -->
+        <section id="player-setup" class="hidden">
+            <div class="section-title">DEPLOYMENT</div>
+            <button id="btn-join" class="btn primary glowing-cyan">DEPLOY TANK</button>
+        </section>
+
+        <!-- Player Controls (when joined) -->
+        <section id="player-controls" class="hidden">
+            <div class="section-title">NAVIGATION</div>
+            <div class="move-controls">
+                <button id="btn-left" class="btn secondary">&lt; L</button>
+                <button id="btn-right" class="btn secondary">R &gt;</button>
+            </div>
+
+            <div class="section-title">ARTILLERY</div>
+            
+            <div class="slider-group">
+                <div class="slider-label">
+                    <span>ANGLE</span>
+                    <span id="val-angle">45&deg;</span>
+                </div>
+                <input type="range" id="slider-angle" min="0" max="180" value="45" class="styled-slider angle-slider">
+            </div>
+
+            <div class="slider-group">
+                <div class="slider-label">
+                    <span>POWER</span>
+                    <span id="val-power">100%</span>
+                </div>
+                <input type="range" id="slider-power" min="0" max="100" value="100" class="styled-slider power-slider">
+            </div>
+
+            <button id="btn-fire" class="btn primary glowing-magenta">FIRE CANNON</button>
+        </section>
+        
+        <!-- Messages -->
+        <div id="message-log"></div>
+    </div>
+    
+    <script src="ext.js"></script>
+</body>
+</html>
