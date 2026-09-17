@@ -648,6 +648,7 @@ func TestAdminDashboardEndpoint(t *testing.T) {
 	}
 }
 
+
 func TestInactivePlayerRandomDirection(t *testing.T) {
 	leftCount := 0
 	rightCount := 0

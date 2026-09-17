@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	claimCodeChars  = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-	claimCodeLength = 6
-	claimDuration   = 5 * time.Minute
+	claimCodeChars   = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+	claimCodeLength  = 6
+	claimDuration    = 5 * time.Minute
 )
 
 // PendingClaim represents an active in-chat authorization challenge.

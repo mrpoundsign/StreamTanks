@@ -694,9 +694,8 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 	}
 }
 
-func updateTankMovements(dtScale float64, bouncyWalls bool) (bool, bool) {
+func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 	anyMoving := false
-	anyFalling := false
 	for name, p := range gameState.Players {
 		if p.IsDead {
 			continue
@@ -762,8 +761,6 @@ func updateTankMovements(dtScale float64, bouncyWalls bool) (bool, bool) {
 			p.Y += 5.0 * dtScale
 			if p.Y > floorY {
 				p.Y = floorY
-			} else if p.Y < floorY {
-				anyFalling = true
 			}
 		} else {
 			p.Y = floorY
@@ -788,7 +785,7 @@ func updateTankMovements(dtScale float64, bouncyWalls bool) (bool, bool) {
 			}
 		}
 	}
-	return anyMoving, anyFalling
+	return anyMoving
 }
 
 func updateProjectiles(dtScale float64, bouncyWalls bool) {
@@ -912,7 +909,7 @@ func updateProjectiles(dtScale float64, bouncyWalls bool) {
 func updatePhysicsStep(dtScale float64) bool {
 	bouncyWalls := gameState.BouncyWalls
 
-	anyMoving, anyFalling := updateTankMovements(dtScale, bouncyWalls)
+	anyMoving := updateTankMovements(dtScale, bouncyWalls)
 	updateProjectiles(dtScale, bouncyWalls)
 
 	// Update explosions
@@ -927,6 +924,13 @@ func updatePhysicsStep(dtScale float64) bool {
 
 	// Phase transition check
 	if gameState.Phase == phaseAction && len(gameState.Projectiles) == 0 && len(gameState.Explosions) == 0 && !anyMoving {
+		anyFalling := false
+		for _, p := range gameState.Players {
+			if !p.IsDead && p.Y < getTerrainHeight(gameState.Terrain, p.X) {
+				anyFalling = true
+				break
+			}
+		}
 		if !anyFalling {
 			return true // Action is finished
 		}
