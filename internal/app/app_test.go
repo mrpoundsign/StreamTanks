@@ -2200,6 +2200,10 @@ func TestBroadcastViewerState(t *testing.T) {
 	// 3. Changed timer should trigger new update
 	gameState.mu.Lock()
 	gameState.TimerRemaining = 14
+	gameState.Players = map[string]*Player{
+		"Alice": {Name: "Alice", IsDead: false},
+		"Bob":   {Name: "Bob", IsDead: true},
+	}
 	gameState.mu.Unlock()
 
 	BroadcastViewerState()
@@ -2211,8 +2215,35 @@ func TestBroadcastViewerState(t *testing.T) {
 		if vs.TimerRemaining != 14 {
 			t.Errorf("expected updated TimerRemaining 14, got %d", vs.TimerRemaining)
 		}
+		if len(vs.Players) != 1 || vs.Players[0] != "alice" {
+			t.Errorf("expected alive players [alice], got %+v", vs.Players)
+		}
+		if vs.PlayersCount != 1 {
+			t.Errorf("expected players count 1, got %d", vs.PlayersCount)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for updated ViewerState")
+	}
+
+	// 4. Adding a new alive player triggers an update
+	gameState.mu.Lock()
+	gameState.Players["Charlie"] = &Player{Name: "Charlie", IsDead: false}
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		_ = json.Unmarshal(payloadBytes, &vs)
+		if len(vs.Players) != 2 || vs.Players[0] != "alice" || vs.Players[1] != "charlie" {
+			t.Errorf("expected alive players [alice, charlie], got %+v", vs.Players)
+		}
+		if vs.PlayersCount != 2 {
+			t.Errorf("expected players count 2, got %d", vs.PlayersCount)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for player roster ViewerState")
 	}
 }
 
