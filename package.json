@@ -1,16 +1,24 @@
 {
   "name": "streamtanks",
-  "version": "0.0.2",
+  "version": "0.2.0",
   "private": true,
   "description": "Interactive Twitch chat artillery game and OBS browser overlay",
   "scripts": {
-    "build": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap",
-    "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap",
-    "watch": "esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap --watch",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap",
+    "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap",
+    "package:ext": "npm run build && powershell -Command \"Compress-Archive -Path ext-web/public/* -DestinationPath extension.zip -Force\"",
+    "watch": "esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap --watch & esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.3",
+    "ws": "^8.21.3"
   }
 }

@@ -163,11 +163,40 @@ func loadSettings() {
 					if _, err := fmt.Sscanf(v, "%d", &bp); err == nil && bp >= 0 && bp <= 10 {
 						gameState.BotPoints = bp
 					}
+				case "cc_enabled":
+					switch v {
+					case "0", "false", "off":
+						gameState.CCEnabled = false
+					case "1", "true", "on":
+						gameState.CCEnabled = true
+					}
+				case "cc_url":
+					if v != "" {
+						gameState.CCServerURL = v
+					}
 				}
 			}
 		}
 	}
+	if gameState.CCServerURL == "" {
+		gameState.CCServerURL = "wss://st-cc.poundsigndesign.com"
+	}
+	if gameState.CCStatus == "" {
+		gameState.CCStatus = "disconnected"
+	}
 	gameState.BotList = loadBotList()
+}
+
+func getSetting(key string) string {
+	if db == nil {
+		return ""
+	}
+	var val string
+	err := db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&val)
+	if err != nil {
+		return ""
+	}
+	return val
 }
 
 func saveSetting(key, value string) {
@@ -177,6 +206,16 @@ func saveSetting(key, value string) {
 	_, err := db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	if err != nil {
 		log.Println("DB saveSetting error:", err)
+	}
+}
+
+func deleteSetting(key string) {
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`DELETE FROM settings WHERE key = ?`, key)
+	if err != nil {
+		log.Println("DB deleteSetting error:", err)
 	}
 }
 

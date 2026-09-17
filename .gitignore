@@ -7,4 +7,6 @@ node_modules/
 *.map
 *~
 *.bak
-
+deploy.ps1
+planning/
+*.zip

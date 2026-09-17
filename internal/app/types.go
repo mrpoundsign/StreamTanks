@@ -95,12 +95,16 @@ type GameState struct {
 	TerrainMin     int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
 	TerrainMax     int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)
 	RoundID        int                `json:"roundId"`
-	StartPerm      string             `json:"startPerm"`                // broadcaster, mod, vip, sub, all
-	ConfigPerm     string             `json:"configPerm"`               // broadcaster, mod, vip, sub, all
-	MinPlayers     int                `json:"minPlayers"`               // minimum player count target for bot fill (default: 5)
-	BotFill        bool               `json:"botFill"`                  // whether to fill empty slots up to MinPlayers with bots
-	BotPoints      int                `json:"botPoints"`                // points awarded when human kills a bot (default: 1)
-	BotList        []string           `json:"botList"`                  // list of named bots to spawn before nameless bots
+	StartPerm      string             `json:"startPerm"`  // broadcaster, mod, vip, sub, all
+	ConfigPerm     string             `json:"configPerm"` // broadcaster, mod, vip, sub, all
+	MinPlayers     int                `json:"minPlayers"` // minimum player count target for bot fill (default: 5)
+	BotFill        bool               `json:"botFill"`    // whether to fill empty slots up to MinPlayers with bots
+	BotPoints      int                `json:"botPoints"`  // points awarded when human kills a bot (default: 1)
+	BotList        []string           `json:"botList"`    // list of named bots to spawn before nameless bots
+	CCEnabled      bool               `json:"ccEnabled"`
+	CCServerURL    string             `json:"ccServerUrl"`
+	CCStatus       string             `json:"ccStatus"` // "disconnected", "connected", "pending_claim", "connecting"
+	ClaimCode      string             `json:"claimCode,omitempty"`
 	Winner         string             `json:"winner"`                   // winner of the current match ("Alice", "AI", or "")
 	TimerRemaining int                `json:"timerRemaining,omitempty"` // remaining input seconds when clock is truncated
 	MatchKills     []KillEvent        `json:"matchKills,omitempty"`
@@ -144,6 +148,16 @@ type PlayerDiedPayload struct {
 type WSMessage struct {
 	Type    string      `json:"type"`
 	Payload interface{} `json:"payload"`
+}
+
+// ViewerState is the compact, high-level game state payload sent to the Twitch Extension C&C relay
+type ViewerState struct {
+	Phase          string   `json:"phase"`
+	TimerRemaining int      `json:"timer_remaining"`
+	RoundID        int      `json:"round_id"`
+	Winner         string   `json:"winner"`
+	PlayersCount   int      `json:"players_count"`
+	Players        []string `json:"players,omitempty"`
 }
 
 // defaultEmotes provides standard Twitch emotes for players without a custom emote

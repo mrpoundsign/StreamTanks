@@ -100,9 +100,22 @@ func applyCrater(terrain []float64, cx, cy, radius float64) {
 	endX := int(math.Min(float64(len(terrain)), math.Ceil(cx+radius)))
 	r2 := radius * radius
 
+	lowestY := cy + radius
+
 	for x := startX; x < endX; x++ {
+		// Quick exit: If the current terrain is already at or below the lowest possible
+		// point of the crater, skip the calculations entirely.
+		if terrain[x] >= lowestY {
+			continue
+		}
+
 		dx := float64(x) - cx
-		dy := math.Sqrt(r2 - dx*dx)
+		dx2 := dx * dx
+		if dx2 > r2 {
+			continue
+		}
+
+		dy := math.Sqrt(r2 - dx2)
 		circleBottomY := cy + dy
 
 		if terrain[x] < circleBottomY {

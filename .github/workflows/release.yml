@@ -71,6 +71,10 @@ jobs:
           npm ci
           npm run build:prod
 
+      - name: Package Twitch Extension
+        run: |
+          cd ext-web/public && zip -r ../../extension.zip *
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

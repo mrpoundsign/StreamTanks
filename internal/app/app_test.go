@@ -2,11 +2,13 @@ package app
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -2048,4 +2050,198 @@ func TestMatchKillsRecap(t *testing.T) {
 		t.Errorf("expected MatchKills to be cleared after resetMatchState, got %d", len(gameState.MatchKills))
 	}
 	gameState.mu.Unlock()
+}
+
+func TestCCCommandsAndStorage(t *testing.T) {
+	testDBPath := filepath.Join(t.TempDir(), "test_cc.db")
+	if err := initDB(testDBPath); err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	defer closeDB()
+
+	// Broadcaster user for permission checks
+	adminUser := &twitch.User{
+		Name:   "AdminUser",
+		Badges: map[string]int{"broadcaster": 1},
+	}
+
+	// 1. Initial defaults
+	gameState.mu.Lock()
+	gameState.CCEnabled = false
+	gameState.CCServerURL = "wss://st-cc.poundsigndesign.com"
+	gameState.mu.Unlock()
+
+	// 2. Test %cc on
+	processCommand("AdminUser", "%cc on", nil, adminUser)
+	gameState.mu.Lock()
+	if !gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to be true after %%cc on")
+	}
+	gameState.mu.Unlock()
+	if getSetting("cc_enabled") != "1" {
+		t.Errorf("expected cc_enabled setting to be '1', got '%s'", getSetting("cc_enabled"))
+	}
+
+	// 3. Test %cc url
+	testURL := "wss://custom-cc.example.com"
+	processCommand("AdminUser", "%cc url "+testURL, nil, adminUser)
+	gameState.mu.Lock()
+	if gameState.CCServerURL != testURL {
+		t.Errorf("expected CCServerURL to be '%s', got '%s'", testURL, gameState.CCServerURL)
+	}
+	gameState.mu.Unlock()
+	if getSetting("cc_url") != testURL {
+		t.Errorf("expected cc_url setting to be '%s', got '%s'", testURL, getSetting("cc_url"))
+	}
+
+	// 4. Test %config cc off
+	processCommand("AdminUser", "%config cc off", nil, adminUser)
+	gameState.mu.Lock()
+	if gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to be false after %%config cc off")
+	}
+	gameState.mu.Unlock()
+	if getSetting("cc_enabled") != "0" {
+		t.Errorf("expected cc_enabled setting to be '0', got '%s'", getSetting("cc_enabled"))
+	}
+
+	// 5. Test saving and retrieving token
+	saveSetting("cc_host_token", "sample.token.12345")
+	if token := getSetting("cc_host_token"); token != "sample.token.12345" {
+		t.Errorf("expected saved token 'sample.token.12345', got '%s'", token)
+	}
+
+	// 6. Test loadSettings reloading persisted C&C configuration
+	saveSetting("cc_enabled", "1")
+	saveSetting("cc_url", "wss://reloaded-cc.example.com")
+	loadSettings()
+
+	gameState.mu.Lock()
+	if !gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to be true after loadSettings")
+	}
+	if gameState.CCServerURL != "wss://reloaded-cc.example.com" {
+		t.Errorf("expected CCServerURL 'wss://reloaded-cc.example.com', got '%s'", gameState.CCServerURL)
+	}
+	gameState.mu.Unlock()
+
+	// 7. Test %cc reset deletes token
+	saveSetting("cc_host_token", "sample.token.to.reset")
+	processCommand("AdminUser", "%cc reset", nil, adminUser)
+	if token := getSetting("cc_host_token"); token != "" {
+		t.Errorf("expected cc_host_token to be cleared after %%cc reset, got '%s'", token)
+	}
+
+	// Clean up
+	StopCCClient()
+}
+
+func TestBroadcastViewerState(t *testing.T) {
+	resetGameStateForTest()
+
+	msgChan := make(chan WSMessage, 10)
+	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		for {
+			var m WSMessage
+			if err := websocket.JSON.Receive(ws, &m); err == nil {
+				msgChan <- m
+			} else {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+
+	clientWS, err := websocket.Dial("ws://"+server.Listener.Addr().String(), "", "http://localhost/")
+	if err != nil {
+		t.Fatalf("failed to dial mock server: %v", err)
+	}
+	defer func() { _ = clientWS.Close() }()
+
+	setCCConn(clientWS)
+	defer setCCConn(nil)
+
+	// 1. Initial broadcast sends state
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	gameState.RoundID = 1
+	gameState.TimerRemaining = 15
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+
+	select {
+	case msg := <-msgChan:
+		if msg.Type != "GAME_STATE" {
+			t.Fatalf("expected message type GAME_STATE, got %s", msg.Type)
+		}
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		if err := json.Unmarshal(payloadBytes, &vs); err != nil {
+			t.Fatalf("failed to unmarshal ViewerState: %v", err)
+		}
+		if vs.Phase != phaseInput || vs.RoundID != 1 || vs.TimerRemaining != 15 {
+			t.Errorf("unexpected ViewerState: %+v", vs)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for ViewerState")
+	}
+
+	// 2. Duplicate broadcast should be deduplicated (no message sent)
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		t.Fatalf("expected duplicate state to be suppressed, but received: %+v", msg)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no duplicate message
+	}
+
+	// 3. Changed timer should trigger new update
+	gameState.mu.Lock()
+	gameState.TimerRemaining = 14
+	gameState.Players = map[string]*Player{
+		"Alice": {Name: "Alice", IsDead: false},
+		"Bob":   {Name: "Bob", IsDead: true},
+	}
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		_ = json.Unmarshal(payloadBytes, &vs)
+		if vs.TimerRemaining != 14 {
+			t.Errorf("expected updated TimerRemaining 14, got %d", vs.TimerRemaining)
+		}
+		if len(vs.Players) != 1 || vs.Players[0] != "alice" {
+			t.Errorf("expected alive players [alice], got %+v", vs.Players)
+		}
+		if vs.PlayersCount != 1 {
+			t.Errorf("expected players count 1, got %d", vs.PlayersCount)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for updated ViewerState")
+	}
+
+	// 4. Adding a new alive player triggers an update
+	gameState.mu.Lock()
+	gameState.Players["Charlie"] = &Player{Name: "Charlie", IsDead: false}
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		_ = json.Unmarshal(payloadBytes, &vs)
+		if len(vs.Players) != 2 || vs.Players[0] != "alice" || vs.Players[1] != "charlie" {
+			t.Errorf("expected alive players [alice, charlie], got %+v", vs.Players)
+		}
+		if vs.PlayersCount != 2 {
+			t.Errorf("expected players count 2, got %d", vs.PlayersCount)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for player roster ViewerState")
+	}
 }

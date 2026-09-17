@@ -72,7 +72,37 @@ let stateRef: GameState | null = null;
 const appliedCraterIds = new Set<string>();
 
 const avatarCache: Record<string, string> = {};
+const avatarImgCache: Record<string, HTMLImageElement> = {};
 const emoteCache: Record<string, HTMLImageElement> = {};
+
+function preloadPlayerAvatar(name: string): void {
+  if (avatarImgCache[name] || name.startsWith('_bot_')) return;
+  if (!avatarCache[name]) {
+    avatarCache[name] = 'fetching';
+    fetch(`https://decapi.me/twitch/avatar/${encodeURIComponent(name)}`)
+      .then((r) => r.text())
+      .then((url) => {
+        if (url && url.startsWith('http')) {
+          avatarCache[name] = url;
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            avatarImgCache[name] = img;
+          };
+          img.src = url;
+        }
+      })
+      .catch(() => {});
+  } else if (avatarCache[name] !== 'fetching' && avatarCache[name].startsWith('http')) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      avatarImgCache[name] = img;
+    };
+    img.src = avatarCache[name];
+    avatarImgCache[name] = img;
+  }
+}
 
 // Network
 const net = new NetworkManager();
@@ -781,6 +811,10 @@ net.onMessage((msg: WSMessage) => {
         players[name].actionType = newPlayers[name].actionType;
       }
 
+      if (!newPlayers[name].isBot) {
+        preloadPlayerAvatar(name);
+      }
+
       const url = newPlayers[name].emoteUrl;
       if (url) {
         let imgEl = document.getElementById('emote-' + name) as HTMLImageElement | null;
@@ -865,7 +899,7 @@ function draw(): void {
   if (currentPhase === 'INPUT') {
     drawGiantProtractor(ctx);
   }
-  drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache);
+  drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache, avatarImgCache);
   drawProjectiles(ctx, projectiles, emoteCache);
   drawExplosions(ctx, explosions);
 }

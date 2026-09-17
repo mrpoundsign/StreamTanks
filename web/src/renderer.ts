@@ -103,7 +103,8 @@ export function drawTanks(
   terrain: number[],
   currentPhase: GamePhase,
   emotesLayer: HTMLElement,
-  _emoteCache: Record<string, HTMLImageElement>
+  emoteCache: Record<string, HTMLImageElement>,
+  avatarImgCache?: Record<string, HTMLImageElement>
 ): void {
   for (const name in players) {
     const p = players[name];
@@ -144,15 +145,88 @@ export function drawTanks(
       imgEl.style.transform = `rotate(${angle}rad)`;
     }
 
-    // Draw Name (unrotated) - nameless bots have no name text rendered
+    const isHuman = !p.isBot && !name.startsWith('_bot_');
+    const showCommandMarker = isHuman && currentPhase === 'INPUT';
+    const statusColor = p.fired ? '#00ffcc' : '#ff003c';
+
+    // Draw Name and Avatar Marker
     const displayName = (p.name && !p.name.startsWith('_bot_')) ? p.name : (!name.startsWith('_bot_') && !p.isBot ? name : '');
     if (displayName) {
-      ctx.fillStyle = '#fff';
-      ctx.font = '16px Orbitron';
-      ctx.textAlign = 'center';
-      ctx.shadowBlur = 5;
-      ctx.shadowColor = '#000';
-      ctx.fillText(displayName, p.x, p.y + 20);
+      if (showCommandMarker) {
+        // --- INPUT Phase: Prominent Avatar Pin & Enlarged Name ---
+        const markerX = p.x;
+        const markerY = p.y - 142;
+        const radius = 32; // 64px diameter for clear mobile visibility
+
+        // 1. Circular Avatar Image
+        const avatarImg = (avatarImgCache && avatarImgCache[name]) || (p.emoteUrl && emoteCache[p.emoteUrl]) || null;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(markerX, markerY, radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
+          ctx.drawImage(avatarImg, markerX - radius, markerY - radius, radius * 2, radius * 2);
+        } else {
+          ctx.fillStyle = '#12161e';
+          ctx.fillRect(markerX - radius, markerY - radius, radius * 2, radius * 2);
+          ctx.fillStyle = statusColor;
+          ctx.font = 'bold 22px Orbitron';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(displayName.charAt(0).toUpperCase(), markerX, markerY);
+        }
+        ctx.restore();
+
+        // 2. Glowing Neon Border around Avatar
+        ctx.beginPath();
+        ctx.arc(markerX, markerY, radius + 2.5, 0, Math.PI * 2);
+        ctx.strokeStyle = statusColor;
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = statusColor;
+        ctx.stroke();
+
+        // 3. Downward Chevron Pin
+        ctx.beginPath();
+        ctx.moveTo(markerX - 8, markerY + radius + 4);
+        ctx.lineTo(markerX, markerY + radius + 14);
+        ctx.lineTo(markerX + 8, markerY + radius + 4);
+        ctx.strokeStyle = statusColor;
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = statusColor;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // 4. Enlarged Name Below Avatar (above protractor)
+        const nameY = p.y - 75;
+        ctx.font = 'bold 28px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+
+        // Dark text outline for maximum legibility on stream
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 6;
+        ctx.strokeText(displayName, markerX, nameY);
+
+        // Glowing text fill
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = statusColor;
+        ctx.fillText(displayName, markerX, nameY);
+        ctx.shadowBlur = 0;
+      } else {
+        // --- Standard Phase / Bots: Default Name Below Treads ---
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#000';
+        ctx.fillText(displayName, p.x, p.y + 20);
+        ctx.shadowBlur = 0;
+      }
     }
 
     // Draw Protractor & Firing state in INPUT phase

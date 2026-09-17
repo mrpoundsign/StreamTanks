@@ -35,7 +35,7 @@ func hasPermission(user *twitch.User, requiredRole string) bool {
 	if user == nil {
 		return true
 	}
-	if user.IsBroadcaster || (channelName != "" && strings.EqualFold(user.Name, channelName)) {
+	if user.IsBroadcaster || (user.Badges != nil && user.Badges["broadcaster"] > 0) || (channelName != "" && strings.EqualFold(user.Name, channelName)) {
 		return true
 	}
 
@@ -77,6 +77,7 @@ func resetMatchState() {
 	gameState.Phase = phaseIdle
 	gameState.Winner = ""
 	gameState.RoundID = 0
+	gameState.TimerRemaining = 0
 	gameState.MatchKills = nil
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 	gameState.Projectiles = []Projectile{}
@@ -355,6 +356,32 @@ func startInputPhase() {
 	// Start timer for input phase
 	roundID := gameState.RoundID
 	roundDuration := time.Duration(initialDurationSec) * time.Second
+
+	// 1-second countdown ticker for synchronized HUD and viewer extension timer updates
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				gameState.mu.Lock()
+				if gameState.Phase != phaseInput || gameState.RoundID != roundID {
+					gameState.mu.Unlock()
+					return
+				}
+				if gameState.TimerRemaining > 0 {
+					gameState.TimerRemaining--
+					gameState.mu.Unlock()
+					broadcast(msgStateUpdate, &gameState)
+				} else {
+					gameState.mu.Unlock()
+				}
+			case <-cancelChan:
+				return
+			}
+		}
+	}()
+
 	go func() {
 		select {
 		case <-time.After(roundDuration):
@@ -498,6 +525,7 @@ func executeActionPhaseForRound(roundID int) {
 	}
 	fastForwardScheduled = false
 	gameState.Phase = phaseAction
+	gameState.TimerRemaining = 0
 
 	// Apply action for those who didn't command: random mix of move and fire
 	for _, p := range gameState.Players {
@@ -666,11 +694,9 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 	}
 }
 
-func updatePhysicsStep(dtScale float64) bool {
+func updateTankMovements(dtScale float64, bouncyWalls bool) (bool, bool) {
 	anyMoving := false
 	anyFalling := false
-	bouncyWalls := gameState.BouncyWalls
-
 	for name, p := range gameState.Players {
 		if p.IsDead {
 			continue
@@ -762,8 +788,10 @@ func updatePhysicsStep(dtScale float64) bool {
 			}
 		}
 	}
+	return anyMoving, anyFalling
+}
 
-	// Projectile logic
+func updateProjectiles(dtScale float64, bouncyWalls bool) {
 	gravity := 0.2
 	for i := len(gameState.Projectiles) - 1; i >= 0; i-- {
 		proj := &gameState.Projectiles[i]
@@ -879,6 +907,13 @@ func updatePhysicsStep(dtScale float64) bool {
 			gameState.Projectiles = append(gameState.Projectiles[:i], gameState.Projectiles[i+1:]...)
 		}
 	}
+}
+
+func updatePhysicsStep(dtScale float64) bool {
+	bouncyWalls := gameState.BouncyWalls
+
+	anyMoving, anyFalling := updateTankMovements(dtScale, bouncyWalls)
+	updateProjectiles(dtScale, bouncyWalls)
 
 	// Update explosions
 	for i := len(gameState.Explosions) - 1; i >= 0; i-- {
@@ -983,6 +1018,91 @@ func checkGameOverAndTransition() {
 	} else {
 		gameState.mu.Unlock()
 		startInputPhase()
+	}
+}
+
+func handleCCCommand(user *twitch.User, args []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+
+	if len(args) == 0 {
+		newVal := !gameState.CCEnabled
+		gameState.CCEnabled = newVal
+		gameState.mu.Unlock()
+		dbVal := "0"
+		if newVal {
+			dbVal = "1"
+			saveSetting("cc_enabled", dbVal)
+			StartCCClientManager(channelName)
+		} else {
+			saveSetting("cc_enabled", dbVal)
+			StopCCClient()
+		}
+		broadcast(msgStateUpdate, &gameState)
+		return
+	}
+
+	sub := strings.ToLower(args[0])
+	switch sub {
+	case "on", "enable", "true", "1":
+		gameState.CCEnabled = true
+		gameState.mu.Unlock()
+		saveSetting("cc_enabled", "1")
+		StartCCClientManager(channelName)
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "off", "disable", "false", "0":
+		gameState.CCEnabled = false
+		gameState.mu.Unlock()
+		saveSetting("cc_enabled", "0")
+		StopCCClient()
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "url", "server":
+		if len(args) > 1 {
+			newURL := strings.TrimSpace(args[1])
+			if newURL != "" {
+				gameState.CCServerURL = newURL
+				enabled := gameState.CCEnabled
+				gameState.mu.Unlock()
+				saveSetting("cc_url", newURL)
+				if enabled {
+					StartCCClientManager(channelName)
+				}
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+		gameState.mu.Unlock()
+		return
+
+	case "status":
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "reset", "reclaim", "repair", "re-pair":
+		gameState.mu.Unlock()
+		ResetCCHostToken(channelName)
+		return
+
+	default:
+		if strings.HasPrefix(sub, "ws://") || strings.HasPrefix(sub, "wss://") {
+			gameState.CCServerURL = args[0]
+			gameState.CCEnabled = true
+			gameState.mu.Unlock()
+			saveSetting("cc_url", args[0])
+			saveSetting("cc_enabled", "1")
+			StartCCClientManager(channelName)
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+		gameState.mu.Unlock()
+		return
 	}
 }
 
@@ -1131,6 +1251,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			gameState.mu.Unlock()
 			return
 		}
+		if len(parts) > 1 && strings.EqualFold(parts[1], "cc") {
+			handleCCCommand(user, parts[2:])
+			return
+		}
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
 			if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
@@ -1144,6 +1268,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		}
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "cc":
+		handleCCCommand(user, parts[1:])
 		return
 
 	case "commandtime", "roundtime":
