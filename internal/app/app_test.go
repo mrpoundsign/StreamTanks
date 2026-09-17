@@ -187,7 +187,7 @@ func TestConcurrentBroadcastAndStateAccess(t *testing.T) {
 	resetGameStateForTest()
 
 	// Spin up a test HTTP server with handleWebSocket
-	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	server := httptest.NewServer(WebSocketHandler())
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
@@ -373,7 +373,7 @@ func TestConfigCommand(t *testing.T) {
 
 	// Verify ShowConfig is copied when broadcasting STATE_UPDATE
 	processCommand("Admin", "%config on", nil)
-	ts := httptest.NewServer(websocket.Handler(handleWebSocket))
+	ts := httptest.NewServer(WebSocketHandler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
@@ -645,7 +645,6 @@ func TestAdminDashboardEndpoint(t *testing.T) {
 		t.Fatalf("expected HTTP 301 redirect for /admin, got %d", wRedirect.Code)
 	}
 }
-
 
 func TestInactivePlayerRandomDirection(t *testing.T) {
 	leftCount := 0
@@ -1140,7 +1139,7 @@ func TestFirePowerAndAngleClamping(t *testing.T) {
 func TestScoringPerKill(t *testing.T) {
 	resetGameStateForTest()
 
-	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	server := httptest.NewServer(WebSocketHandler())
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
@@ -1171,7 +1170,7 @@ func TestScoringPerKill(t *testing.T) {
 
 	// 2. Environmental death (abyss): Charlie dies with no killer
 	processCommand("Charlie", "%join PogChamp", nil)
-	
+
 	gameState.mu.Lock()
 	gameState.Phase = phaseAction
 	charlie := gameState.Players["Charlie"]
@@ -1194,7 +1193,7 @@ func TestScoringPerKill(t *testing.T) {
 	if gameState.Leaderboard["Charlie"] != 0 {
 		t.Errorf("expected Charlie score to be 0, got %d", gameState.Leaderboard["Charlie"])
 	}
-	
+
 	// Game over should be triggered by updatePhysicsStep because only Alice is left
 	// Since Alice is the winner, she gets +5 points
 	if gameState.Leaderboard["Alice"] != 6 {
@@ -2018,7 +2017,7 @@ func TestMatchKillsRecap(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// 3. Verify WebSocket broadcast carries MatchKills in stateCopy
-	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	server := httptest.NewServer(WebSocketHandler())
 	defer server.Close()
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 	conn, err := websocket.Dial(wsURL, "", server.URL)
@@ -2049,4 +2048,23 @@ func TestMatchKillsRecap(t *testing.T) {
 		t.Errorf("expected MatchKills to be cleared after resetMatchState, got %d", len(gameState.MatchKills))
 	}
 	gameState.mu.Unlock()
+}
+
+func TestWebSocketOriginCheck(t *testing.T) {
+	server := httptest.NewServer(WebSocketHandler())
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+	// Test 1: Valid Origin (matches server URL)
+	_, err := websocket.Dial(wsURL, "", server.URL)
+	if err != nil {
+		t.Errorf("Expected connection to succeed with valid origin, got error: %v", err)
+	}
+
+	// Test 2: Invalid Origin
+	_, err = websocket.Dial(wsURL, "", "http://evil.com")
+	if err == nil {
+		t.Errorf("Expected connection to fail with invalid origin, but it succeeded")
+	}
 }

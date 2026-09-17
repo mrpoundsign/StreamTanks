@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"streamtanks/web"
-
-	"golang.org/x/net/websocket"
 )
 
 // Config encapsulates server configuration parameters.
@@ -91,7 +89,7 @@ func Run(cfg Config) error {
 
 	// Setup WebSocket and HTTP server with no-cache headers for overlay assets
 	mux := http.NewServeMux()
-	mux.Handle("/ws", websocket.Handler(handleWebSocket))
+	mux.Handle("/ws", WebSocketHandler())
 
 	// Prefer local ./web/public directory if present (for development), fallback to embedded assets
 	var fileSystem http.FileSystem
