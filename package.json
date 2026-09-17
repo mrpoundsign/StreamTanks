@@ -7,10 +7,13 @@
     "build": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap",
     "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap",
     "watch": "esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }
