@@ -107,15 +107,15 @@ func resetMatchState() {
 }
 
 var (
-	inputCancel           chan struct{}
-	inputStartTime        time.Time
-	prevRoundHadCommands  bool
-	fastForwardScheduled  bool
-	minWaitTimer          *time.Timer
-	fastForwardTimerMu    sync.Mutex
-	fastForwardTimer      *time.Timer
-	autoRoundTimerMu       sync.Mutex
-	autoRoundTimer         *time.Timer
+	inputCancel          chan struct{}
+	inputStartTime       time.Time
+	prevRoundHadCommands bool
+	fastForwardScheduled bool
+	minWaitTimer         *time.Timer
+	fastForwardTimerMu   sync.Mutex
+	fastForwardTimer     *time.Timer
+	autoRoundTimerMu     sync.Mutex
+	autoRoundTimer       *time.Timer
 )
 
 func cancelFastForward() {
@@ -666,10 +666,8 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 	}
 }
 
-func updatePhysicsStep(dtScale float64) bool {
+func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 	anyMoving := false
-	bouncyWalls := gameState.BouncyWalls
-
 	for name, p := range gameState.Players {
 		if p.IsDead {
 			continue
@@ -759,8 +757,10 @@ func updatePhysicsStep(dtScale float64) bool {
 			}
 		}
 	}
+	return anyMoving
+}
 
-	// Projectile logic
+func updateProjectiles(dtScale float64, bouncyWalls bool) {
 	gravity := 0.2
 	for i := len(gameState.Projectiles) - 1; i >= 0; i-- {
 		proj := &gameState.Projectiles[i]
@@ -876,6 +876,13 @@ func updatePhysicsStep(dtScale float64) bool {
 			gameState.Projectiles = append(gameState.Projectiles[:i], gameState.Projectiles[i+1:]...)
 		}
 	}
+}
+
+func updatePhysicsStep(dtScale float64) bool {
+	bouncyWalls := gameState.BouncyWalls
+
+	anyMoving := updateTankMovements(dtScale, bouncyWalls)
+	updateProjectiles(dtScale, bouncyWalls)
 
 	// Update explosions
 	for i := len(gameState.Explosions) - 1; i >= 0; i-- {
