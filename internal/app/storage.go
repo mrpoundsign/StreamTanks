@@ -245,6 +245,3 @@ func removeBotFromList(username string) {
 		log.Println("DB removeBotFromList error:", err)
 	}
 }
-
-
-

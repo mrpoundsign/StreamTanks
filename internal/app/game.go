@@ -107,15 +107,15 @@ func resetMatchState() {
 }
 
 var (
-	inputCancel           chan struct{}
-	inputStartTime        time.Time
-	prevRoundHadCommands  bool
-	fastForwardScheduled  bool
-	minWaitTimer          *time.Timer
-	fastForwardTimerMu    sync.Mutex
-	fastForwardTimer      *time.Timer
-	autoRoundTimerMu       sync.Mutex
-	autoRoundTimer         *time.Timer
+	inputCancel          chan struct{}
+	inputStartTime       time.Time
+	prevRoundHadCommands bool
+	fastForwardScheduled bool
+	minWaitTimer         *time.Timer
+	fastForwardTimerMu   sync.Mutex
+	fastForwardTimer     *time.Timer
+	autoRoundTimerMu     sync.Mutex
+	autoRoundTimer       *time.Timer
 )
 
 func cancelFastForward() {
@@ -668,6 +668,7 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 
 func updatePhysicsStep(dtScale float64) bool {
 	anyMoving := false
+	anyFalling := false
 	bouncyWalls := gameState.BouncyWalls
 
 	for name, p := range gameState.Players {
@@ -735,6 +736,8 @@ func updatePhysicsStep(dtScale float64) bool {
 			p.Y += 5.0 * dtScale
 			if p.Y > floorY {
 				p.Y = floorY
+			} else if p.Y < floorY {
+				anyFalling = true
 			}
 		} else {
 			p.Y = floorY
@@ -889,13 +892,6 @@ func updatePhysicsStep(dtScale float64) bool {
 
 	// Phase transition check
 	if gameState.Phase == phaseAction && len(gameState.Projectiles) == 0 && len(gameState.Explosions) == 0 && !anyMoving {
-		anyFalling := false
-		for _, p := range gameState.Players {
-			if !p.IsDead && p.Y < getTerrainHeight(gameState.Terrain, p.X) {
-				anyFalling = true
-				break
-			}
-		}
 		if !anyFalling {
 			return true // Action is finished
 		}
