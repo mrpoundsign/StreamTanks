@@ -53,6 +53,7 @@ body {
     fill: rgba(0, 255, 204, 0.001); /* Captures mouse/touch clicks */
     cursor: crosshair;
     pointer-events: all;
+    touch-action: none; /* Crucial: stops mobile browser/Twitch swipe gestures when aiming */
     transition: fill 0.2s;
 }
 
@@ -346,7 +347,16 @@ body {
     letter-spacing: 2px;
 }
 
+/* Aiming & Power Row (Side-by-side on mobile) */
+.aiming-controls-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
 .mobile-protractor-wrapper {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -354,8 +364,92 @@ body {
     background: rgba(18, 22, 30, 0.85);
     border: 1px solid rgba(0, 255, 204, 0.35);
     border-radius: 12px;
-    padding: 12px 10px 14px;
+    padding: 10px 8px 12px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
+    touch-action: none;
+}
+
+.vertical-power-wrapper {
+    width: 68px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(18, 22, 30, 0.85);
+    border: 1px solid rgba(255, 0, 127, 0.4);
+    border-radius: 12px;
+    padding: 10px 6px 12px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
+}
+
+.power-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.power-title {
+    font-family: var(--font-heading);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--neon-magenta);
+    letter-spacing: 1px;
+}
+
+.power-display {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 6px var(--neon-magenta);
+}
+
+.vertical-power-track {
+    position: relative;
+    width: 24px;
+    flex: 1;
+    min-height: 120px;
+    margin: 8px 0;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1.5px solid rgba(255, 0, 127, 0.4);
+    border-radius: 12px;
+    cursor: pointer;
+    touch-action: none; /* Crucial: stops mobile browser/Twitch horizontal and vertical gesture conflict */
+    user-select: none;
+    overflow: hidden;
+}
+
+.power-fill-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to top, rgba(255, 0, 127, 0.4), rgba(255, 0, 127, 0.95));
+    box-shadow: 0 0 12px rgba(255, 0, 127, 0.6);
+    pointer-events: none;
+    border-radius: 0 0 10px 10px;
+}
+
+.power-thumb {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    width: 20px;
+    height: 12px;
+    border-radius: 4px;
+    background: #ffffff;
+    border: 2px solid var(--neon-magenta);
+    box-shadow: 0 0 10px var(--neon-magenta);
+    pointer-events: none;
+}
+
+.hidden-accessible-range {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
 }
 
 .mobile-protractor-svg {
