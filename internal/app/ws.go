@@ -5,7 +5,10 @@ import (
 	"log"
 	"sync"
 
+	"fmt"
 	"golang.org/x/net/websocket"
+	"net/http"
+	"net/url"
 )
 
 var (
@@ -140,5 +143,27 @@ func handleWebSocket(ws *websocket.Conn) {
 				}
 			}
 		}
+	}
+}
+
+func checkOrigin(config *websocket.Config, req *http.Request) error {
+	origin := req.Header.Get("Origin")
+	if origin == "" {
+		return nil
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return fmt.Errorf("invalid origin")
+	}
+	if u.Host != req.Host {
+		return fmt.Errorf("origin not allowed")
+	}
+	return nil
+}
+
+func WebSocketHandler() websocket.Server {
+	return websocket.Server{
+		Handler:   websocket.Handler(handleWebSocket),
+		Handshake: checkOrigin,
 	}
 }
