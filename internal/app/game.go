@@ -1137,11 +1137,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		}
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
-				gameState.ShowConfig = false
-			} else {
-				gameState.ShowConfig = true
-			}
+			gameState.ShowConfig = parseBoolArg(arg)
 		} else {
 			// Toggle config modal
 			gameState.ShowConfig = !gameState.ShowConfig
@@ -1213,11 +1209,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		var val bool
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "false" || arg == "0" || arg == "hide" {
-				val = false
-			} else {
-				val = true
-			}
+			val = parseBoolArg(arg)
 		} else {
 			val = !gameState.IdleMessage
 		}
@@ -1240,11 +1232,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		var val bool
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "false" || arg == "0" {
-				val = false
-			} else {
-				val = true
-			}
+			val = parseBoolArg(arg)
 		} else {
 			val = !gameState.BouncyWalls
 		}
@@ -1479,11 +1467,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		var val bool
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "false" || arg == "0" {
-				val = false
-			} else {
-				val = true
-			}
+			val = parseBoolArg(arg)
 		} else {
 			val = !gameState.BotFill
 		}
@@ -1631,4 +1615,11 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 	}
 
 	gameState.mu.Unlock()
+}
+
+func parseBoolArg(arg string) bool {
+	if arg == "off" || arg == "false" || arg == "0" || arg == "hide" || arg == "close" {
+		return false
+	}
+	return true
 }
