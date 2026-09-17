@@ -646,7 +646,6 @@ func TestAdminDashboardEndpoint(t *testing.T) {
 	}
 }
 
-
 func TestInactivePlayerRandomDirection(t *testing.T) {
 	leftCount := 0
 	rightCount := 0
@@ -1171,7 +1170,7 @@ func TestScoringPerKill(t *testing.T) {
 
 	// 2. Environmental death (abyss): Charlie dies with no killer
 	processCommand("Charlie", "%join PogChamp", nil)
-	
+
 	gameState.mu.Lock()
 	gameState.Phase = phaseAction
 	charlie := gameState.Players["Charlie"]
@@ -1194,7 +1193,7 @@ func TestScoringPerKill(t *testing.T) {
 	if gameState.Leaderboard["Charlie"] != 0 {
 		t.Errorf("expected Charlie score to be 0, got %d", gameState.Leaderboard["Charlie"])
 	}
-	
+
 	// Game over should be triggered by updatePhysicsStep because only Alice is left
 	// Since Alice is the winner, she gets +5 points
 	if gameState.Leaderboard["Alice"] != 6 {

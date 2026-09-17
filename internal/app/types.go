@@ -34,15 +34,15 @@ const (
 
 // Player models an individual artillery tank in the game
 type Player struct {
-	Name       string  `json:"name"`
-	Emote      string  `json:"emote"`
-	EmoteURL   string  `json:"emoteUrl"`
-	LastAngle  int     `json:"lastAngle"`
-	LastPower  int     `json:"lastPower"`
-	ActionType string  `json:"actionType"`
-	Fired      bool    `json:"fired"`
-	Angle      int     `json:"angle"`
-	Power      int     `json:"power"`
+	Name            string  `json:"name"`
+	Emote           string  `json:"emote"`
+	EmoteURL        string  `json:"emoteUrl"`
+	LastAngle       int     `json:"lastAngle"`
+	LastPower       int     `json:"lastPower"`
+	ActionType      string  `json:"actionType"`
+	Fired           bool    `json:"fired"`
+	Angle           int     `json:"angle"`
+	Power           int     `json:"power"`
 	IsDead          bool    `json:"isDead"`
 	IsBot           bool    `json:"isBot"`
 	X               float64 `json:"x"`
@@ -78,30 +78,30 @@ type Explosion struct {
 
 // GameState holds all synchronized state for active players, phases, and settings
 type GameState struct {
-	mu            sync.Mutex
-	Phase         string             `json:"phase"`
-	Players       map[string]*Player `json:"players"`
-	InputDuration int                `json:"inputDuration"` // in seconds
-	MoveDistance  int                `json:"moveDistance"`
-	Leaderboard   map[string]int     `json:"leaderboard"`
-	Debug         bool               `json:"debug"`
-	Prefix        string             `json:"prefix"`
-	PhysicsSpeed  float64            `json:"physicsSpeed"`
-	ShowConfig    bool               `json:"showConfig"`
-	AutoRound     int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
-	IdleMessage   bool               `json:"idleMessage"`
-	BouncyWalls   bool               `json:"bouncyWalls"`
-	Terrain       []float64          `json:"terrain,omitempty"`
-	TerrainMin    int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
-	TerrainMax    int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)
-	RoundID       int                `json:"roundId"`
-	StartPerm     string             `json:"startPerm"`  // broadcaster, mod, vip, sub, all
-	ConfigPerm    string             `json:"configPerm"` // broadcaster, mod, vip, sub, all
-	MinPlayers    int                `json:"minPlayers"` // minimum player count target for bot fill (default: 5)
-	BotFill       bool               `json:"botFill"`    // whether to fill empty slots up to MinPlayers with bots
-	BotPoints     int                `json:"botPoints"`  // points awarded when human kills a bot (default: 1)
-	BotList       []string           `json:"botList"`    // list of named bots to spawn before nameless bots
-	Winner         string             `json:"winner"`         // winner of the current match ("Alice", "AI", or "")
+	mu             sync.Mutex
+	Phase          string             `json:"phase"`
+	Players        map[string]*Player `json:"players"`
+	InputDuration  int                `json:"inputDuration"` // in seconds
+	MoveDistance   int                `json:"moveDistance"`
+	Leaderboard    map[string]int     `json:"leaderboard"`
+	Debug          bool               `json:"debug"`
+	Prefix         string             `json:"prefix"`
+	PhysicsSpeed   float64            `json:"physicsSpeed"`
+	ShowConfig     bool               `json:"showConfig"`
+	AutoRound      int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
+	IdleMessage    bool               `json:"idleMessage"`
+	BouncyWalls    bool               `json:"bouncyWalls"`
+	Terrain        []float64          `json:"terrain,omitempty"`
+	TerrainMin     int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
+	TerrainMax     int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)
+	RoundID        int                `json:"roundId"`
+	StartPerm      string             `json:"startPerm"`                // broadcaster, mod, vip, sub, all
+	ConfigPerm     string             `json:"configPerm"`               // broadcaster, mod, vip, sub, all
+	MinPlayers     int                `json:"minPlayers"`               // minimum player count target for bot fill (default: 5)
+	BotFill        bool               `json:"botFill"`                  // whether to fill empty slots up to MinPlayers with bots
+	BotPoints      int                `json:"botPoints"`                // points awarded when human kills a bot (default: 1)
+	BotList        []string           `json:"botList"`                  // list of named bots to spawn before nameless bots
+	Winner         string             `json:"winner"`                   // winner of the current match ("Alice", "AI", or "")
 	TimerRemaining int                `json:"timerRemaining,omitempty"` // remaining input seconds when clock is truncated
 	MatchKills     []KillEvent        `json:"matchKills,omitempty"`
 	Projectiles    []Projectile       `json:"projectiles"`

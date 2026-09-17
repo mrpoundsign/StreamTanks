@@ -107,15 +107,15 @@ func resetMatchState() {
 }
 
 var (
-	inputCancel           chan struct{}
-	inputStartTime        time.Time
-	prevRoundHadCommands  bool
-	fastForwardScheduled  bool
-	minWaitTimer          *time.Timer
-	fastForwardTimerMu    sync.Mutex
-	fastForwardTimer      *time.Timer
-	autoRoundTimerMu       sync.Mutex
-	autoRoundTimer         *time.Timer
+	inputCancel          chan struct{}
+	inputStartTime       time.Time
+	prevRoundHadCommands bool
+	fastForwardScheduled bool
+	minWaitTimer         *time.Timer
+	fastForwardTimerMu   sync.Mutex
+	fastForwardTimer     *time.Timer
+	autoRoundTimerMu     sync.Mutex
+	autoRoundTimer       *time.Timer
 )
 
 func cancelFastForward() {
@@ -670,7 +670,19 @@ func updatePhysicsStep(dtScale float64) bool {
 	anyMoving := false
 	bouncyWalls := gameState.BouncyWalls
 
+	type activePlayer struct {
+		name string
+		p    *Player
+	}
+	var activePlayersBuf [100]activePlayer
+	activePlayers := activePlayersBuf[:0]
 	for name, p := range gameState.Players {
+		activePlayers = append(activePlayers, activePlayer{name, p})
+	}
+
+	for _, ap := range activePlayers {
+		name := ap.name
+		p := ap.p
 		if p.IsDead {
 			continue
 		}
@@ -859,7 +871,9 @@ func updatePhysicsStep(dtScale float64) bool {
 
 		// Direct tank collision
 		if !hit {
-			for name, p := range gameState.Players {
+			for _, ap := range activePlayers {
+				name := ap.name
+				p := ap.p
 				if name == proj.Owner || p.IsDead {
 					continue
 				}
@@ -890,7 +904,8 @@ func updatePhysicsStep(dtScale float64) bool {
 	// Phase transition check
 	if gameState.Phase == phaseAction && len(gameState.Projectiles) == 0 && len(gameState.Explosions) == 0 && !anyMoving {
 		anyFalling := false
-		for _, p := range gameState.Players {
+		for _, ap := range activePlayers {
+			p := ap.p
 			if !p.IsDead && p.Y < getTerrainHeight(gameState.Terrain, p.X) {
 				anyFalling = true
 				break
