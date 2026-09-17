@@ -78,9 +78,12 @@ const emoteCache: Record<string, HTMLImageElement> = {};
 const net = new NetworkManager();
 
 function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.innerText = str;
-  return div.innerHTML;
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function showKillMessage(msg: string): void {
