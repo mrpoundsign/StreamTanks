@@ -1103,227 +1103,258 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	switch cmd {
 	case "prefix":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			newPrefix := parts[1]
-			gameState.Prefix = newPrefix
-			gameState.mu.Unlock()
-			saveSetting("prefix", newPrefix)
-			broadcast(msgStateUpdate, &gameState)
-			return
-		}
-
+		handlePrefixCmd(user, parts)
+		return
 	case "speed", "physicsspeed":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			var spd float64
-			if _, err := fmt.Sscanf(parts[1], "%f", &spd); err == nil {
-				if spd < 0.1 {
-					spd = 0.1
-				} else if spd > 3.0 {
-					spd = 3.0
-				}
-				gameState.PhysicsSpeed = spd
-				gameState.mu.Unlock()
-				saveSetting("physics_speed", fmt.Sprintf("%.2f", spd))
-				broadcast(msgStateUpdate, &gameState)
-				return
-			}
-		}
-
+		handleSpeedCmd(user, parts)
+		return
 	case "config", "settings":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
-				gameState.ShowConfig = false
-			} else {
-				gameState.ShowConfig = true
-			}
-		} else {
-			// Toggle config modal
-			gameState.ShowConfig = !gameState.ShowConfig
-		}
-		gameState.mu.Unlock()
-		broadcast(msgStateUpdate, &gameState)
+		handleConfigCmd(user, parts)
 		return
-
 	case "commandtime", "roundtime":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			var dur int
-			if _, err := fmt.Sscanf(parts[1], "%d", &dur); err == nil {
-				if dur < 5 {
-					dur = 5
-				} else if dur > 120 {
-					dur = 120
-				}
-				gameState.InputDuration = dur
-				gameState.mu.Unlock()
-				saveSetting("command_time", strconv.Itoa(dur))
-				broadcast(msgStateUpdate, &gameState)
-				return
-			}
-		}
-
+		handleCommandTimeCmd(user, parts)
+		return
 	case "autoround":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			arg := strings.ToLower(parts[1])
-			var ar int
-			switch arg {
-			case "off", "false", "0":
-				ar = 0
-			case "-1", "immediate", "instant":
-				ar = -1
-			default:
-				if _, err := fmt.Sscanf(parts[1], "%d", &ar); err != nil || ar < 1 {
-					gameState.mu.Unlock()
-					return
-				}
-				if ar > 60 {
-					ar = 60
-				}
-			}
-
-			gameState.AutoRound = ar
-			gameState.mu.Unlock()
-			saveSetting("auto_round", strconv.Itoa(ar))
-			broadcast(msgStateUpdate, &gameState)
-
-			if ar == 0 {
-				cancelAutoRoundTimer()
-			}
-			return
-		}
-
+		handleAutoRoundCmd(user, parts)
+		return
 	case "idlemessage":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		var val bool
-		if len(parts) > 1 {
-			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "false" || arg == "0" || arg == "hide" {
-				val = false
-			} else {
-				val = true
-			}
-		} else {
-			val = !gameState.IdleMessage
-		}
-
-		gameState.IdleMessage = val
-		gameState.mu.Unlock()
-		dbVal := "0"
-		if val {
-			dbVal = "1"
-		}
-		saveSetting("idle_message", dbVal)
-		broadcast(msgStateUpdate, &gameState)
+		handleIdleMessageCmd(user, parts)
 		return
-
 	case "bouncywalls", "bouncy":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		var val bool
-		if len(parts) > 1 {
-			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "false" || arg == "0" {
-				val = false
-			} else {
-				val = true
-			}
-		} else {
-			val = !gameState.BouncyWalls
-		}
-
-		gameState.BouncyWalls = val
+		handleBouncyWallsCmd(user, parts)
+		return
+	case "terrain":
+		handleTerrainCmd(user, parts)
+		return
+	case "startperm":
+		handleStartPermCmd(user, parts)
+		return
+	case "configperm":
+		handleConfigPermCmd(user, parts)
+		return
+	case "perm", "perms", "permission", "permissions":
+		handlePermCmd(user, parts)
+		return
+	case "clearleaderboard", "resetleaderboard":
+		handleClearLeaderboardCmd(user)
+		return
+	case "deleteplayer", "removeplayer":
+		handleDeletePlayerCmd(user, parts)
+		return
+	case "join":
+		handleJoinCmd(parts, username, emotes)
+		return
+	case "minplayers":
+		handleMinPlayersCmd(user, parts)
+		return
+	case "botfill":
+		handleBotFillCmd(user, parts)
+		return
+	case "botpoints":
+		handleBotPointsCmd(user, parts)
+		return
+	case "botlist":
+		handleBotListCmd(user, parts)
+		return
+	case "startgame", "start":
+		handleStartGameCmd(user)
+		return
+	case "fire", "left", "right":
+		handleFireCmd(parts, username, cmd)
+		return
+	default:
 		gameState.mu.Unlock()
-		dbVal := "0"
-		if val {
-			dbVal = "1"
-		}
-		saveSetting("bouncy_walls", dbVal)
+		return
+	}
+
+}
+
+func handlePrefixCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		newPrefix := parts[1]
+		gameState.Prefix = newPrefix
+		gameState.mu.Unlock()
+		saveSetting("prefix", newPrefix)
 		broadcast(msgStateUpdate, &gameState)
 		return
+	}
+	gameState.mu.Unlock()
+}
 
-	case "terrain":
-		if !hasPermission(user, gameState.ConfigPerm) {
+func handleSpeedCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		var spd float64
+		if _, err := fmt.Sscanf(parts[1], "%f", &spd); err == nil {
+			if spd < 0.1 {
+				spd = 0.1
+			} else if spd > 3.0 {
+				spd = 3.0
+			}
+			gameState.PhysicsSpeed = spd
 			gameState.mu.Unlock()
+			saveSetting("physics_speed", fmt.Sprintf("%.2f", spd))
+			broadcast(msgStateUpdate, &gameState)
 			return
 		}
-		if len(parts) > 1 {
-			arg1 := strings.ToLower(parts[1])
-			switch {
-			case arg1 == "reroll" || arg1 == "roll":
-				if gameState.Phase == phaseIdle {
-					gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
-					for _, p := range gameState.Players {
-						p.Y = getTerrainHeight(gameState.Terrain, p.X)
-					}
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
-					broadcast(msgResetTerrain, nil)
-				} else {
-					gameState.mu.Unlock()
-				}
-				return
-			case arg1 == "reset" || arg1 == "default":
-				gameState.TerrainMin = 20
-				gameState.TerrainMax = 75
-			case len(parts) >= 3:
-				var minVal, maxVal int
-				clean1 := strings.TrimSuffix(parts[1], "%")
-				clean2 := strings.TrimSuffix(parts[2], "%")
-				_, err1 := fmt.Sscanf(clean1, "%d", &minVal)
-				_, err2 := fmt.Sscanf(clean2, "%d", &maxVal)
-				if err1 != nil || err2 != nil {
-					gameState.mu.Unlock()
-					return
-				}
-				if minVal < 10 {
-					minVal = 10
-				}
-				if maxVal > 90 {
-					maxVal = 90
-				}
-				if minVal > maxVal-10 {
-					gameState.mu.Unlock()
-					return
-				}
-				gameState.TerrainMin = minVal
-				gameState.TerrainMax = maxVal
-			default:
+	}
+	gameState.mu.Unlock()
+}
+
+func handleConfigCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		arg := strings.ToLower(parts[1])
+		if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
+			gameState.ShowConfig = false
+		} else {
+			gameState.ShowConfig = true
+		}
+	} else {
+		// Toggle config modal
+		gameState.ShowConfig = !gameState.ShowConfig
+	}
+	gameState.mu.Unlock()
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
+
+func handleCommandTimeCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		var dur int
+		if _, err := fmt.Sscanf(parts[1], "%d", &dur); err == nil {
+			if dur < 5 {
+				dur = 5
+			} else if dur > 120 {
+				dur = 120
+			}
+			gameState.InputDuration = dur
+			gameState.mu.Unlock()
+			saveSetting("command_time", strconv.Itoa(dur))
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+	}
+	gameState.mu.Unlock()
+}
+
+func handleAutoRoundCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		arg := strings.ToLower(parts[1])
+		var ar int
+		switch arg {
+		case "off", "false", "0":
+			ar = 0
+		case "-1", "immediate", "instant":
+			ar = -1
+		default:
+			if _, err := fmt.Sscanf(parts[1], "%d", &ar); err != nil || ar < 1 {
 				gameState.mu.Unlock()
 				return
 			}
+			if ar > 60 {
+				ar = 60
+			}
+		}
 
-			tMin := gameState.TerrainMin
-			tMax := gameState.TerrainMax
-			saveSetting("terrain_min", strconv.Itoa(tMin))
-			saveSetting("terrain_max", strconv.Itoa(tMax))
+		gameState.AutoRound = ar
+		gameState.mu.Unlock()
+		saveSetting("auto_round", strconv.Itoa(ar))
+		broadcast(msgStateUpdate, &gameState)
 
+		if ar == 0 {
+			cancelAutoRoundTimer()
+		}
+		return
+	}
+	gameState.mu.Unlock()
+}
+
+func handleIdleMessageCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	var val bool
+	if len(parts) > 1 {
+		arg := strings.ToLower(parts[1])
+		if arg == "off" || arg == "false" || arg == "0" || arg == "hide" {
+			val = false
+		} else {
+			val = true
+		}
+	} else {
+		val = !gameState.IdleMessage
+	}
+
+	gameState.IdleMessage = val
+	gameState.mu.Unlock()
+	dbVal := "0"
+	if val {
+		dbVal = "1"
+	}
+	saveSetting("idle_message", dbVal)
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
+
+func handleBouncyWallsCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	var val bool
+	if len(parts) > 1 {
+		arg := strings.ToLower(parts[1])
+		if arg == "off" || arg == "false" || arg == "0" {
+			val = false
+		} else {
+			val = true
+		}
+	} else {
+		val = !gameState.BouncyWalls
+	}
+
+	gameState.BouncyWalls = val
+	gameState.mu.Unlock()
+	dbVal := "0"
+	if val {
+		dbVal = "1"
+	}
+	saveSetting("bouncy_walls", dbVal)
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
+
+func handleTerrainCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		arg1 := strings.ToLower(parts[1])
+		switch {
+		case arg1 == "reroll" || arg1 == "roll":
 			if gameState.Phase == phaseIdle {
-				gameState.Terrain = generateTerrain(tMin, tMax)
+				gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 				for _, p := range gameState.Players {
 					p.Y = getTerrainHeight(gameState.Terrain, p.X)
 				}
@@ -1332,35 +1363,113 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 				broadcast(msgResetTerrain, nil)
 			} else {
 				gameState.mu.Unlock()
-				broadcast(msgStateUpdate, &gameState)
 			}
 			return
-		}
-
-	case "startperm":
-		if !hasPermission(user, "broadcaster") {
+		case arg1 == "reset" || arg1 == "default":
+			gameState.TerrainMin = 20
+			gameState.TerrainMax = 75
+		case len(parts) >= 3:
+			var minVal, maxVal int
+			clean1 := strings.TrimSuffix(parts[1], "%")
+			clean2 := strings.TrimSuffix(parts[2], "%")
+			_, err1 := fmt.Sscanf(clean1, "%d", &minVal)
+			_, err2 := fmt.Sscanf(clean2, "%d", &maxVal)
+			if err1 != nil || err2 != nil {
+				gameState.mu.Unlock()
+				return
+			}
+			if minVal < 10 {
+				minVal = 10
+			}
+			if maxVal > 90 {
+				maxVal = 90
+			}
+			if minVal > maxVal-10 {
+				gameState.mu.Unlock()
+				return
+			}
+			gameState.TerrainMin = minVal
+			gameState.TerrainMax = maxVal
+		default:
 			gameState.mu.Unlock()
 			return
 		}
-		if len(parts) > 1 {
-			role := strings.ToLower(parts[1])
-			if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+
+		tMin := gameState.TerrainMin
+		tMax := gameState.TerrainMax
+		saveSetting("terrain_min", strconv.Itoa(tMin))
+		saveSetting("terrain_max", strconv.Itoa(tMax))
+
+		if gameState.Phase == phaseIdle {
+			gameState.Terrain = generateTerrain(tMin, tMax)
+			for _, p := range gameState.Players {
+				p.Y = getTerrainHeight(gameState.Terrain, p.X)
+			}
+			gameState.mu.Unlock()
+			broadcast(msgStateUpdate, &gameState)
+			broadcast(msgResetTerrain, nil)
+		} else {
+			gameState.mu.Unlock()
+			broadcast(msgStateUpdate, &gameState)
+		}
+		return
+	}
+	gameState.mu.Unlock()
+}
+
+func handleStartPermCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, "broadcaster") {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		role := strings.ToLower(parts[1])
+		if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+			gameState.StartPerm = role
+			gameState.mu.Unlock()
+			saveSetting("start_perm", role)
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+	}
+	gameState.mu.Unlock()
+}
+
+func handleConfigPermCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, "broadcaster") {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		role := strings.ToLower(parts[1])
+		if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+			gameState.ConfigPerm = role
+			gameState.mu.Unlock()
+			saveSetting("config_perm", role)
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+	}
+	gameState.mu.Unlock()
+}
+
+func handlePermCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, "broadcaster") {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) >= 3 {
+		target := strings.ToLower(parts[1])
+		role := strings.ToLower(parts[2])
+		if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+			switch target {
+			case "start", "startgame":
 				gameState.StartPerm = role
 				gameState.mu.Unlock()
 				saveSetting("start_perm", role)
 				broadcast(msgStateUpdate, &gameState)
 				return
-			}
-		}
-
-	case "configperm":
-		if !hasPermission(user, "broadcaster") {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			role := strings.ToLower(parts[1])
-			if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
+			case "config", "settings":
 				gameState.ConfigPerm = role
 				gameState.mu.Unlock()
 				saveSetting("config_perm", role)
@@ -1368,274 +1477,258 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 				return
 			}
 		}
+	}
+	gameState.mu.Unlock()
+}
 
-	case "perm", "perms", "permission", "permissions":
-		if !hasPermission(user, "broadcaster") {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) >= 3 {
-			target := strings.ToLower(parts[1])
-			role := strings.ToLower(parts[2])
-			if role == "broadcaster" || role == "mod" || role == "vip" || role == "sub" || role == "all" {
-				switch target {
-				case "start", "startgame":
-					gameState.StartPerm = role
-					gameState.mu.Unlock()
-					saveSetting("start_perm", role)
-					broadcast(msgStateUpdate, &gameState)
-					return
-				case "config", "settings":
-					gameState.ConfigPerm = role
-					gameState.mu.Unlock()
-					saveSetting("config_perm", role)
-					broadcast(msgStateUpdate, &gameState)
-					return
-				}
-			}
-		}
-
-	case "clearleaderboard", "resetleaderboard":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		gameState.Leaderboard = make(map[string]int)
-		gameState.mu.Unlock()
-		clearLeaderboardDB()
-		broadcast(msgStateUpdate, &gameState)
-		return
-
-	case "deleteplayer", "removeplayer":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			target := strings.TrimPrefix(parts[1], "@")
-			if target != "" {
-				for key := range gameState.Leaderboard {
-					if strings.EqualFold(key, target) {
-						delete(gameState.Leaderboard, key)
-					}
-				}
-				gameState.mu.Unlock()
-				deletePlayerDB(target)
-				broadcast(msgStateUpdate, &gameState)
-				return
-			}
-		}
+func handleClearLeaderboardCmd(user *twitch.User) {
+	if !hasPermission(user, gameState.ConfigPerm) {
 		gameState.mu.Unlock()
 		return
+	}
+	gameState.Leaderboard = make(map[string]int)
+	gameState.mu.Unlock()
+	clearLeaderboardDB()
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
 
-	case "join":
-		player := gameState.Players[username]
-		if gameState.Phase != phaseIdle {
-			player.LastActiveRound = gameState.RoundID
-		}
-		if len(parts) > 1 {
-			player.Emote = parts[1]
-			if len(emotes) > 0 {
-				player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", emotes[0].ID)
-			} else {
-				for _, de := range defaultEmotes {
-					if strings.EqualFold(de.Name, parts[1]) {
-						player.EmoteURL = de.URL
-						break
-					}
-				}
-			}
-		}
-		if player.EmoteURL == "" {
-			randIdx := rand.IntN(len(defaultEmotes))
-			player.Emote = defaultEmotes[randIdx].Name
-			player.EmoteURL = defaultEmotes[randIdx].URL
-		}
-		gameState.mu.Unlock()
-		broadcast(msgStateUpdate, &gameState)
-		return
-
-	case "minplayers":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			var mp int
-			if _, err := fmt.Sscanf(parts[1], "%d", &mp); err == nil {
-				if mp < 2 {
-					mp = 2
-				} else if mp > 20 {
-					mp = 20
-				}
-				gameState.MinPlayers = mp
-				gameState.mu.Unlock()
-				saveSetting("min_players", strconv.Itoa(mp))
-				broadcast(msgStateUpdate, &gameState)
-				return
-			}
-		}
+func handleDeletePlayerCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
 		gameState.mu.Unlock()
 		return
-
-	case "botfill":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		var val bool
-		if len(parts) > 1 {
-			arg := strings.ToLower(parts[1])
-			if arg == "off" || arg == "false" || arg == "0" {
-				val = false
-			} else {
-				val = true
-			}
-		} else {
-			val = !gameState.BotFill
-		}
-		gameState.BotFill = val
-		gameState.mu.Unlock()
-		dbVal := "0"
-		if val {
-			dbVal = "1"
-		}
-		saveSetting("bot_fill", dbVal)
-		broadcast(msgStateUpdate, &gameState)
-		return
-
-	case "botpoints":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 1 {
-			var bp int
-			if _, err := fmt.Sscanf(parts[1], "%d", &bp); err == nil {
-				if bp < 0 {
-					bp = 0
-				} else if bp > 10 {
-					bp = 10
-				}
-				gameState.BotPoints = bp
-				gameState.mu.Unlock()
-				saveSetting("bot_points", strconv.Itoa(bp))
-				broadcast(msgStateUpdate, &gameState)
-				return
-			}
-		}
-		gameState.mu.Unlock()
-		return
-
-	case "botlist":
-		if !hasPermission(user, gameState.ConfigPerm) {
-			gameState.mu.Unlock()
-			return
-		}
-		if len(parts) > 2 {
-			subCmd := strings.ToLower(parts[1])
-			botName := strings.TrimPrefix(parts[2], "@")
-			if botName != "" {
-				switch subCmd {
-				case "add":
-					alreadyExists := false
-					for _, b := range gameState.BotList {
-						if strings.EqualFold(b, botName) {
-							alreadyExists = true
-							break
-						}
-					}
-					if !alreadyExists {
-						gameState.BotList = append(gameState.BotList, botName)
-						addBotToList(botName)
-					}
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
-					return
-				case "remove", "del", "delete":
-					updated := make([]string, 0, len(gameState.BotList))
-					for _, b := range gameState.BotList {
-						if !strings.EqualFold(b, botName) {
-							updated = append(updated, b)
-						}
-					}
-					gameState.BotList = updated
-					removeBotFromList(botName)
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
-					return
+	}
+	if len(parts) > 1 {
+		target := strings.TrimPrefix(parts[1], "@")
+		if target != "" {
+			for key := range gameState.Leaderboard {
+				if strings.EqualFold(key, target) {
+					delete(gameState.Leaderboard, key)
 				}
 			}
-		}
-		gameState.mu.Unlock()
-		broadcast(msgStateUpdate, &gameState)
-		return
-
-	case "startgame", "start":
-		if !hasPermission(user, gameState.StartPerm) {
 			gameState.mu.Unlock()
-			return
-		}
-		if gameState.Phase == phaseIdle {
-			humanCount := 0
-			for _, p := range gameState.Players {
-				if !p.IsBot {
-					humanCount++
-				}
-			}
-			if humanCount == 0 {
-				gameState.mu.Unlock()
-				return
-			}
-			gameState.mu.Unlock()
-			startInputPhase()
-			return
-		}
-
-	case "fire", "left", "right":
-		if gameState.Phase == phaseInput {
-			player := gameState.Players[username]
-			player.LastActiveRound = gameState.RoundID
-			if cmd == "fire" {
-				if len(parts) >= 3 {
-					var angle, power int
-					_, _ = fmt.Sscanf(parts[1], "%d", &angle)
-					_, _ = fmt.Sscanf(parts[2], "%d", &power)
-
-					if angle < 0 {
-						angle = 0
-					} else if angle > 180 {
-						angle = 180
-					}
-
-					if power < 1 {
-						power = 1
-					} else if power > 100 {
-						power = 100
-					}
-
-					player.Angle = angle
-					player.Power = power
-					player.LastAngle = angle
-					player.LastPower = power
-				} else {
-					player.Angle = player.LastAngle
-					player.Power = player.LastPower
-				}
-				player.ActionType = actionFire
-				player.Fired = true
-			} else {
-				player.ActionType = strings.ToUpper(cmd)
-				player.Fired = true
-			}
-
-			checkAllPlayersFired()
-			gameState.mu.Unlock()
-			broadcast(msgPlayerLocked, username)
+			deletePlayerDB(target)
 			broadcast(msgStateUpdate, &gameState)
 			return
 		}
 	}
+	gameState.mu.Unlock()
+	return
+}
 
+func handleJoinCmd(parts []string, username string, emotes []*twitch.Emote) {
+	player := gameState.Players[username]
+	if gameState.Phase != phaseIdle {
+		player.LastActiveRound = gameState.RoundID
+	}
+	if len(parts) > 1 {
+		player.Emote = parts[1]
+		if len(emotes) > 0 {
+			player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", emotes[0].ID)
+		} else {
+			for _, de := range defaultEmotes {
+				if strings.EqualFold(de.Name, parts[1]) {
+					player.EmoteURL = de.URL
+					break
+				}
+			}
+		}
+	}
+	if player.EmoteURL == "" {
+		randIdx := rand.IntN(len(defaultEmotes))
+		player.Emote = defaultEmotes[randIdx].Name
+		player.EmoteURL = defaultEmotes[randIdx].URL
+	}
+	gameState.mu.Unlock()
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
+
+func handleMinPlayersCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		var mp int
+		if _, err := fmt.Sscanf(parts[1], "%d", &mp); err == nil {
+			if mp < 2 {
+				mp = 2
+			} else if mp > 20 {
+				mp = 20
+			}
+			gameState.MinPlayers = mp
+			gameState.mu.Unlock()
+			saveSetting("min_players", strconv.Itoa(mp))
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+	}
+	gameState.mu.Unlock()
+	return
+}
+
+func handleBotFillCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	var val bool
+	if len(parts) > 1 {
+		arg := strings.ToLower(parts[1])
+		if arg == "off" || arg == "false" || arg == "0" {
+			val = false
+		} else {
+			val = true
+		}
+	} else {
+		val = !gameState.BotFill
+	}
+	gameState.BotFill = val
+	gameState.mu.Unlock()
+	dbVal := "0"
+	if val {
+		dbVal = "1"
+	}
+	saveSetting("bot_fill", dbVal)
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
+
+func handleBotPointsCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 1 {
+		var bp int
+		if _, err := fmt.Sscanf(parts[1], "%d", &bp); err == nil {
+			if bp < 0 {
+				bp = 0
+			} else if bp > 10 {
+				bp = 10
+			}
+			gameState.BotPoints = bp
+			gameState.mu.Unlock()
+			saveSetting("bot_points", strconv.Itoa(bp))
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+	}
+	gameState.mu.Unlock()
+	return
+}
+
+func handleBotListCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if len(parts) > 2 {
+		subCmd := strings.ToLower(parts[1])
+		botName := strings.TrimPrefix(parts[2], "@")
+		if botName != "" {
+			switch subCmd {
+			case "add":
+				alreadyExists := false
+				for _, b := range gameState.BotList {
+					if strings.EqualFold(b, botName) {
+						alreadyExists = true
+						break
+					}
+				}
+				if !alreadyExists {
+					gameState.BotList = append(gameState.BotList, botName)
+					addBotToList(botName)
+				}
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
+				return
+			case "remove", "del", "delete":
+				updated := make([]string, 0, len(gameState.BotList))
+				for _, b := range gameState.BotList {
+					if !strings.EqualFold(b, botName) {
+						updated = append(updated, b)
+					}
+				}
+				gameState.BotList = updated
+				removeBotFromList(botName)
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+	}
+	gameState.mu.Unlock()
+	broadcast(msgStateUpdate, &gameState)
+	return
+}
+
+func handleStartGameCmd(user *twitch.User) {
+	if !hasPermission(user, gameState.StartPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	if gameState.Phase == phaseIdle {
+		humanCount := 0
+		for _, p := range gameState.Players {
+			if !p.IsBot {
+				humanCount++
+			}
+		}
+		if humanCount == 0 {
+			gameState.mu.Unlock()
+			return
+		}
+		gameState.mu.Unlock()
+		startInputPhase()
+		return
+	}
+	gameState.mu.Unlock()
+}
+
+func handleFireCmd(parts []string, username string, cmd string) {
+	if gameState.Phase == phaseInput {
+		player := gameState.Players[username]
+		player.LastActiveRound = gameState.RoundID
+		if cmd == "fire" {
+			if len(parts) >= 3 {
+				var angle, power int
+				_, _ = fmt.Sscanf(parts[1], "%d", &angle)
+				_, _ = fmt.Sscanf(parts[2], "%d", &power)
+
+				if angle < 0 {
+					angle = 0
+				} else if angle > 180 {
+					angle = 180
+				}
+
+				if power < 1 {
+					power = 1
+				} else if power > 100 {
+					power = 100
+				}
+
+				player.Angle = angle
+				player.Power = power
+				player.LastAngle = angle
+				player.LastPower = power
+			} else {
+				player.Angle = player.LastAngle
+				player.Power = player.LastPower
+			}
+			player.ActionType = actionFire
+			player.Fired = true
+		} else {
+			player.ActionType = strings.ToUpper(cmd)
+			player.Fired = true
+		}
+
+		checkAllPlayersFired()
+		gameState.mu.Unlock()
+		broadcast(msgPlayerLocked, username)
+		broadcast(msgStateUpdate, &gameState)
+		return
+	}
 	gameState.mu.Unlock()
 }
