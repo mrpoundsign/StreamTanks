@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -2050,3 +2051,88 @@ func TestMatchKillsRecap(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestCCCommandsAndStorage(t *testing.T) {
+	testDBPath := filepath.Join(t.TempDir(), "test_cc.db")
+	if err := initDB(testDBPath); err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	defer closeDB()
+
+	// Broadcaster user for permission checks
+	adminUser := &twitch.User{
+		Name:   "AdminUser",
+		Badges: map[string]int{"broadcaster": 1},
+	}
+
+	// 1. Initial defaults
+	gameState.mu.Lock()
+	gameState.CCEnabled = false
+	gameState.CCServerURL = "wss://st-cc.poundsigndesign.com"
+	gameState.mu.Unlock()
+
+	// 2. Test %cc on
+	processCommand("AdminUser", "%cc on", nil, adminUser)
+	gameState.mu.Lock()
+	if !gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to be true after %%cc on")
+	}
+	gameState.mu.Unlock()
+	if getSetting("cc_enabled") != "1" {
+		t.Errorf("expected cc_enabled setting to be '1', got '%s'", getSetting("cc_enabled"))
+	}
+
+	// 3. Test %cc url
+	testURL := "wss://custom-cc.example.com"
+	processCommand("AdminUser", "%cc url "+testURL, nil, adminUser)
+	gameState.mu.Lock()
+	if gameState.CCServerURL != testURL {
+		t.Errorf("expected CCServerURL to be '%s', got '%s'", testURL, gameState.CCServerURL)
+	}
+	gameState.mu.Unlock()
+	if getSetting("cc_url") != testURL {
+		t.Errorf("expected cc_url setting to be '%s', got '%s'", testURL, getSetting("cc_url"))
+	}
+
+	// 4. Test %config cc off
+	processCommand("AdminUser", "%config cc off", nil, adminUser)
+	gameState.mu.Lock()
+	if gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to be false after %%config cc off")
+	}
+	gameState.mu.Unlock()
+	if getSetting("cc_enabled") != "0" {
+		t.Errorf("expected cc_enabled setting to be '0', got '%s'", getSetting("cc_enabled"))
+	}
+
+	// 5. Test saving and retrieving token
+	saveSetting("cc_host_token", "sample.token.12345")
+	if token := getSetting("cc_host_token"); token != "sample.token.12345" {
+		t.Errorf("expected saved token 'sample.token.12345', got '%s'", token)
+	}
+
+	// 6. Test loadSettings reloading persisted C&C configuration
+	saveSetting("cc_enabled", "1")
+	saveSetting("cc_url", "wss://reloaded-cc.example.com")
+	loadSettings()
+
+	gameState.mu.Lock()
+	if !gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to be true after loadSettings")
+	}
+	if gameState.CCServerURL != "wss://reloaded-cc.example.com" {
+		t.Errorf("expected CCServerURL 'wss://reloaded-cc.example.com', got '%s'", gameState.CCServerURL)
+	}
+	gameState.mu.Unlock()
+
+	// 7. Test %cc reset deletes token
+	saveSetting("cc_host_token", "sample.token.to.reset")
+	processCommand("AdminUser", "%cc reset", nil, adminUser)
+	if token := getSetting("cc_host_token"); token != "" {
+		t.Errorf("expected cc_host_token to be cleared after %%cc reset, got '%s'", token)
+	}
+
+	// Clean up
+	StopCCClient()
+}
+

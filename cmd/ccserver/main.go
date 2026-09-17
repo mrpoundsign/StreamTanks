@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -32,6 +33,11 @@ func main() {
 		log.Fatal("ERROR: A twitch-secret must be provided via flag or TWITCH_EXTENSION_SECRET environment variable")
 	}
 
+	secretBytes, err := base64.StdEncoding.DecodeString(*twitchSecret)
+	if err != nil {
+		log.Fatalf("ERROR: Invalid base64 twitch-secret: %v", err)
+	}
+
 	var twitchClient *TwitchAPIClient
 	if *clientID != "" && *apiSecret != "" {
 		twitchClient = NewTwitchAPIClient(*clientID, *apiSecret)
@@ -41,11 +47,10 @@ func main() {
 	}
 
 	hub := NewHub()
-	
-	// Option 1 Auth: Trust the first connection that claims the channel
-	auth := &TrustFirstAuthenticator{}
+	claimMgr := NewClaimManager()
+	auth := NewHMACAuthenticator(secretBytes)
 
-	http.Handle("/ws/host", hub.HandleHost(auth))
+	http.Handle("/ws/host", hub.HandleHost(auth, claimMgr))
 	http.Handle("/ws/viewer", HandleViewer(hub, *twitchSecret, twitchClient))
 
 	// Serve the Twitch Extension frontend files on /ext/ with permissive CORS headers

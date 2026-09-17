@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/websocket"
@@ -71,6 +72,10 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 			BotFill:        gameState.BotFill,
 			BotPoints:      gameState.BotPoints,
 			BotList:        gameState.BotList,
+			CCEnabled:      gameState.CCEnabled,
+			CCServerURL:    gameState.CCServerURL,
+			CCStatus:       gameState.CCStatus,
+			ClaimCode:      gameState.ClaimCode,
 			Winner:         gameState.Winner,
 			TimerRemaining: gameState.TimerRemaining,
 			MatchKills:     matchKillsCopy,
@@ -109,14 +114,22 @@ func handleWebSocket(ws *websocket.Conn) {
 	activeClients[ws] = true
 	clientsMu.Unlock()
 
+	clientType := "Overlay"
+	if req := ws.Request(); req != nil {
+		if req.URL.Query().Get("client") == "admin" || strings.Contains(req.Header.Get("Referer"), "/admin") {
+			clientType = "Admin Console"
+		}
+	}
+
 	defer func() {
 		clientsMu.Lock()
 		delete(activeClients, ws)
 		clientsMu.Unlock()
 		_ = ws.Close()
+		log.Printf("%s WebSocket disconnected\n", clientType)
 	}()
 
-	log.Println("New WebSocket client connected (Overlay)")
+	log.Printf("New WebSocket client connected (%s)\n", clientType)
 
 	// Send initial state
 	broadcast(msgStateUpdate, &gameState)
@@ -125,7 +138,6 @@ func handleWebSocket(ws *websocket.Conn) {
 	for {
 		var msg WSMessage
 		if err := websocket.JSON.Receive(ws, &msg); err != nil {
-			log.Println("WebSocket disconnected")
 			break
 		}
 

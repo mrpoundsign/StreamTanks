@@ -42,131 +42,183 @@
 
         <!-- Main Dashboard Content Grid -->
         <main class="admin-grid">
-            <!-- Left Column: Settings & Configuration -->
-            <section class="card config-card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-icon">&#9881;</span> Match Configuration
+            <!-- Left Column: Settings, Configuration & C&C Relay -->
+            <div class="admin-col left-col">
+                <section class="card config-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#9881;</span> Match Configuration
+                        </div>
+                        <span class="card-badge">LIVE SYNC</span>
                     </div>
-                    <span class="card-badge">LIVE SYNC</span>
-                </div>
-                <div class="card-body">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="cfg-prefix">Command Prefix</label>
-                            <div class="input-with-action">
-                                <input type="text" id="cfg-prefix" maxlength="5" placeholder="%" />
-                                <button id="btn-apply-prefix" class="btn btn-small">Set</button>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="cfg-commandtime">Input Window (sec)</label>
-                            <div class="input-with-action">
-                                <input type="number" id="cfg-commandtime" min="5" max="120" placeholder="20" />
-                                <button id="btn-apply-commandtime" class="btn btn-small">Set</button>
-                            </div>
-                        </div>
-
-                        <div class="form-group span-2">
-                            <label>Auto Round: <span id="autoround-current-val" class="highlight-val">Off</span></label>
-                            <div class="autoround-container">
-                                <div class="preset-buttons">
-                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="0">Off</button>
-                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="-1">Instant</button>
-                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="1">1m</button>
-                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="2">2m</button>
-                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="3">3m</button>
-                                    <button type="button" class="btn btn-tiny btn-preset" data-ar="5">5m</button>
-                                </div>
+                    <div class="card-body">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="cfg-prefix">Command Prefix</label>
                                 <div class="input-with-action">
-                                    <input type="number" id="cfg-autoround-custom" min="1" max="60" placeholder="Custom minutes (1-60)" />
-                                    <button id="btn-apply-autoround-custom" class="btn btn-small">Set Min</button>
+                                    <input type="text" id="cfg-prefix" maxlength="5" placeholder="%" />
+                                    <button id="btn-apply-prefix" class="btn btn-small">Set</button>
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="cfg-minplayers">Min Players</label>
-                            <div class="input-with-action">
-                                <input type="number" id="cfg-minplayers" min="2" max="20" placeholder="5" />
-                                <button id="btn-apply-minplayers" class="btn btn-small">Set</button>
+                            <div class="form-group">
+                                <label for="cfg-commandtime">Input Window (sec)</label>
+                                <div class="input-with-action">
+                                    <input type="number" id="cfg-commandtime" min="5" max="120" placeholder="20" />
+                                    <button id="btn-apply-commandtime" class="btn btn-small">Set</button>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="cfg-botpoints">Kill Bot Points</label>
-                            <div class="input-with-action">
-                                <input type="number" id="cfg-botpoints" min="0" max="10" placeholder="1" />
-                                <button id="btn-apply-botpoints" class="btn btn-small">Set</button>
+                            <div class="form-group span-2">
+                                <label>Auto Round: <span id="autoround-current-val" class="highlight-val">Off</span></label>
+                                <div class="autoround-container">
+                                    <div class="preset-buttons">
+                                        <button type="button" class="btn btn-tiny btn-preset" data-ar="0">Off</button>
+                                        <button type="button" class="btn btn-tiny btn-preset" data-ar="-1">Instant</button>
+                                        <button type="button" class="btn btn-tiny btn-preset" data-ar="1">1m</button>
+                                        <button type="button" class="btn btn-tiny btn-preset" data-ar="2">2m</button>
+                                        <button type="button" class="btn btn-tiny btn-preset" data-ar="3">3m</button>
+                                        <button type="button" class="btn btn-tiny btn-preset" data-ar="5">5m</button>
+                                    </div>
+                                    <div class="input-with-action">
+                                        <input type="number" id="cfg-autoround-custom" min="1" max="60" placeholder="Custom minutes (1-60)" />
+                                        <button id="btn-apply-autoround-custom" class="btn btn-small">Set Min</button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="cfg-speed">Physics Speed</label>
-                            <div class="input-with-action">
-                                <select id="cfg-speed">
-                                    <option value="0.25">0.25x (Slow Mo)</option>
-                                    <option value="0.5">0.5x (Default)</option>
-                                    <option value="0.75">0.75x</option>
-                                    <option value="1.0">1.0x (Fast)</option>
-                                    <option value="1.5">1.5x (Turbo)</option>
-                                </select>
-                                <button id="btn-apply-speed" class="btn btn-small">Set</button>
+                            <div class="form-group">
+                                <label for="cfg-minplayers">Min Players</label>
+                                <div class="input-with-action">
+                                    <input type="number" id="cfg-minplayers" min="2" max="20" placeholder="5" />
+                                    <button id="btn-apply-minplayers" class="btn btn-small">Set</button>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="cfg-startperm">Start Game Perm</label>
-                            <div class="input-with-action">
-                                <select id="cfg-startperm">
-                                    <option value="broadcaster">Broadcaster</option>
-                                    <option value="mod">Mods & Broadcaster</option>
-                                    <option value="vip">VIPs, Mods, Broadcaster</option>
-                                    <option value="sub">Subscribers+</option>
-                                    <option value="all">Everyone</option>
-                                </select>
-                                <button id="btn-apply-startperm" class="btn btn-small">Set</button>
+                            <div class="form-group">
+                                <label for="cfg-botpoints">Kill Bot Points</label>
+                                <div class="input-with-action">
+                                    <input type="number" id="cfg-botpoints" min="0" max="10" placeholder="1" />
+                                    <button id="btn-apply-botpoints" class="btn btn-small">Set</button>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group span-2">
-                            <label for="cfg-configperm">Config Perm</label>
-                            <div class="input-with-action">
-                                <select id="cfg-configperm">
-                                    <option value="broadcaster">Broadcaster</option>
-                                    <option value="mod">Mods & Broadcaster</option>
-                                    <option value="vip">VIPs, Mods, Broadcaster</option>
-                                    <option value="sub">Subscribers+</option>
-                                    <option value="all">Everyone</option>
-                                </select>
-                                <button id="btn-apply-configperm" class="btn btn-small">Set</button>
+                            <div class="form-group">
+                                <label for="cfg-speed">Physics Speed</label>
+                                <div class="input-with-action">
+                                    <select id="cfg-speed">
+                                        <option value="0.25">0.25x (Slow Mo)</option>
+                                        <option value="0.5">0.5x (Default)</option>
+                                        <option value="0.75">0.75x</option>
+                                        <option value="1.0">1.0x (Fast)</option>
+                                        <option value="1.5">1.5x (Turbo)</option>
+                                    </select>
+                                    <button id="btn-apply-speed" class="btn btn-small">Set</button>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group span-2">
-                            <label>Terrain Bounds: <span id="terrain-range-val" class="highlight-val">20% — 75%</span></label>
-                            <div class="range-dual">
-                                <input type="range" id="cfg-terrain-min" min="10" max="80" value="20" />
-                                <input type="range" id="cfg-terrain-max" min="20" max="90" value="75" />
-                                <button id="btn-apply-terrain" class="btn btn-small">Apply Terrain</button>
+                            <div class="form-group">
+                                <label for="cfg-startperm">Start Game Perm</label>
+                                <div class="input-with-action">
+                                    <select id="cfg-startperm">
+                                        <option value="broadcaster">Broadcaster</option>
+                                        <option value="mod">Mods & Broadcaster</option>
+                                        <option value="vip">VIPs, Mods, Broadcaster</option>
+                                        <option value="sub">Subscribers+</option>
+                                        <option value="all">Everyone</option>
+                                    </select>
+                                    <button id="btn-apply-startperm" class="btn btn-small">Set</button>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group span-2 toggle-row">
-                            <button id="btn-toggle-idle" class="btn btn-secondary">
-                                Idle HUD: <span id="idle-status-text">On</span>
-                            </button>
-                            <button id="btn-toggle-botfill" class="btn btn-secondary">
-                                Bot Fill: <span id="botfill-status-text">On</span>
-                            </button>
-                            <button id="btn-reset-terrain" class="btn btn-secondary">
-                                Re-roll Terrain
-                            </button>
+                            <div class="form-group span-2">
+                                <label for="cfg-configperm">Config Perm</label>
+                                <div class="input-with-action">
+                                    <select id="cfg-configperm">
+                                        <option value="broadcaster">Broadcaster</option>
+                                        <option value="mod">Mods & Broadcaster</option>
+                                        <option value="vip">VIPs, Mods, Broadcaster</option>
+                                        <option value="sub">Subscribers+</option>
+                                        <option value="all">Everyone</option>
+                                    </select>
+                                    <button id="btn-apply-configperm" class="btn btn-small">Set</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group span-2">
+                                <label>Terrain Bounds: <span id="terrain-range-val" class="highlight-val">20% — 75%</span></label>
+                                <div class="range-dual">
+                                    <input type="range" id="cfg-terrain-min" min="10" max="80" value="20" />
+                                    <input type="range" id="cfg-terrain-max" min="20" max="90" value="75" />
+                                    <button id="btn-apply-terrain" class="btn btn-small">Apply Terrain</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group span-2 toggle-row">
+                                <button id="btn-toggle-idle" class="btn btn-secondary">
+                                    Idle HUD: <span id="idle-status-text">On</span>
+                                </button>
+                                <button id="btn-toggle-botfill" class="btn btn-secondary">
+                                    Bot Fill: <span id="botfill-status-text">On</span>
+                                </button>
+                                <button id="btn-reset-terrain" class="btn btn-secondary">
+                                    Re-roll Terrain
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
+
+                <!-- C&C Relay & Extension Card -->
+                <section class="card cc-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#128225;</span> Twitch Extension & C&C Relay
+                        </div>
+                        <span id="cc-status-badge" class="card-badge cc-badge disconnected">DISCONNECTED</span>
+                    </div>
+                    <div class="card-body">
+                        <!-- In-Chat Claim Alert Banner (dynamic) -->
+                        <div id="cc-claim-banner" class="claim-banner" style="display: none;">
+                            <div class="claim-banner-header">
+                                <span class="claim-icon">&#9888;</span>
+                                <span class="claim-title">AUTHORIZATION CHALLENGE</span>
+                            </div>
+                            <p class="claim-instructions">
+                                Type this into your Twitch chat as broadcaster to authorize this host:
+                            </p>
+                            <div class="claim-code-box">
+                                <span id="cc-claim-code" class="claim-code">%claim ------</span>
+                                <button id="btn-copy-claim" class="btn btn-small btn-primary">
+                                    Copy Command
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group span-2">
+                                <label for="cfg-cc-url">C&C Server WebSocket URL</label>
+                                <div class="input-with-action">
+                                    <input type="text" id="cfg-cc-url" placeholder="wss://st-cc.poundsigndesign.com" />
+                                    <button id="btn-apply-cc-url" class="btn btn-small">Set</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group span-2 toggle-row">
+                                <button id="btn-toggle-cc" class="btn btn-secondary">
+                                    C&C Relay: <span id="cc-status-text">Disabled</span>
+                                </button>
+                                <button id="btn-reconnect-cc" class="btn btn-secondary">
+                                    Reconnect
+                                </button>
+                                <button id="btn-reset-cc-key" class="btn btn-danger" title="Clear saved token and request a new authorization code in chat">
+                                    Reset Key
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
 
             <!-- Center Column: Active Players in Round -->
             <section class="card players-card">

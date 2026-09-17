@@ -4,7 +4,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -115,7 +117,7 @@ func (h *Hub) RouteMessage(channel string, payload interface{}) error {
 }
 
 // HandleHost is the WebSocket handler for incoming streamer (host) connections.
-func (h *Hub) HandleHost(auth HostAuthenticator) websocket.Server {
+func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websocket.Server {
 	return websocket.Server{
 		Handshake: func(config *websocket.Config, req *http.Request) error {
 			// Accept any origin
@@ -123,34 +125,124 @@ func (h *Hub) HandleHost(auth HostAuthenticator) websocket.Server {
 		},
 		Handler: func(ws *websocket.Conn) {
 			req := ws.Request()
-		channel, err := auth.Authenticate(req)
-		if err != nil {
-			log.Printf("Host authentication failed: %v", err)
-			return
-		}
+			channel, err := auth.Authenticate(req)
 
-		if err := h.RegisterHost(channel, ws); err != nil {
-			log.Printf("Host registration failed for %s: %v", channel, err)
-			return
-		}
+			// Single dedicated reader goroutine for this WebSocket connection
+			msgChan := make(chan interface{})
+			errChan := make(chan error, 1)
+			go func() {
+				for {
+					var m interface{}
+					if err := websocket.JSON.Receive(ws, &m); err != nil {
+						errChan <- err
+						return
+					}
+					msgChan <- m
+				}
+			}()
 
-		defer func() {
-			h.UnregisterHost(channel, ws)
-			_ = ws.Close()
-		}()
+			if err != nil {
+				reqChannel := strings.ToLower(strings.TrimSpace(req.URL.Query().Get("channel")))
+				if reqChannel == "" || claimMgr == nil {
+					log.Printf("Host authentication rejected: %v", err)
+					_ = websocket.JSON.Send(ws, map[string]interface{}{
+						"type":    "AUTH_ERROR",
+						"payload": err.Error(),
+					})
+					_ = ws.Close()
+					return
+				}
 
-		// Keep the connection alive and read incoming messages.
-		// The host sends GAME_STATE updates here which we broadcast to all viewers.
-		for {
-			var msg interface{}
-			if err := websocket.JSON.Receive(ws, &msg); err != nil {
-				log.Printf("Host disconnected for channel %s", channel)
-				break
+				code, approvedChan, cancel := claimMgr.CreateChallenge(reqChannel)
+				defer cancel()
+
+				log.Printf("Host challenge issued for channel %s (code: %s)", reqChannel, code)
+				if sendErr := websocket.JSON.Send(ws, map[string]interface{}{
+					"type": "AUTH_CHALLENGE",
+					"payload": map[string]interface{}{
+						"channel":    reqChannel,
+						"code":       code,
+						"command":    "%claim " + code,
+						"expires_in": 300,
+					},
+				}); sendErr != nil {
+					log.Printf("Failed to send challenge to host: %v", sendErr)
+					_ = ws.Close()
+					return
+				}
+
+				authenticated := false
+				for !authenticated {
+					select {
+					case <-approvedChan:
+						channel = reqChannel
+						auth.InvalidateOlderTokens(channel, time.Now().Unix())
+						newToken := auth.GenerateToken(channel)
+						_ = websocket.JSON.Send(ws, map[string]interface{}{
+							"type": "AUTH_SUCCESS",
+							"payload": map[string]interface{}{
+								"channel": channel,
+								"token":   newToken,
+							},
+						})
+						log.Printf("Host %s authenticated via in-chat claim successfully!", channel)
+						authenticated = true
+
+					case readErr := <-errChan:
+						log.Printf("Host disconnected during claim challenge for %s: %v", reqChannel, readErr)
+						_ = ws.Close()
+						return
+
+					case <-time.After(5 * time.Minute):
+						log.Printf("Host challenge timed out for channel %s", reqChannel)
+						_ = websocket.JSON.Send(ws, map[string]interface{}{
+							"type":    "AUTH_ERROR",
+							"payload": "Claim timed out. Reconnect to retry.",
+						})
+						_ = ws.Close()
+						return
+
+					case msg := <-msgChan:
+						// Handle PING or keep-alive from host while waiting for claim
+						_ = msg
+					}
+				}
+			} else {
+				// Immediately authenticated via valid token
+				_ = websocket.JSON.Send(ws, map[string]interface{}{
+					"type": "AUTH_SUCCESS",
+					"payload": map[string]interface{}{
+						"channel": channel,
+					},
+				})
 			}
-			
-			// Broadcast the message (e.g. GAME_STATE) to all viewers of this channel
-			h.BroadcastToViewers(channel, msg)
-		}
-	},
+
+			if err := h.RegisterHost(channel, ws); err != nil {
+				log.Printf("Host registration failed for %s: %v", channel, err)
+				_ = websocket.JSON.Send(ws, map[string]interface{}{
+					"type":    "AUTH_ERROR",
+					"payload": err.Error(),
+				})
+				_ = ws.Close()
+				return
+			}
+
+			defer func() {
+				h.UnregisterHost(channel, ws)
+				_ = ws.Close()
+			}()
+
+			log.Printf("Host active for channel: %s", channel)
+
+			for {
+				select {
+				case readErr := <-errChan:
+					log.Printf("Host disconnected for channel %s: %v", channel, readErr)
+					return
+				case msg := <-msgChan:
+					h.BroadcastToViewers(channel, msg)
+				}
+			}
+		},
 	}
 }

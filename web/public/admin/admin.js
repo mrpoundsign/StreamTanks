@@ -35,6 +35,18 @@
     const cfgTerrainMax = document.getElementById('cfg-terrain-max');
     const terrainRangeVal = document.getElementById('terrain-range-val');
 
+    // C&C Relay Elements
+    const ccStatusBadge = document.getElementById('cc-status-badge');
+    const ccClaimBanner = document.getElementById('cc-claim-banner');
+    const ccClaimCode = document.getElementById('cc-claim-code');
+    const btnCopyClaim = document.getElementById('btn-copy-claim');
+    const cfgCcUrl = document.getElementById('cfg-cc-url');
+    const btnApplyCcUrl = document.getElementById('btn-apply-cc-url');
+    const btnToggleCc = document.getElementById('btn-toggle-cc');
+    const ccStatusText = document.getElementById('cc-status-text');
+    const btnReconnectCc = document.getElementById('btn-reconnect-cc');
+    const btnResetCcKey = document.getElementById('btn-reset-cc-key');
+
     // Tables
     const playersTableBody = document.getElementById('players-table-body');
     const playerCountBadge = document.getElementById('player-count-badge');
@@ -44,7 +56,7 @@
     // Connect WebSocket
     function connectWS() {
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${proto}//${window.location.host}/ws`;
+        const wsUrl = `${proto}//${window.location.host}/ws?client=admin`;
 
         connectionPill.className = 'connection-pill';
         connectionText.innerText = 'Connecting...';
@@ -168,6 +180,44 @@
             cfgTerrainMin.value = tMin;
             cfgTerrainMax.value = tMax;
             terrainRangeVal.innerText = `${tMin}% — ${tMax}%`;
+        }
+
+        // C&C Relay UI Sync
+        const isCcEnabled = !!state.ccEnabled;
+        const ccStatus = state.ccStatus || 'disconnected';
+        const claimCode = state.claimCode || '';
+        const ccUrl = state.ccServerUrl || 'wss://st-cc.poundsigndesign.com';
+
+        if (ccStatusText) {
+            ccStatusText.innerText = isCcEnabled ? 'Enabled' : 'Disabled';
+        }
+        if (btnToggleCc) {
+            btnToggleCc.className = isCcEnabled ? 'btn btn-outline' : 'btn btn-secondary';
+        }
+        if (cfgCcUrl && document.activeElement !== cfgCcUrl) {
+            cfgCcUrl.value = ccUrl;
+        }
+
+        if (ccStatusBadge) {
+            ccStatusBadge.className = `card-badge cc-badge ${ccStatus}`;
+            if (ccStatus === 'connected') {
+                ccStatusBadge.innerText = 'CONNECTED';
+            } else if (ccStatus === 'connecting') {
+                ccStatusBadge.innerText = 'CONNECTING';
+            } else if (ccStatus === 'pending_claim') {
+                ccStatusBadge.innerText = 'PENDING CLAIM';
+            } else {
+                ccStatusBadge.innerText = 'DISCONNECTED';
+            }
+        }
+
+        if (ccClaimBanner && ccClaimCode) {
+            if (claimCode && ccStatus === 'pending_claim') {
+                ccClaimBanner.style.display = 'block';
+                ccClaimCode.innerText = `%claim ${claimCode}`;
+            } else {
+                ccClaimBanner.style.display = 'none';
+            }
         }
 
         // Render Active Players Table
@@ -387,6 +437,53 @@
         if (minVal > maxVal - 10) minVal = maxVal - 10;
         sendCommand(`terrain ${minVal} ${maxVal}`);
     });
+
+    // Event Listeners: C&C Relay
+    if (btnToggleCc) {
+        btnToggleCc.addEventListener('click', () => {
+            const nextVal = stateRef?.ccEnabled ? 'off' : 'on';
+            sendCommand(`cc ${nextVal}`);
+        });
+    }
+
+    if (btnReconnectCc) {
+        btnReconnectCc.addEventListener('click', () => {
+            sendCommand('cc on');
+        });
+    }
+
+    if (btnResetCcKey) {
+        btnResetCcKey.addEventListener('click', () => {
+            if (confirm('Reset C&C authentication key? This will revoke the existing token and require a new %claim code in Twitch chat.')) {
+                sendCommand('cc reset');
+            }
+        });
+    }
+
+    if (btnApplyCcUrl && cfgCcUrl) {
+        btnApplyCcUrl.addEventListener('click', () => {
+            const url = cfgCcUrl.value.trim();
+            if (url) {
+                sendCommand(`cc url ${url}`);
+            }
+        });
+    }
+
+    if (btnCopyClaim) {
+        btnCopyClaim.addEventListener('click', () => {
+            const code = stateRef?.claimCode;
+            if (code) {
+                const cmd = `%claim ${code}`;
+                navigator.clipboard.writeText(cmd).then(() => {
+                    const orig = btnCopyClaim.innerText;
+                    btnCopyClaim.innerText = 'Copied!';
+                    setTimeout(() => { btnCopyClaim.innerText = orig; }, 2000);
+                }).catch(() => {
+                    prompt('Copy this command and paste into your Twitch chat:', cmd);
+                });
+            }
+        });
+    }
 
     // Event Delegation: Delete Player from Leaderboard & Kick
     document.addEventListener('click', (e) => {
