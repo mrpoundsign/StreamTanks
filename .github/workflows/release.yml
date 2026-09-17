@@ -73,8 +73,7 @@ jobs:
 
       - name: Package Twitch Extension
         run: |
-          mkdir -p dist
-          cd ext-web/public && zip -r ../../dist/extension.zip *
+          cd ext-web/public && zip -r ../../extension.zip *
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

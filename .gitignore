@@ -9,3 +9,4 @@ node_modules/
 *.bak
 deploy.ps1
 planning/
+*.zip

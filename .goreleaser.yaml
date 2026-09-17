@@ -27,9 +27,9 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
-  - id: ccserver
+  - id: st_cc_server
     main: ./cmd/ccserver
-    binary: ccserver
+    binary: st_cc_server
     env:
       - CGO_ENABLED=0
     goos:
@@ -60,12 +60,12 @@ archives:
       - README.md
       - LICENSE*
 
-  - id: ccserver
+  - id: st_cc_server
     ids:
-      - ccserver
+      - st_cc_server
     formats:
       - tar.gz
-    name_template: "ccserver_{{ .Os }}_{{ .Arch }}"
+    name_template: "st_cc_server_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats:
@@ -76,7 +76,7 @@ archives:
 
 release:
   extra_files:
-    - glob: ./dist/extension.zip
+    - glob: ./extension.zip
 
 checksum:
   name_template: "checksums.txt"
