@@ -95,6 +95,7 @@ func resetMatchState() {
 		p.IsDead = false
 		p.Fired = false
 		p.ActionType = ""
+		p.Moving = false
 		p.LastActiveRound = gameState.RoundID
 		p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
 		p.Y = getTerrainHeight(gameState.Terrain, p.X)
