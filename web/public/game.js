@@ -1,16 +1,1090 @@
-"use strict";(()=>{var C="IDLE",X="INPUT",L="ACTION",S="CELEBRATION";var se="STATE_UPDATE",oe="EXECUTE_ACTIONS";var ie="RESET_TERRAIN";var le="PLAYER_DIED";var re="CHAT_COMMAND";var ce="TERRAIN_CRATER",de="FIRE",O="LEFT",U="RIGHT";function K(){let n=new Array(1920),t=1080/2+(Math.random()*200-100),a=0;n[0]=t;for(let e=1;e<1920;e++)a+=(Math.random()-.5)*.15,a>2&&(a=2),a<-2&&(a=-2),t+=a,t<250&&(a+=.05),t>880&&(a-=.05),n[e]=t;return n}function G(n,t){if(n.length===0)return 1080/2;let a=Math.min(1919,Math.max(0,Math.floor(t)));return n[a]}function me(n,t,a=5){let e=Math.max(0,Math.floor(t-a)),s=Math.min(1919,Math.floor(t+a)),o=n[e],r=n[s];return Math.atan2(r-o,s-e)}function q(n,t,a,e){let s=Math.max(0,Math.floor(t-e)),o=Math.min(1920,Math.ceil(t+e));for(let r=s;r<o;r++){let i=r-t,d=Math.sqrt(e*e-i*i),u=a+d;n[r]<u&&(n[r]=u)}}var j=class{ws=null;isDisconnected=!1;reconnectInterval=null;healthCheckInterval=null;messageHandlers=[];constructor(){this.connect()}onMessage(t){this.messageHandlers.push(t)}send(t){this.ws&&this.ws.readyState===WebSocket.OPEN&&this.ws.send(JSON.stringify(t))}connect(){let a=`${window.location.protocol==="https:"?"wss:":"ws:"}//${window.location.host}/ws`;try{this.ws=new WebSocket(a),this.ws.onopen=()=>{if(console.log("Connected to StreamTanks server"),this.isDisconnected){window.location.reload();return}this.healthCheckInterval&&clearInterval(this.healthCheckInterval),this.healthCheckInterval=setInterval(()=>{this.ws&&this.ws.readyState===WebSocket.CLOSED&&this.handleDisconnect()},2e3)},this.ws.onmessage=e=>{try{let s=JSON.parse(e.data);for(let o of this.messageHandlers)o(s)}catch(s){console.error("Failed to parse WebSocket message:",s)}},this.ws.onclose=()=>this.handleDisconnect(),this.ws.onerror=()=>this.handleDisconnect()}catch{this.handleDisconnect()}}handleDisconnect(){if(this.isDisconnected)return;this.isDisconnected=!0,console.log("Server disconnected or unreachable. Hiding overlay and waiting for server to return...");let t=document.getElementById("game-container");t&&(t.style.display="none"),document.body.style.display="none",this.healthCheckInterval&&(clearInterval(this.healthCheckInterval),this.healthCheckInterval=null),this.reconnectInterval&&clearInterval(this.reconnectInterval),this.reconnectInterval=setInterval(async()=>{try{(await fetch("/",{method:"HEAD",cache:"no-store"})).ok&&(console.log("Server detected back online! Reloading page..."),clearInterval(this.reconnectInterval),window.location.reload())}catch{}},1500)}};function pe(n,t){if(t.length!==0){n.beginPath(),n.moveTo(0,t[0]);for(let a=1;a<1920;a++)n.lineTo(a,t[a]);n.strokeStyle="#ff003c",n.lineWidth=4,n.shadowBlur=15,n.shadowColor="#ff003c",n.stroke(),n.lineTo(1920,1080),n.lineTo(0,1080),n.closePath(),n.fillStyle="rgba(255, 0, 60, 0.02)",n.fill(),n.shadowBlur=0}}function fe(n){n.save(),n.translate(250,250),n.strokeStyle="rgba(0, 255, 204, 0.5)",n.lineWidth=10,n.shadowBlur=20,n.shadowColor="#00ffcc",n.beginPath(),n.arc(0,0,150,Math.PI,0),n.stroke(),n.fillStyle="#00ffcc",n.font="24px Orbitron",n.textAlign="center",n.textBaseline="middle";let t=[{deg:0,label:"0\xB0"},{deg:45,label:"45\xB0"},{deg:90,label:"90\xB0"},{deg:135,label:"135\xB0"},{deg:180,label:"180\xB0"}];for(let{deg:a,label:e}of t){let s=a*Math.PI/180,o=Math.cos(s)*140,r=-Math.sin(s)*140,i=Math.cos(s)*160,d=-Math.sin(s)*160;n.lineWidth=4,n.beginPath(),n.moveTo(o,r),n.lineTo(i,d),n.stroke();let u=Math.cos(s)*190,v=-Math.sin(s)*190;n.fillText(e,u,v)}n.lineWidth=2;for(let a=15;a<180;a+=15){if(a%45===0)continue;let e=a*Math.PI/180,s=Math.cos(e)*145,o=-Math.sin(e)*145,r=Math.cos(e)*155,i=-Math.sin(e)*155;n.beginPath(),n.moveTo(s,o),n.lineTo(r,i),n.stroke()}n.fillStyle="#ff003c",n.shadowColor="#ff003c",n.beginPath(),n.arc(0,0,8,0,Math.PI*2),n.fill(),n.restore()}function ue(n,t,a,e,s,o){for(let r in t){let i=t[r],d=document.getElementById("emote-"+r);if(!d&&i.emoteUrl&&(d=document.createElement("img"),d.id="emote-"+r,d.className="tank-emote",d.src=i.emoteUrl,s.appendChild(d)),i.isDead){d&&(d.style.display="none");continue}n.save(),n.translate(i.x,i.y);let u=me(a,i.x);n.rotate(u),n.strokeStyle="#ff003c",n.lineWidth=2,n.shadowBlur=10,n.shadowColor="#ff003c",n.strokeRect(-15,-10,30,10),n.restore(),d&&(d.style.display="block",d.style.left=i.x-14+"px",d.style.top=i.y-35+"px",d.style.transformOrigin="14px 35px",d.style.transform=`rotate(${u}rad)`);let v=i.name&&!i.name.startsWith("_bot_")?i.name:!r.startsWith("_bot_")&&!i.isBot?r:"";if(v&&(n.fillStyle="#fff",n.font="16px Orbitron",n.textAlign="center",n.shadowBlur=5,n.shadowColor="#000",n.fillText(v,i.x,i.y+20)),e==="INPUT"){n.strokeStyle=i.fired?"#00ffcc":"#ff003c",n.shadowColor=n.strokeStyle,n.lineWidth=2,n.beginPath(),n.arc(i.x,i.y-10,50,Math.PI,0),n.stroke(),n.fillStyle=n.strokeStyle,n.font="10px Orbitron";let $=[0,45,90,135,180];for(let ne of $){let k=ne*Math.PI/180,te=45,ae=50;n.beginPath(),n.moveTo(i.x+Math.cos(k)*te,i.y-10-Math.sin(k)*te),n.lineTo(i.x+Math.cos(k)*ae,i.y-10-Math.sin(k)*ae),n.stroke(),n.fillText(ne.toString(),i.x+Math.cos(k)*60,i.y-10-Math.sin(k)*60)}let ee=(i.lastAngle??45)*Math.PI/180;n.beginPath(),n.moveTo(i.x,i.y-10),n.lineTo(i.x+Math.cos(ee)*50,i.y-10-Math.sin(ee)*50),n.stroke()}}}function ye(n,t,a){for(let e of t){let s=e.emoteUrl?a[e.emoteUrl]:null;s&&s.complete&&s.naturalWidth>0?(n.shadowBlur=0,n.drawImage(s,e.x-7,e.y-7,14,14)):(n.fillStyle="#00ffcc",n.shadowBlur=10,n.shadowColor="#00ffcc",n.beginPath(),n.arc(e.x,e.y,4,0,Math.PI*2),n.fill())}}function ge(n,t){for(let a of t)a.isSpark?(n.strokeStyle=`rgba(0, 255, 204, ${a.alpha})`,n.shadowBlur=15,n.shadowColor="#00ffcc",n.lineWidth=3):(n.strokeStyle=`rgba(255, 0, 60, ${a.alpha})`,n.shadowBlur=20,n.shadowColor="#ff003c",n.lineWidth=4),n.beginPath(),n.arc(a.x,a.y,a.radius,0,Math.PI*2),n.stroke()}var De=document.getElementById("gameCanvas"),B=De.getContext("2d"),b=document.getElementById("phase-badge"),M=document.getElementById("hud-instructions"),_=document.getElementById("hud-top"),H=document.getElementById("leaderboard"),he=document.getElementById("leaderboard-list"),z=document.getElementById("leaderboard-ticker"),J=document.getElementById("ticker-track"),m=document.getElementById("timer-display"),Q=document.getElementById("kill-feed"),Ce=document.getElementById("emotes-layer"),F=document.getElementById("celebration-display"),f=document.getElementById("hud-avatar"),R=document.getElementById("celebration-recap"),W=document.getElementById("recap-list"),Z=document.getElementById("config-modal"),be=document.getElementById("config-table-body"),ve=document.getElementById("config-dismiss-hint"),Me=document.getElementById("debug-bar"),P=document.getElementById("debug-input"),Te=document.getElementById("debug-send-btn"),x=K(),c={},E=[],I=[],g=C,xe=C,y=0,A="",V=0,Ie=performance.now(),l=null,N=new Set,T={},Y={},Se=new j;function w(n){let t=document.createElement("div");return t.innerText=n,t.innerHTML}function Ee(n){let t=document.createElement("div");t.className="kill-message",t.innerText=n,Q.appendChild(t),setTimeout(()=>{Q.contains(t)&&Q.removeChild(t)},5e3)}function D(n,t){I.push({x:n,y:t,radius:0,maxRadius:30,alpha:1,isSpark:!0})}function we(n,t,a,e){for(let s in c){if(s===e)continue;let o=c[s];if(o.isDead)continue;if(Math.hypot(o.x-n,o.y-t)<a+20){o.isDead=!0;let i=document.getElementById("emote-"+s);i&&(i.style.display="none")}}}function Pe(n,t,a,e){if(e){if(N.has(e))return;N.add(e)}q(x,n,t,a),I.push({x:n,y:t,radius:0,maxRadius:a,alpha:1})}function ke(){E=[];for(let n in c){let t=c[n];if(!t.isDead)if(t.actionType===de){let a=(t.angle??45)*Math.PI/180,s=Math.min(Math.max(t.power??50,1),100)/5,o=Math.cos(a)*s,r=-Math.sin(a)*s,i=`${l?.roundId??0}_${n}`,d=25,u=t.x+Math.cos(a)*d,v=t.y-10-Math.sin(a)*d;E.push({id:i,x:u,y:v,vx:o,vy:r,owner:n,emoteUrl:t.emoteUrl})}else t.actionType===O?(t.moveTarget=t.x-(l?.moveDistance??100),t.moving=!0,t.speedMultiplier=1,t.hasBounced=!1):t.actionType===U&&(t.moveTarget=t.x+(l?.moveDistance??100),t.moving=!0,t.speedMultiplier=1,t.hasBounced=!1)}}function Ae(n){let t=!!l?.bouncyWalls;for(let a in c){let e=c[a];if(e.isDead)continue;if(g===L&&e.moving){let o=(e.speedMultiplier??1)*2*n;e.actionType===O?(e.x-=o,e.x<=20?t&&!e.hasBounced?(e.x=20,e.actionType=U,e.moveTarget=e.x+(l?.moveDistance??100),e.speedMultiplier=1.5,e.hasBounced=!0,D(20,e.y)):(e.moveTarget!==void 0&&e.x<=e.moveTarget||e.x<=20)&&(e.moving=!1,e.x<20&&(e.x=20)):e.moveTarget!==void 0&&e.x<=e.moveTarget&&(e.moving=!1)):e.actionType===U&&(e.x+=o,e.x>=1900?t&&!e.hasBounced?(e.x=1900,e.actionType=O,e.moveTarget=e.x-(l?.moveDistance??100),e.speedMultiplier=1.5,e.hasBounced=!0,D(1900,e.y)):(e.moveTarget!==void 0&&e.x>=e.moveTarget||e.x>=1900)&&(e.moving=!1,e.x>1900&&(e.x=1900)):e.moveTarget!==void 0&&e.x>=e.moveTarget&&(e.moving=!1))}e.x<20&&(e.x=20),e.x>1900&&(e.x=1900);let s=G(x,e.x);if(e.y<s?(e.y+=5*n,e.y>s&&(e.y=s)):e.y=s,e.y>=1080){e.isDead=!0;let o=document.getElementById("emote-"+a);o&&(o.style.display="none")}}for(let a=E.length-1;a>=0;a--){let e=E[a];e.x+=e.vx*n,e.vy+=.2*n,e.y+=e.vy*n;let s=!1;if(e.y<0?t&&(e.y=0,e.vy=Math.abs(e.vy)*1.1,e.vx*=1.1,e.bounces=(e.bounces??0)+1,D(Math.max(0,Math.min(1920,e.x)),0),e.bounces>15&&(s=!0)):e.y>1080&&(t?(e.y=1080,e.vy=-Math.abs(e.vy)*1.1,e.vx*=1.1,e.bounces=(e.bounces??0)+1,D(Math.max(0,Math.min(1920,e.x)),1080),e.bounces>15&&(s=!0)):s=!0),s||(e.x<0?t?(e.x=0,e.vx=Math.abs(e.vx)*1.1,e.vy*=1.1,e.bounces=(e.bounces??0)+1,D(0,Math.max(0,Math.min(1080,e.y))),e.bounces>15&&(s=!0)):s=!0:e.x>1920&&(t?(e.x=1920,e.vx=-Math.abs(e.vx)*1.1,e.vy*=1.1,e.bounces=(e.bounces??0)+1,D(1920,Math.max(0,Math.min(1080,e.y))),e.bounces>15&&(s=!0)):s=!0)),!s&&e.y>=0&&e.y>=G(x,e.x)&&(s=!0,g===S?I.push({x:e.x,y:e.y,radius:0,maxRadius:50,alpha:1}):(Pe(e.x,e.y,50,e.id),we(e.x,e.y,50,e.owner))),!s)for(let o in c){if(o===e.owner)continue;let r=c[o];if(!r.isDead&&Math.hypot(r.x-e.x,r.y-e.y)<20){s=!0,Pe(e.x,e.y,50,e.id),we(e.x,e.y,50,e.owner);break}}s&&E.splice(a,1)}for(let a=I.length-1;a>=0;a--){let e=I[a];e.radius+=2*n,e.alpha-=.05*n,e.alpha<=0&&I.splice(a,1)}if(g===S){let a=V>0?performance.now()-V:0;if(A&&A!=="AI"&&a<3500&&Math.random()<.2){let e=c[A];E.push({x:Math.random()*1920,y:-30,vx:(Math.random()-.5)*5,vy:Math.random()*5+5,owner:A,emoteUrl:e?.emoteUrl??""})}}}function $e(n){if(!he)return;let t=Object.entries(n).sort((s,o)=>o[1]-s[1]),a=t.slice(0,3),e=t.slice(3,8);he.innerHTML=a.map(([s,o])=>{let r=T[s]&&T[s]!=="fetching",i=r?T[s]:"";return`
+"use strict";
+(() => {
+  // web/src/types.ts
+  var WIDTH = 1920;
+  var HEIGHT = 1080;
+  var PhaseIdle = "IDLE";
+  var PhaseInput = "INPUT";
+  var PhaseAction = "ACTION";
+  var PhaseCelebration = "CELEBRATION";
+  var MsgStateUpdate = "STATE_UPDATE";
+  var MsgExecuteActions = "EXECUTE_ACTIONS";
+  var MsgResetTerrain = "RESET_TERRAIN";
+  var MsgPlayerDied = "PLAYER_DIED";
+  var MsgChatCommand = "CHAT_COMMAND";
+  var MsgTerrainCrater = "TERRAIN_CRATER";
+  var ActionFire = "FIRE";
+  var ActionLeft = "LEFT";
+  var ActionRight = "RIGHT";
+
+  // web/src/terrain.ts
+  function createDefaultTerrain() {
+    const terrain2 = new Array(WIDTH);
+    let y = HEIGHT / 2 + (Math.random() * 200 - 100);
+    let slope = 0;
+    terrain2[0] = y;
+    for (let x = 1; x < WIDTH; x++) {
+      slope += (Math.random() - 0.5) * 0.15;
+      if (slope > 2) slope = 2;
+      if (slope < -2) slope = -2;
+      y += slope;
+      if (y < 250) slope += 0.05;
+      if (y > HEIGHT - 200) slope -= 0.05;
+      terrain2[x] = y;
+    }
+    return terrain2;
+  }
+  function getTerrainHeight(terrain2, x) {
+    if (terrain2.length === 0) return HEIGHT / 2;
+    const idx = Math.min(WIDTH - 1, Math.max(0, Math.floor(x)));
+    return terrain2[idx];
+  }
+  function getTerrainSlopeAngle(terrain2, x, delta = 5) {
+    const x1 = Math.max(0, Math.floor(x - delta));
+    const x2 = Math.min(WIDTH - 1, Math.floor(x + delta));
+    const y1 = terrain2[x1];
+    const y2 = terrain2[x2];
+    return Math.atan2(y2 - y1, x2 - x1);
+  }
+  function applyCrater(terrain2, cx, cy, radius) {
+    const startX = Math.max(0, Math.floor(cx - radius));
+    const endX = Math.min(WIDTH, Math.ceil(cx + radius));
+    for (let x = startX; x < endX; x++) {
+      const dx = x - cx;
+      const dy = Math.sqrt(radius * radius - dx * dx);
+      const circleBottomY = cy + dy;
+      if (terrain2[x] < circleBottomY) {
+        terrain2[x] = circleBottomY;
+      }
+    }
+  }
+
+  // web/src/network.ts
+  var NetworkManager = class {
+    ws = null;
+    isDisconnected = false;
+    reconnectInterval = null;
+    healthCheckInterval = null;
+    messageHandlers = [];
+    constructor() {
+      this.connect();
+    }
+    onMessage(handler) {
+      this.messageHandlers.push(handler);
+    }
+    send(msg) {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(msg));
+      }
+    }
+    connect() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      try {
+        this.ws = new WebSocket(wsUrl);
+        this.ws.onopen = () => {
+          console.log("Connected to StreamTanks server");
+          if (this.isDisconnected) {
+            window.location.reload();
+            return;
+          }
+          if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
+          this.healthCheckInterval = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.CLOSED) {
+              this.handleDisconnect();
+            }
+          }, 2e3);
+        };
+        this.ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            for (const handler of this.messageHandlers) {
+              handler(msg);
+            }
+          } catch (err) {
+            console.error("Failed to parse WebSocket message:", err);
+          }
+        };
+        this.ws.onclose = () => this.handleDisconnect();
+        this.ws.onerror = () => this.handleDisconnect();
+      } catch {
+        this.handleDisconnect();
+      }
+    }
+    handleDisconnect() {
+      if (this.isDisconnected) return;
+      this.isDisconnected = true;
+      console.log("Server disconnected or unreachable. Hiding overlay and waiting for server to return...");
+      const container = document.getElementById("game-container");
+      if (container) {
+        container.style.display = "none";
+      }
+      document.body.style.display = "none";
+      if (this.healthCheckInterval) {
+        clearInterval(this.healthCheckInterval);
+        this.healthCheckInterval = null;
+      }
+      if (this.reconnectInterval) clearInterval(this.reconnectInterval);
+      this.reconnectInterval = setInterval(async () => {
+        try {
+          const res = await fetch("/", { method: "HEAD", cache: "no-store" });
+          if (res.ok) {
+            console.log("Server detected back online! Reloading page...");
+            clearInterval(this.reconnectInterval);
+            window.location.reload();
+          }
+        } catch {
+        }
+      }, 1500);
+    }
+  };
+
+  // web/src/renderer.ts
+  function drawTerrain(ctx2, terrain2) {
+    if (terrain2.length === 0) return;
+    ctx2.beginPath();
+    ctx2.moveTo(0, terrain2[0]);
+    for (let x = 1; x < WIDTH; x++) {
+      ctx2.lineTo(x, terrain2[x]);
+    }
+    ctx2.strokeStyle = "#ff003c";
+    ctx2.lineWidth = 4;
+    ctx2.shadowBlur = 15;
+    ctx2.shadowColor = "#ff003c";
+    ctx2.stroke();
+    ctx2.lineTo(WIDTH, HEIGHT);
+    ctx2.lineTo(0, HEIGHT);
+    ctx2.closePath();
+    ctx2.fillStyle = "rgba(255, 0, 60, 0.02)";
+    ctx2.fill();
+    ctx2.shadowBlur = 0;
+  }
+  function drawGiantProtractor(ctx2) {
+    ctx2.save();
+    ctx2.translate(250, 250);
+    ctx2.strokeStyle = "rgba(0, 255, 204, 0.5)";
+    ctx2.lineWidth = 10;
+    ctx2.shadowBlur = 20;
+    ctx2.shadowColor = "#00ffcc";
+    ctx2.beginPath();
+    ctx2.arc(0, 0, 150, Math.PI, 0);
+    ctx2.stroke();
+    ctx2.fillStyle = "#00ffcc";
+    ctx2.font = "24px Orbitron";
+    ctx2.textAlign = "center";
+    ctx2.textBaseline = "middle";
+    const majorAngles = [
+      { deg: 0, label: "0\xB0" },
+      { deg: 45, label: "45\xB0" },
+      { deg: 90, label: "90\xB0" },
+      { deg: 135, label: "135\xB0" },
+      { deg: 180, label: "180\xB0" }
+    ];
+    for (const { deg, label } of majorAngles) {
+      const rad = deg * Math.PI / 180;
+      const x1 = Math.cos(rad) * 140;
+      const y1 = -Math.sin(rad) * 140;
+      const x2 = Math.cos(rad) * 160;
+      const y2 = -Math.sin(rad) * 160;
+      ctx2.lineWidth = 4;
+      ctx2.beginPath();
+      ctx2.moveTo(x1, y1);
+      ctx2.lineTo(x2, y2);
+      ctx2.stroke();
+      const tx = Math.cos(rad) * 190;
+      const ty = -Math.sin(rad) * 190;
+      ctx2.fillText(label, tx, ty);
+    }
+    ctx2.lineWidth = 2;
+    for (let deg = 15; deg < 180; deg += 15) {
+      if (deg % 45 === 0) continue;
+      const rad = deg * Math.PI / 180;
+      const x1 = Math.cos(rad) * 145;
+      const y1 = -Math.sin(rad) * 145;
+      const x2 = Math.cos(rad) * 155;
+      const y2 = -Math.sin(rad) * 155;
+      ctx2.beginPath();
+      ctx2.moveTo(x1, y1);
+      ctx2.lineTo(x2, y2);
+      ctx2.stroke();
+    }
+    ctx2.fillStyle = "#ff003c";
+    ctx2.shadowColor = "#ff003c";
+    ctx2.beginPath();
+    ctx2.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.restore();
+  }
+  function drawTanks(ctx2, players2, terrain2, currentPhase2, emotesLayer2, _emoteCache) {
+    for (const name in players2) {
+      const p = players2[name];
+      let imgEl = document.getElementById("emote-" + name);
+      if (!imgEl && p.emoteUrl) {
+        imgEl = document.createElement("img");
+        imgEl.id = "emote-" + name;
+        imgEl.className = "tank-emote";
+        imgEl.src = p.emoteUrl;
+        emotesLayer2.appendChild(imgEl);
+      }
+      if (p.isDead) {
+        if (imgEl) imgEl.style.display = "none";
+        continue;
+      }
+      ctx2.save();
+      ctx2.translate(p.x, p.y);
+      const angle = getTerrainSlopeAngle(terrain2, p.x);
+      ctx2.rotate(angle);
+      ctx2.strokeStyle = "#ff003c";
+      ctx2.lineWidth = 2;
+      ctx2.shadowBlur = 10;
+      ctx2.shadowColor = "#ff003c";
+      ctx2.strokeRect(-15, -10, 30, 10);
+      ctx2.restore();
+      if (imgEl) {
+        imgEl.style.display = "block";
+        imgEl.style.left = p.x - 14 + "px";
+        imgEl.style.top = p.y - 35 + "px";
+        imgEl.style.transformOrigin = "14px 35px";
+        imgEl.style.transform = `rotate(${angle}rad)`;
+      }
+      const displayName = p.name && !p.name.startsWith("_bot_") ? p.name : !name.startsWith("_bot_") && !p.isBot ? name : "";
+      if (displayName) {
+        ctx2.fillStyle = "#fff";
+        ctx2.font = "16px Orbitron";
+        ctx2.textAlign = "center";
+        ctx2.shadowBlur = 5;
+        ctx2.shadowColor = "#000";
+        ctx2.fillText(displayName, p.x, p.y + 20);
+      }
+      if (currentPhase2 === "INPUT") {
+        ctx2.strokeStyle = p.fired ? "#00ffcc" : "#ff003c";
+        ctx2.shadowColor = ctx2.strokeStyle;
+        ctx2.lineWidth = 2;
+        ctx2.beginPath();
+        ctx2.arc(p.x, p.y - 10, 50, Math.PI, 0);
+        ctx2.stroke();
+        ctx2.fillStyle = ctx2.strokeStyle;
+        ctx2.font = "10px Orbitron";
+        const angles = [0, 45, 90, 135, 180];
+        for (const deg of angles) {
+          const rad = deg * Math.PI / 180;
+          const innerR = 45;
+          const outerR = 50;
+          ctx2.beginPath();
+          ctx2.moveTo(p.x + Math.cos(rad) * innerR, p.y - 10 - Math.sin(rad) * innerR);
+          ctx2.lineTo(p.x + Math.cos(rad) * outerR, p.y - 10 - Math.sin(rad) * outerR);
+          ctx2.stroke();
+          ctx2.fillText(deg.toString(), p.x + Math.cos(rad) * 60, p.y - 10 - Math.sin(rad) * 60);
+        }
+        const aimAngle = (p.lastAngle ?? 45) * Math.PI / 180;
+        ctx2.beginPath();
+        ctx2.moveTo(p.x, p.y - 10);
+        ctx2.lineTo(p.x + Math.cos(aimAngle) * 50, p.y - 10 - Math.sin(aimAngle) * 50);
+        ctx2.stroke();
+      }
+    }
+  }
+  function drawProjectiles(ctx2, projectiles2, emoteCache2) {
+    for (const proj of projectiles2) {
+      const img = proj.emoteUrl ? emoteCache2[proj.emoteUrl] : null;
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx2.shadowBlur = 0;
+        ctx2.drawImage(img, proj.x - 7, proj.y - 7, 14, 14);
+      } else {
+        ctx2.fillStyle = "#00ffcc";
+        ctx2.shadowBlur = 10;
+        ctx2.shadowColor = "#00ffcc";
+        ctx2.beginPath();
+        ctx2.arc(proj.x, proj.y, 4, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    }
+  }
+  function drawExplosions(ctx2, explosions2) {
+    for (const exp of explosions2) {
+      if (exp.isSpark) {
+        ctx2.strokeStyle = `rgba(0, 255, 204, ${exp.alpha})`;
+        ctx2.shadowBlur = 15;
+        ctx2.shadowColor = "#00ffcc";
+        ctx2.lineWidth = 3;
+      } else {
+        ctx2.strokeStyle = `rgba(255, 0, 60, ${exp.alpha})`;
+        ctx2.shadowBlur = 20;
+        ctx2.shadowColor = "#ff003c";
+        ctx2.lineWidth = 4;
+      }
+      ctx2.beginPath();
+      ctx2.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
+      ctx2.stroke();
+    }
+  }
+
+  // web/src/game.ts
+  var canvas = document.getElementById("gameCanvas");
+  var ctx = canvas.getContext("2d");
+  var phaseBadge = document.getElementById("phase-badge");
+  var hudInstructions = document.getElementById("hud-instructions");
+  var hudTop = document.getElementById("hud-top");
+  var leaderboardEl = document.getElementById("leaderboard");
+  var leaderboardList = document.getElementById("leaderboard-list");
+  var leaderboardTicker = document.getElementById("leaderboard-ticker");
+  var tickerTrack = document.getElementById("ticker-track");
+  var timerDisplay = document.getElementById("timer-display");
+  var killFeed = document.getElementById("kill-feed");
+  var emotesLayer = document.getElementById("emotes-layer");
+  var celebrationDisplay = document.getElementById("celebration-display");
+  var hudAvatar = document.getElementById("hud-avatar");
+  var celebrationRecap = document.getElementById("celebration-recap");
+  var recapList = document.getElementById("recap-list");
+  var configModal = document.getElementById("config-modal");
+  var configTableBody = document.getElementById("config-table-body");
+  var configDismissHint = document.getElementById("config-dismiss-hint");
+  var debugBar = document.getElementById("debug-bar");
+  var debugInput = document.getElementById("debug-input");
+  var debugSendBtn = document.getElementById("debug-send-btn");
+  var terrain = createDefaultTerrain();
+  var players = {};
+  var projectiles = [];
+  var explosions = [];
+  var currentPhase = PhaseIdle;
+  var previousPhase = PhaseIdle;
+  var inputTimer = 0;
+  var celebrationWinner = "";
+  var celebrationStartTime = 0;
+  var lastTime = performance.now();
+  var stateRef = null;
+  var appliedCraterIds = /* @__PURE__ */ new Set();
+  var avatarCache = {};
+  var emoteCache = {};
+  var net = new NetworkManager();
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function showKillMessage(msg) {
+    const el = document.createElement("div");
+    el.className = "kill-message";
+    el.innerText = msg;
+    killFeed.appendChild(el);
+    setTimeout(() => {
+      if (killFeed.contains(el)) {
+        killFeed.removeChild(el);
+      }
+    }, 5e3);
+  }
+  function createWallSpark(cx, cy) {
+    explosions.push({ x: cx, y: cy, radius: 0, maxRadius: 30, alpha: 1, isSpark: true });
+  }
+  function checkTankCollisions(cx, cy, radius, owner) {
+    for (const name in players) {
+      if (name === owner) continue;
+      const p = players[name];
+      if (p.isDead) continue;
+      const dist = Math.hypot(p.x - cx, p.y - cy);
+      if (dist < radius + 20) {
+        p.isDead = true;
+        const imgEl = document.getElementById("emote-" + name);
+        if (imgEl) imgEl.style.display = "none";
+      }
+    }
+  }
+  function destroyTerrain(cx, cy, radius, shotId) {
+    if (shotId) {
+      if (appliedCraterIds.has(shotId)) {
+        return;
+      }
+      appliedCraterIds.add(shotId);
+    }
+    applyCrater(terrain, cx, cy, radius);
+    explosions.push({ x: cx, y: cy, radius: 0, maxRadius: radius, alpha: 1 });
+  }
+  function executeActions() {
+    projectiles = [];
+    for (const name in players) {
+      const p = players[name];
+      if (p.isDead) continue;
+      if (p.actionType === ActionFire) {
+        const rad = (p.angle ?? 45) * Math.PI / 180;
+        const powerClamped = Math.min(Math.max(p.power ?? 50, 1), 100);
+        const powerScaled = powerClamped / 5;
+        const vx = Math.cos(rad) * powerScaled;
+        const vy = -Math.sin(rad) * powerScaled;
+        const shotId = `${stateRef?.roundId ?? 0}_${name}`;
+        const muzzleDist = 25;
+        const spawnX = p.x + Math.cos(rad) * muzzleDist;
+        const spawnY = p.y - 10 - Math.sin(rad) * muzzleDist;
+        projectiles.push({
+          id: shotId,
+          x: spawnX,
+          y: spawnY,
+          vx,
+          vy,
+          owner: name,
+          emoteUrl: p.emoteUrl
+        });
+      } else if (p.actionType === ActionLeft) {
+        p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
+        p.moving = true;
+        p.speedMultiplier = 1;
+        p.hasBounced = false;
+      } else if (p.actionType === ActionRight) {
+        p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
+        p.moving = true;
+        p.speedMultiplier = 1;
+        p.hasBounced = false;
+      }
+    }
+  }
+  function updatePhysics(dtScale) {
+    const bouncyWalls = !!stateRef?.bouncyWalls;
+    for (const name in players) {
+      const p = players[name];
+      if (p.isDead) continue;
+      if (currentPhase === PhaseAction && p.moving) {
+        const currentSpeed = (p.speedMultiplier ?? 1) * 2 * dtScale;
+        if (p.actionType === ActionLeft) {
+          p.x -= currentSpeed;
+          if (p.x <= 20) {
+            if (bouncyWalls && !p.hasBounced) {
+              p.x = 20;
+              p.actionType = ActionRight;
+              p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
+              p.speedMultiplier = 1.5;
+              p.hasBounced = true;
+              createWallSpark(20, p.y);
+            } else if (p.moveTarget !== void 0 && p.x <= p.moveTarget || p.x <= 20) {
+              p.moving = false;
+              if (p.x < 20) p.x = 20;
+            }
+          } else if (p.moveTarget !== void 0 && p.x <= p.moveTarget) {
+            p.moving = false;
+          }
+        } else if (p.actionType === ActionRight) {
+          p.x += currentSpeed;
+          if (p.x >= WIDTH - 20) {
+            if (bouncyWalls && !p.hasBounced) {
+              p.x = WIDTH - 20;
+              p.actionType = ActionLeft;
+              p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
+              p.speedMultiplier = 1.5;
+              p.hasBounced = true;
+              createWallSpark(WIDTH - 20, p.y);
+            } else if (p.moveTarget !== void 0 && p.x >= p.moveTarget || p.x >= WIDTH - 20) {
+              p.moving = false;
+              if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+            }
+          } else if (p.moveTarget !== void 0 && p.x >= p.moveTarget) {
+            p.moving = false;
+          }
+        }
+      }
+      if (p.x < 20) p.x = 20;
+      if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+      const floorY = getTerrainHeight(terrain, p.x);
+      if (p.y < floorY) {
+        p.y += 5 * dtScale;
+        if (p.y > floorY) p.y = floorY;
+      } else {
+        p.y = floorY;
+      }
+      if (p.y >= HEIGHT) {
+        p.isDead = true;
+        const imgEl = document.getElementById("emote-" + name);
+        if (imgEl) imgEl.style.display = "none";
+      }
+    }
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const proj = projectiles[i];
+      proj.x += proj.vx * dtScale;
+      proj.vy += 0.2 * dtScale;
+      proj.y += proj.vy * dtScale;
+      let hit = false;
+      if (proj.y < 0) {
+        if (bouncyWalls) {
+          proj.y = 0;
+          proj.vy = Math.abs(proj.vy) * 1.1;
+          proj.vx *= 1.1;
+          proj.bounces = (proj.bounces ?? 0) + 1;
+          createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), 0);
+          if (proj.bounces > 15) hit = true;
+        }
+      } else if (proj.y > HEIGHT) {
+        if (bouncyWalls) {
+          proj.y = HEIGHT;
+          proj.vy = -Math.abs(proj.vy) * 1.1;
+          proj.vx *= 1.1;
+          proj.bounces = (proj.bounces ?? 0) + 1;
+          createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), HEIGHT);
+          if (proj.bounces > 15) hit = true;
+        } else {
+          hit = true;
+        }
+      }
+      if (!hit) {
+        if (proj.x < 0) {
+          if (bouncyWalls) {
+            proj.x = 0;
+            proj.vx = Math.abs(proj.vx) * 1.1;
+            proj.vy *= 1.1;
+            proj.bounces = (proj.bounces ?? 0) + 1;
+            createWallSpark(0, Math.max(0, Math.min(HEIGHT, proj.y)));
+            if (proj.bounces > 15) hit = true;
+          } else {
+            hit = true;
+          }
+        } else if (proj.x > WIDTH) {
+          if (bouncyWalls) {
+            proj.x = WIDTH;
+            proj.vx = -Math.abs(proj.vx) * 1.1;
+            proj.vy *= 1.1;
+            proj.bounces = (proj.bounces ?? 0) + 1;
+            createWallSpark(WIDTH, Math.max(0, Math.min(HEIGHT, proj.y)));
+            if (proj.bounces > 15) hit = true;
+          } else {
+            hit = true;
+          }
+        }
+      }
+      if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(terrain, proj.x)) {
+        hit = true;
+        if (currentPhase === PhaseCelebration) {
+          explosions.push({ x: proj.x, y: proj.y, radius: 0, maxRadius: 50, alpha: 1 });
+        } else {
+          destroyTerrain(proj.x, proj.y, 50, proj.id);
+          checkTankCollisions(proj.x, proj.y, 50, proj.owner);
+        }
+      }
+      if (!hit) {
+        for (const name in players) {
+          if (name === proj.owner) continue;
+          const p = players[name];
+          if (p.isDead) continue;
+          if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
+            hit = true;
+            destroyTerrain(proj.x, proj.y, 50, proj.id);
+            checkTankCollisions(proj.x, proj.y, 50, proj.owner);
+            break;
+          }
+        }
+      }
+      if (hit) {
+        projectiles.splice(i, 1);
+      }
+    }
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      const exp = explosions[i];
+      exp.radius += 2 * dtScale;
+      exp.alpha -= 0.05 * dtScale;
+      if (exp.alpha <= 0) {
+        explosions.splice(i, 1);
+      }
+    }
+    if (currentPhase === PhaseCelebration) {
+      const elapsed = celebrationStartTime > 0 ? performance.now() - celebrationStartTime : 0;
+      if (celebrationWinner && celebrationWinner !== "AI" && elapsed < 3500 && Math.random() < 0.2) {
+        const p = players[celebrationWinner];
+        projectiles.push({
+          x: Math.random() * WIDTH,
+          y: -30,
+          vx: (Math.random() - 0.5) * 5,
+          vy: Math.random() * 5 + 5,
+          owner: celebrationWinner,
+          emoteUrl: p?.emoteUrl ?? ""
+        });
+      }
+    }
+  }
+  function updateLeaderboard(lb) {
+    if (!leaderboardList) return;
+    const sorted = Object.entries(lb).sort((a, b) => b[1] - a[1]);
+    const top3 = sorted.slice(0, 3);
+    const runnersUp = sorted.slice(3, 8);
+    leaderboardList.innerHTML = top3.map(
+      ([name, wins]) => {
+        const hasUrl = avatarCache[name] && avatarCache[name] !== "fetching";
+        const avatarUrl = hasUrl ? avatarCache[name] : "";
+        return `
         <li>
             <div class="lb-player">
-                <img id="lb-avatar-${s}" class="lb-avatar" src="${i}" style="${r?"":"display:none;"}">
-                <span class="lb-name" title="${w(s)}">${w(s)}</span>
+                <img id="lb-avatar-${name}" class="lb-avatar" src="${avatarUrl}" style="${hasUrl ? "" : "display:none;"}">
+                <span class="lb-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
             </div>
-            <span class="lb-score">${o}</span>
+            <span class="lb-score">${wins}</span>
         </li>
-    `}).join("");for(let[s]of a)T[s]||(T[s]="fetching",fetch(`https://decapi.me/twitch/avatar/${s}`).then(o=>o.text()).then(o=>{T[s]=o;let r=document.getElementById(`lb-avatar-${s}`);r&&(r.src=o,r.style.display="inline-block")}));if(z&&J)if(e.length>0){z.style.display="block";let s=e.map(([o,r],i)=>`<span class="ticker-item"><span class="ticker-rank">#${i+4}</span> <span class="ticker-name">${w(o)}</span> <span class="ticker-score">(${r})</span></span>`).join('<span class="ticker-sep">\u2022</span>');J.innerHTML=s+'<span class="ticker-sep">\u2022</span>'+s}else z.style.display="none",J.innerHTML=""}function Le(n){if(!Z||!be)return;if(!!!l?.showConfig){Z.style.display="none";return}Z.style.display="flex",ve&&(ve.innerText=`${n}config off`);let a=l?.physicsSpeed??.5,e=l?.inputDuration??20,s=l?.autoRound??0,o='<span class="config-val badge-off">Off</span>';s===-1?o='<span class="config-val badge-on">Immediate</span>':s>0&&(o=`<span class="config-val badge-on">${s} min</span>`);let i=l?.idleMessage??!0?'<span class="config-val badge-on">On</span>':'<span class="config-val badge-off">Off</span>',u=!!l?.bouncyWalls?'<span class="config-val badge-on">On (+10% bullet, +50% tank)</span>':'<span class="config-val badge-off">Off</span>',v=[{label:"Command Prefix",value:`<span class="config-val">"${n}"</span>`,cmd:`<span class="config-cmd">${n}prefix <span class="cmd-param">&lt;str&gt;</span></span>`},{label:"Physics / Speed",value:`<span class="config-val">${a}x</span>`,cmd:`<span class="config-cmd">${n}speed <span class="cmd-param">&lt;0.1 - 3.0&gt;</span></span>`},{label:"Command Time",value:`<span class="config-val">${e}s</span>`,cmd:`<span class="config-cmd">${n}commandtime <span class="cmd-param">&lt;seconds&gt;</span></span>`},{label:"Auto Round",value:o,cmd:`<span class="config-cmd">${n}autoround <span class="cmd-param">&lt;minutes|-1|off&gt;</span></span>`},{label:"Idle Message",value:i,cmd:`<span class="config-cmd">${n}idlemessage <span class="cmd-param">&lt;on|off&gt;</span></span>`},{label:"Bouncy Walls",value:u,cmd:`<span class="config-cmd">${n}bouncywalls <span class="cmd-param">&lt;on|off&gt;</span></span>`},{label:"Terrain Bounds",value:`<span class="config-val">${l?.terrainMin??20}% - ${l?.terrainMax??75}%</span>`,cmd:`<span class="config-cmd">${n}terrain <span class="cmd-param">&lt;min%&gt; &lt;max%&gt;</span></span>`},{label:"Start Game Perm",value:`<span class="config-val badge-on">${l?.startPerm??"broadcaster"}</span>`,cmd:`<span class="config-cmd">${n}startperm <span class="cmd-param">&lt;role&gt;</span></span>`},{label:"Config Perm",value:`<span class="config-val badge-on">${l?.configPerm??"broadcaster"}</span>`,cmd:`<span class="config-cmd">${n}configperm <span class="cmd-param">&lt;role&gt;</span></span>`},{label:"Min Players",value:`<span class="config-val">${l?.minPlayers??5}</span>`,cmd:`<span class="config-cmd">${n}minplayers <span class="cmd-param">&lt;2-20&gt;</span></span>`},{label:"Bot Fill",value:l?.botFill??!0?'<span class="config-val badge-on">ON</span>':'<span class="config-val badge-off">OFF</span>',cmd:`<span class="config-cmd">${n}botfill <span class="cmd-param">&lt;on|off&gt;</span></span>`},{label:"Bot Points",value:`<span class="config-val">${l?.botPoints??1}</span>`,cmd:`<span class="config-cmd">${n}botpoints <span class="cmd-param">&lt;0-10&gt;</span></span>`},{label:"Clear Leaderboard",value:'<span class="config-val badge-off">Wipe</span>',cmd:`<span class="config-cmd">${n}clearleaderboard</span>`},{label:"Delete Player",value:'<span class="config-val badge-off">Remove</span>',cmd:`<span class="config-cmd">${n}deleteplayer <span class="cmd-param">&lt;user&gt;</span></span>`}];be.innerHTML=v.map($=>`
+    `;
+      }
+    ).join("");
+    for (const [name] of top3) {
+      if (!avatarCache[name]) {
+        avatarCache[name] = "fetching";
+        fetch(`https://decapi.me/twitch/avatar/${name}`).then((r) => r.text()).then((url) => {
+          avatarCache[name] = url;
+          const img = document.getElementById(`lb-avatar-${name}`);
+          if (img) {
+            img.src = url;
+            img.style.display = "inline-block";
+          }
+        });
+      }
+    }
+    if (leaderboardTicker && tickerTrack) {
+      if (runnersUp.length > 0) {
+        leaderboardTicker.style.display = "block";
+        const itemsHtml = runnersUp.map(([name, wins], idx) => {
+          const rank = idx + 4;
+          return `<span class="ticker-item"><span class="ticker-rank">#${rank}</span> <span class="ticker-name">${escapeHtml(name)}</span> <span class="ticker-score">(${wins})</span></span>`;
+        }).join('<span class="ticker-sep">\u2022</span>');
+        tickerTrack.innerHTML = itemsHtml + '<span class="ticker-sep">\u2022</span>' + itemsHtml;
+      } else {
+        leaderboardTicker.style.display = "none";
+        tickerTrack.innerHTML = "";
+      }
+    }
+  }
+  function renderConfigModal(prefix) {
+    if (!configModal || !configTableBody) return;
+    const isVisible = !!stateRef?.showConfig;
+    if (!isVisible) {
+      configModal.style.display = "none";
+      return;
+    }
+    configModal.style.display = "flex";
+    if (configDismissHint) {
+      configDismissHint.innerText = `${prefix}config off`;
+    }
+    const speedVal = stateRef?.physicsSpeed ?? 0.5;
+    const roundDuration = stateRef?.inputDuration ?? 20;
+    const autoRoundVal = stateRef?.autoRound ?? 0;
+    let autoRoundDisplay = `<span class="config-val badge-off">Off</span>`;
+    if (autoRoundVal === -1) {
+      autoRoundDisplay = `<span class="config-val badge-on">Immediate</span>`;
+    } else if (autoRoundVal > 0) {
+      autoRoundDisplay = `<span class="config-val badge-on">${autoRoundVal} min</span>`;
+    }
+    const idleMessageVal = stateRef?.idleMessage ?? true;
+    const idleMessageDisplay = idleMessageVal ? `<span class="config-val badge-on">On</span>` : `<span class="config-val badge-off">Off</span>`;
+    const bouncyVal = !!stateRef?.bouncyWalls;
+    const bouncyDisplay = bouncyVal ? `<span class="config-val badge-on">On (+10% bullet, +50% tank)</span>` : `<span class="config-val badge-off">Off</span>`;
+    const rows = [
+      {
+        label: "Command Prefix",
+        value: `<span class="config-val">"${prefix}"</span>`,
+        cmd: `<span class="config-cmd">${prefix}prefix <span class="cmd-param">&lt;str&gt;</span></span>`
+      },
+      {
+        label: "Physics / Speed",
+        value: `<span class="config-val">${speedVal}x</span>`,
+        cmd: `<span class="config-cmd">${prefix}speed <span class="cmd-param">&lt;0.1 - 3.0&gt;</span></span>`
+      },
+      {
+        label: "Command Time",
+        value: `<span class="config-val">${roundDuration}s</span>`,
+        cmd: `<span class="config-cmd">${prefix}commandtime <span class="cmd-param">&lt;seconds&gt;</span></span>`
+      },
+      {
+        label: "Auto Round",
+        value: autoRoundDisplay,
+        cmd: `<span class="config-cmd">${prefix}autoround <span class="cmd-param">&lt;minutes|-1|off&gt;</span></span>`
+      },
+      {
+        label: "Idle Message",
+        value: idleMessageDisplay,
+        cmd: `<span class="config-cmd">${prefix}idlemessage <span class="cmd-param">&lt;on|off&gt;</span></span>`
+      },
+      {
+        label: "Bouncy Walls",
+        value: bouncyDisplay,
+        cmd: `<span class="config-cmd">${prefix}bouncywalls <span class="cmd-param">&lt;on|off&gt;</span></span>`
+      },
+      {
+        label: "Terrain Bounds",
+        value: `<span class="config-val">${stateRef?.terrainMin ?? 20}% - ${stateRef?.terrainMax ?? 75}%</span>`,
+        cmd: `<span class="config-cmd">${prefix}terrain <span class="cmd-param">&lt;min%&gt; &lt;max%&gt;</span></span>`
+      },
+      {
+        label: "Start Game Perm",
+        value: `<span class="config-val badge-on">${stateRef?.startPerm ?? "broadcaster"}</span>`,
+        cmd: `<span class="config-cmd">${prefix}startperm <span class="cmd-param">&lt;role&gt;</span></span>`
+      },
+      {
+        label: "Config Perm",
+        value: `<span class="config-val badge-on">${stateRef?.configPerm ?? "broadcaster"}</span>`,
+        cmd: `<span class="config-cmd">${prefix}configperm <span class="cmd-param">&lt;role&gt;</span></span>`
+      },
+      {
+        label: "Min Players",
+        value: `<span class="config-val">${stateRef?.minPlayers ?? 5}</span>`,
+        cmd: `<span class="config-cmd">${prefix}minplayers <span class="cmd-param">&lt;2-20&gt;</span></span>`
+      },
+      {
+        label: "Bot Fill",
+        value: stateRef?.botFill ?? true ? '<span class="config-val badge-on">ON</span>' : '<span class="config-val badge-off">OFF</span>',
+        cmd: `<span class="config-cmd">${prefix}botfill <span class="cmd-param">&lt;on|off&gt;</span></span>`
+      },
+      {
+        label: "Bot Points",
+        value: `<span class="config-val">${stateRef?.botPoints ?? 1}</span>`,
+        cmd: `<span class="config-cmd">${prefix}botpoints <span class="cmd-param">&lt;0-10&gt;</span></span>`
+      },
+      {
+        label: "Clear Leaderboard",
+        value: `<span class="config-val badge-off">Wipe</span>`,
+        cmd: `<span class="config-cmd">${prefix}clearleaderboard</span>`
+      },
+      {
+        label: "Delete Player",
+        value: `<span class="config-val badge-off">Remove</span>`,
+        cmd: `<span class="config-cmd">${prefix}deleteplayer <span class="cmd-param">&lt;user&gt;</span></span>`
+      }
+    ];
+    configTableBody.innerHTML = rows.map(
+      (r) => `
         <tr>
-            <td class="config-label">${$.label}</td>
-            <td>${$.value}</td>
-            <td>${$.cmd}</td>
+            <td class="config-label">${r.label}</td>
+            <td>${r.value}</td>
+            <td>${r.cmd}</td>
         </tr>
-    `).join("")}function Re(){let n=l?.prefix??"%";if(g===C){let t=l?.idleMessage??!0;_&&(_.style.display=t?"flex":"none"),b&&(b.innerText="WAITING FOR PLAYERS",b.className="hud-badge idle"),M&&(M.innerHTML=`Type <span class="cmd-highlight">${n}startgame</span> to start | <span class="cmd-highlight">${n}join</span> to join`),m.style.display="none",F.style.display="none",f&&(f.style.display="none",f.src=""),H&&(H.style.display=t?"block":"none")}else if(g===X)_&&(_.style.display="flex"),b&&(b.innerText="INPUT PHASE",b.className="hud-badge input"),M&&(M.innerHTML=`<span class="cmd-highlight">${n}fire &lt;angle&gt; &lt;power&gt;</span> | <span class="cmd-highlight">${n}left</span> | <span class="cmd-highlight">${n}right</span>`),f&&(f.style.display="none",f.src=""),m.style.display="block",F.style.display="none",H&&(H.style.display="none"),xe!==X?(y=l?.timerRemaining??l?.inputDuration??20,m.innerText=y.toString(),y<=5&&y>0?(m.style.color="#ff003c",m.style.animation="pulse 0.5s infinite alternate",m.style.textShadow="0 0 15px #ff003c"):(m.style.color="#fff",m.style.animation="none",m.style.textShadow="0 0 8px #00ffcc")):l?.timerRemaining!==void 0&&l.timerRemaining<y&&(y=l.timerRemaining,m.innerText=y.toString(),y<=5&&y>0?(m.style.color="#ff003c",m.style.animation="pulse 0.5s infinite alternate",m.style.textShadow="0 0 15px #ff003c"):(m.style.color="#fff",m.style.animation="none",m.style.textShadow="0 0 8px #00ffcc"));else if(g===L)b&&(b.innerText="ACTION PHASE",b.className="hud-badge action"),M&&(M.innerHTML="Executing commands..."),f&&(f.style.display="none",f.src=""),m.style.display="none",F.style.display="none",H&&(H.style.display="block");else if(g===S){b&&(b.innerText="GAME OVER",b.className="hud-badge celebration");let t=l?.winner!==void 0&&l.winner!==""?l.winner:A;if(t&&t!=="AI"?(M&&(M.innerHTML=`<span class="hud-winner">${w(t)} WINS!</span>`),f&&(T[t]&&T[t]!=="fetching"?(f.src=T[t],f.style.display="block"):fetch(`https://decapi.me/twitch/avatar/${t}`).then(a=>a.text()).then(a=>{T[t]=a,f&&(f.src=a,f.style.display="block")}))):(f&&(f.style.display="none",f.src=""),M&&(M.innerHTML='<span class="hud-ai-winner">Humanity failed to defeat the AI</span>')),m.style.display="none",F.style.display="flex",R&&W){W.innerHTML="";let a=l?.matchKills??[];if(a.length>0){R.style.display="flex";for(let e of a){let s=document.createElement("li");s.className="recap-item";let o=e.victimIsBot,r=o?"recap-name bot":"recap-name player",i=o?'<span class="bot-tag">BOT</span>':"";if(e.killer){let d=e.killerIsBot,u=d?"recap-name bot":"recap-name player",v=d?'<span class="bot-tag">BOT</span>':"";s.innerHTML=`<span class="${u}">${w(e.killer)}${v}</span><span class="recap-action">\u{1F4A5} destroyed</span><span class="${r}">${w(e.victim)}${i}</span>`}else s.innerHTML=`<span class="${r}">${w(e.victim)}${i}</span><span class="recap-action abyss">fell into the abyss</span>`;W.appendChild(s)}}else R.style.display="none"}}Me&&(Me.style.display=l?.debug?"flex":"none"),P&&(P.placeholder=`Type command (${n}startgame, ${n}fire 45 60, ${n}left, etc.)...`),Le(n),xe=g}setInterval(()=>{g==="INPUT"&&y>0&&(y--,y<=5&&y>0?(m.innerText=y.toString(),m.style.color="#ff003c",m.style.animation="pulse 0.5s infinite alternate",m.style.textShadow="0 0 15px #ff003c"):y>5?(m.innerText=y.toString(),m.style.color="#ffffff",m.style.animation="none",m.style.textShadow="0 0 8px #00ffcc"):(m.innerText="FIRING!",m.style.color="#ffaa00",m.style.animation="none",m.style.textShadow="0 0 10px #ffaa00"))},1e3);Se.onMessage(n=>{if(n.type===se){let t=n.payload;l=t,t.phase===L&&g!==L&&ke(),t.phase===S&&g!==S&&(V=performance.now()),t.phase===C&&g!==C&&(A="",f&&(f.style.display="none",f.src=""),W&&(W.innerHTML=""),R&&(R.style.display="none")),g=t.phase,t.leaderboard&&$e(t.leaderboard),Array.isArray(t.terrain)&&t.terrain.length===1920&&(x=t.terrain);let a=t.players;for(let e in a){if(c[e])c[e].x=a[e].x,c[e].y=a[e].y,c[e].moving=a[e].moving,c[e].moveTarget=a[e].moveTarget,c[e].speedMultiplier=a[e].speedMultiplier,c[e].hasBounced=a[e].hasBounced,c[e].isBot=a[e].isBot,c[e].lastAngle=a[e].lastAngle,c[e].lastPower=a[e].lastPower,c[e].fired=a[e].fired,c[e].angle=a[e].angle,c[e].power=a[e].power,c[e].emote=a[e].emote,c[e].emoteUrl=a[e].emoteUrl,c[e].isDead=a[e].isDead,c[e].actionType=a[e].actionType;else{let o=typeof a[e].x=="number"&&a[e].x>0?a[e].x:Math.random()*1820+50,r=typeof a[e].y=="number"?a[e].y:G(x,o),i=(Math.random()>.5?1:-1)*1.5;c[e]={...a[e],x:o,y:r,dx:i};let d=c[e].emoteUrl||"https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0";if(!Y[d]){let u=new Image;u.src=d,Y[d]=u}}let s=a[e].emoteUrl;if(s){let o=document.getElementById("emote-"+e);o||(o=document.createElement("img"),o.id="emote-"+e,o.className="tank-emote",Ce.appendChild(o)),o.src!==s&&(o.src=s)}}for(let e in c)if(!a[e]){let s=document.getElementById("emote-"+e);s&&s.remove(),delete c[e]}Re()}else if(n.type===oe)ke();else if(n.type===ie){l&&Array.isArray(l.terrain)&&l.terrain.length===1920?x=l.terrain:x=K(),E=[],I.length=0,N.clear(),V=0;for(let t in c)l&&l.players&&l.players[t]&&typeof l.players[t].x=="number"?c[t].x=l.players[t].x:c[t].x=Math.random()*1820+50,c[t].y=-50}else if(n.type===le){let t=n.payload;if(t.killer?Ee(`${t.killer} destroyed ${t.victim}!`):Ee(`${t.victim} fell into the abyss!`),c[t.victim]){c[t.victim].isDead=!0;let a=document.getElementById("emote-"+t.victim);a&&(a.style.display="none")}}else if(n.type===ce){let t=n.payload;if(t&&typeof t.x=="number"){if(t.id&&N.has(t.id))return;t.id&&N.add(t.id),q(x,t.x,t.y,t.radius),I.some(e=>Math.hypot(e.x-t.x,e.y-t.y)<t.radius)||I.push({x:t.x,y:t.y,radius:0,maxRadius:t.radius,alpha:1})}}});function We(){B.clearRect(0,0,1920,1080),pe(B,x),g==="INPUT"&&fe(B),ue(B,c,x,g,Ce,Y),ye(B,E,Y),ge(B,I)}function Be(n){let t=n-Ie;Ie=n;let e=Math.min(Math.max(t,0),100)/(1e3/60),s=l&&typeof l.physicsSpeed=="number"?l.physicsSpeed:.5,o=e*s;Ae(o),We(),requestAnimationFrame(Be)}requestAnimationFrame(Be);function He(){if(!P)return;let n=P.value.trim();n&&(Se.send({type:re,payload:n}),P.value="")}Te&&Te.addEventListener("click",He);P&&P.addEventListener("keydown",n=>{n.key==="Enter"&&He()});})();
+    `
+    ).join("");
+  }
+  function updateUI() {
+    const prefix = stateRef?.prefix ?? "%";
+    if (currentPhase === PhaseIdle) {
+      const showIdle = stateRef?.idleMessage ?? true;
+      if (hudTop) hudTop.style.display = showIdle ? "flex" : "none";
+      if (phaseBadge) {
+        phaseBadge.innerText = "WAITING FOR PLAYERS";
+        phaseBadge.className = "hud-badge idle";
+      }
+      if (hudInstructions) {
+        hudInstructions.innerHTML = `Type <span class="cmd-highlight">${prefix}startgame</span> to start | <span class="cmd-highlight">${prefix}join</span> to join`;
+      }
+      timerDisplay.style.display = "none";
+      celebrationDisplay.style.display = "none";
+      if (hudAvatar) {
+        hudAvatar.style.display = "none";
+        hudAvatar.src = "";
+      }
+      if (leaderboardEl) leaderboardEl.style.display = showIdle ? "block" : "none";
+    } else if (currentPhase === PhaseInput) {
+      if (hudTop) hudTop.style.display = "flex";
+      if (phaseBadge) {
+        phaseBadge.innerText = "INPUT PHASE";
+        phaseBadge.className = "hud-badge input";
+      }
+      if (hudInstructions) {
+        hudInstructions.innerHTML = `<span class="cmd-highlight">${prefix}fire &lt;angle&gt; &lt;power&gt;</span> | <span class="cmd-highlight">${prefix}left</span> | <span class="cmd-highlight">${prefix}right</span>`;
+      }
+      if (hudAvatar) {
+        hudAvatar.style.display = "none";
+        hudAvatar.src = "";
+      }
+      timerDisplay.style.display = "block";
+      celebrationDisplay.style.display = "none";
+      if (leaderboardEl) leaderboardEl.style.display = "none";
+      if (previousPhase !== PhaseInput) {
+        inputTimer = stateRef?.timerRemaining ?? stateRef?.inputDuration ?? 20;
+        timerDisplay.innerText = inputTimer.toString();
+        if (inputTimer <= 5 && inputTimer > 0) {
+          timerDisplay.style.color = "#ff003c";
+          timerDisplay.style.animation = "pulse 0.5s infinite alternate";
+          timerDisplay.style.textShadow = "0 0 15px #ff003c";
+        } else {
+          timerDisplay.style.color = "#fff";
+          timerDisplay.style.animation = "none";
+          timerDisplay.style.textShadow = "0 0 8px #00ffcc";
+        }
+      } else if (stateRef?.timerRemaining !== void 0 && stateRef.timerRemaining < inputTimer) {
+        inputTimer = stateRef.timerRemaining;
+        timerDisplay.innerText = inputTimer.toString();
+        if (inputTimer <= 5 && inputTimer > 0) {
+          timerDisplay.style.color = "#ff003c";
+          timerDisplay.style.animation = "pulse 0.5s infinite alternate";
+          timerDisplay.style.textShadow = "0 0 15px #ff003c";
+        } else {
+          timerDisplay.style.color = "#fff";
+          timerDisplay.style.animation = "none";
+          timerDisplay.style.textShadow = "0 0 8px #00ffcc";
+        }
+      }
+    } else if (currentPhase === PhaseAction) {
+      if (phaseBadge) {
+        phaseBadge.innerText = "ACTION PHASE";
+        phaseBadge.className = "hud-badge action";
+      }
+      if (hudInstructions) {
+        hudInstructions.innerHTML = "Executing commands...";
+      }
+      if (hudAvatar) {
+        hudAvatar.style.display = "none";
+        hudAvatar.src = "";
+      }
+      timerDisplay.style.display = "none";
+      celebrationDisplay.style.display = "none";
+      if (leaderboardEl) leaderboardEl.style.display = "block";
+    } else if (currentPhase === PhaseCelebration) {
+      if (phaseBadge) {
+        phaseBadge.innerText = "GAME OVER";
+        phaseBadge.className = "hud-badge celebration";
+      }
+      const win = stateRef?.winner !== void 0 && stateRef.winner !== "" ? stateRef.winner : celebrationWinner;
+      if (win && win !== "AI") {
+        if (hudInstructions) {
+          hudInstructions.innerHTML = `<span class="hud-winner">${escapeHtml(win)} WINS!</span>`;
+        }
+        if (hudAvatar) {
+          if (avatarCache[win] && avatarCache[win] !== "fetching") {
+            hudAvatar.src = avatarCache[win];
+            hudAvatar.style.display = "block";
+          } else {
+            fetch(`https://decapi.me/twitch/avatar/${win}`).then((r) => r.text()).then((url) => {
+              avatarCache[win] = url;
+              if (hudAvatar) {
+                hudAvatar.src = url;
+                hudAvatar.style.display = "block";
+              }
+            });
+          }
+        }
+      } else {
+        if (hudAvatar) {
+          hudAvatar.style.display = "none";
+          hudAvatar.src = "";
+        }
+        if (hudInstructions) {
+          hudInstructions.innerHTML = '<span class="hud-ai-winner">Humanity failed to defeat the AI</span>';
+        }
+      }
+      timerDisplay.style.display = "none";
+      celebrationDisplay.style.display = "flex";
+      if (celebrationRecap && recapList) {
+        recapList.innerHTML = "";
+        const kills = stateRef?.matchKills ?? [];
+        if (kills.length > 0) {
+          celebrationRecap.style.display = "flex";
+          for (const k of kills) {
+            const li = document.createElement("li");
+            li.className = "recap-item";
+            const victimIsBot = k.victimIsBot;
+            const victimClass = victimIsBot ? "recap-name bot" : "recap-name player";
+            const victimTag = victimIsBot ? '<span class="bot-tag">BOT</span>' : "";
+            if (k.killer) {
+              const killerIsBot = k.killerIsBot;
+              const killerClass = killerIsBot ? "recap-name bot" : "recap-name player";
+              const killerTag = killerIsBot ? '<span class="bot-tag">BOT</span>' : "";
+              li.innerHTML = `<span class="${killerClass}">${escapeHtml(k.killer)}${killerTag}</span><span class="recap-action">\u{1F4A5} destroyed</span><span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}</span>`;
+            } else {
+              li.innerHTML = `<span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}</span><span class="recap-action abyss">fell into the abyss</span>`;
+            }
+            recapList.appendChild(li);
+          }
+        } else {
+          celebrationRecap.style.display = "none";
+        }
+      }
+    }
+    if (debugBar) {
+      debugBar.style.display = stateRef?.debug ? "flex" : "none";
+    }
+    if (debugInput) {
+      debugInput.placeholder = `Type command (${prefix}startgame, ${prefix}fire 45 60, ${prefix}left, etc.)...`;
+    }
+    renderConfigModal(prefix);
+    previousPhase = currentPhase;
+  }
+  setInterval(() => {
+    if (currentPhase === "INPUT" && inputTimer > 0) {
+      inputTimer--;
+      if (inputTimer <= 5 && inputTimer > 0) {
+        timerDisplay.innerText = inputTimer.toString();
+        timerDisplay.style.color = "#ff003c";
+        timerDisplay.style.animation = "pulse 0.5s infinite alternate";
+        timerDisplay.style.textShadow = "0 0 15px #ff003c";
+      } else if (inputTimer > 5) {
+        timerDisplay.innerText = inputTimer.toString();
+        timerDisplay.style.color = "#ffffff";
+        timerDisplay.style.animation = "none";
+        timerDisplay.style.textShadow = "0 0 8px #00ffcc";
+      } else {
+        timerDisplay.innerText = "FIRING!";
+        timerDisplay.style.color = "#ffaa00";
+        timerDisplay.style.animation = "none";
+        timerDisplay.style.textShadow = "0 0 10px #ffaa00";
+      }
+    }
+  }, 1e3);
+  net.onMessage((msg) => {
+    if (msg.type === MsgStateUpdate) {
+      const state = msg.payload;
+      stateRef = state;
+      if (state.phase === PhaseAction && currentPhase !== PhaseAction) {
+        executeActions();
+      }
+      if (state.phase === PhaseCelebration && currentPhase !== PhaseCelebration) {
+        celebrationStartTime = performance.now();
+      }
+      if (state.phase === PhaseIdle && currentPhase !== PhaseIdle) {
+        celebrationWinner = "";
+        if (hudAvatar) {
+          hudAvatar.style.display = "none";
+          hudAvatar.src = "";
+        }
+        if (recapList) recapList.innerHTML = "";
+        if (celebrationRecap) celebrationRecap.style.display = "none";
+      }
+      currentPhase = state.phase;
+      if (state.leaderboard) {
+        updateLeaderboard(state.leaderboard);
+      }
+      if (Array.isArray(state.terrain) && state.terrain.length === WIDTH) {
+        terrain = state.terrain;
+      }
+      const newPlayers = state.players;
+      for (const name in newPlayers) {
+        if (!players[name]) {
+          let spawnX = typeof newPlayers[name].x === "number" && newPlayers[name].x > 0 ? newPlayers[name].x : Math.random() * (WIDTH - 100) + 50;
+          let spawnY = typeof newPlayers[name].y === "number" ? newPlayers[name].y : getTerrainHeight(terrain, spawnX);
+          let moveDx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+          players[name] = {
+            ...newPlayers[name],
+            x: spawnX,
+            y: spawnY,
+            dx: moveDx
+          };
+          const emoteUrl = players[name].emoteUrl || `https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0`;
+          if (!emoteCache[emoteUrl]) {
+            const img = new Image();
+            img.src = emoteUrl;
+            emoteCache[emoteUrl] = img;
+          }
+        } else {
+          players[name].x = newPlayers[name].x;
+          players[name].y = newPlayers[name].y;
+          players[name].moving = newPlayers[name].moving;
+          players[name].moveTarget = newPlayers[name].moveTarget;
+          players[name].speedMultiplier = newPlayers[name].speedMultiplier;
+          players[name].hasBounced = newPlayers[name].hasBounced;
+          players[name].isBot = newPlayers[name].isBot;
+          players[name].lastAngle = newPlayers[name].lastAngle;
+          players[name].lastPower = newPlayers[name].lastPower;
+          players[name].fired = newPlayers[name].fired;
+          players[name].angle = newPlayers[name].angle;
+          players[name].power = newPlayers[name].power;
+          players[name].emote = newPlayers[name].emote;
+          players[name].emoteUrl = newPlayers[name].emoteUrl;
+          players[name].isDead = newPlayers[name].isDead;
+          players[name].actionType = newPlayers[name].actionType;
+        }
+        const url = newPlayers[name].emoteUrl;
+        if (url) {
+          let imgEl = document.getElementById("emote-" + name);
+          if (!imgEl) {
+            imgEl = document.createElement("img");
+            imgEl.id = "emote-" + name;
+            imgEl.className = "tank-emote";
+            emotesLayer.appendChild(imgEl);
+          }
+          if (imgEl.src !== url) {
+            imgEl.src = url;
+          }
+        }
+      }
+      for (const name in players) {
+        if (!newPlayers[name]) {
+          const imgEl = document.getElementById("emote-" + name);
+          if (imgEl) imgEl.remove();
+          delete players[name];
+        }
+      }
+      updateUI();
+    } else if (msg.type === MsgExecuteActions) {
+      executeActions();
+    } else if (msg.type === MsgResetTerrain) {
+      if (stateRef && Array.isArray(stateRef.terrain) && stateRef.terrain.length === WIDTH) {
+        terrain = stateRef.terrain;
+      } else {
+        terrain = createDefaultTerrain();
+      }
+      projectiles = [];
+      explosions.length = 0;
+      appliedCraterIds.clear();
+      celebrationStartTime = 0;
+      for (const name in players) {
+        if (stateRef && stateRef.players && stateRef.players[name] && typeof stateRef.players[name].x === "number") {
+          players[name].x = stateRef.players[name].x;
+        } else {
+          players[name].x = Math.random() * (WIDTH - 100) + 50;
+        }
+        players[name].y = -50;
+      }
+    } else if (msg.type === MsgPlayerDied) {
+      const payload = msg.payload;
+      if (payload.killer) {
+        showKillMessage(`${payload.killer} destroyed ${payload.victim}!`);
+      } else {
+        showKillMessage(`${payload.victim} fell into the abyss!`);
+      }
+      if (players[payload.victim]) {
+        players[payload.victim].isDead = true;
+        const imgEl = document.getElementById("emote-" + payload.victim);
+        if (imgEl) imgEl.style.display = "none";
+      }
+    } else if (msg.type === MsgTerrainCrater) {
+      const crater = msg.payload;
+      if (crater && typeof crater.x === "number") {
+        if (crater.id && appliedCraterIds.has(crater.id)) {
+          return;
+        }
+        if (crater.id) {
+          appliedCraterIds.add(crater.id);
+        }
+        applyCrater(terrain, crater.x, crater.y, crater.radius);
+        const hasExplosion = explosions.some(
+          (e) => Math.hypot(e.x - crater.x, e.y - crater.y) < crater.radius
+        );
+        if (!hasExplosion) {
+          explosions.push({ x: crater.x, y: crater.y, radius: 0, maxRadius: crater.radius, alpha: 1 });
+        }
+      }
+    }
+  });
+  function draw() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    drawTerrain(ctx, terrain);
+    if (currentPhase === "INPUT") {
+      drawGiantProtractor(ctx);
+    }
+    drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache);
+    drawProjectiles(ctx, projectiles, emoteCache);
+    drawExplosions(ctx, explosions);
+  }
+  function gameLoop(time) {
+    const rawDt = time - lastTime;
+    lastTime = time;
+    const dtClamped = Math.min(Math.max(rawDt, 0), 100);
+    const baseDtScale = dtClamped / (1e3 / 60);
+    const speedMultiplier = stateRef && typeof stateRef.physicsSpeed === "number" ? stateRef.physicsSpeed : 0.5;
+    const dtScale = baseDtScale * speedMultiplier;
+    updatePhysics(dtScale);
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+  requestAnimationFrame(gameLoop);
+  function sendDebugCommand() {
+    if (!debugInput) return;
+    const cmd = debugInput.value.trim();
+    if (!cmd) return;
+    net.send({ type: MsgChatCommand, payload: cmd });
+    debugInput.value = "";
+  }
+  if (debugSendBtn) {
+    debugSendBtn.addEventListener("click", sendDebugCommand);
+  }
+  if (debugInput) {
+    debugInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        sendDebugCommand();
+      }
+    });
+  }
+})();
 //# sourceMappingURL=game.js.map
