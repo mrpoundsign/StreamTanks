@@ -77,6 +77,7 @@ func resetMatchState() {
 	gameState.Phase = phaseIdle
 	gameState.Winner = ""
 	gameState.RoundID = 0
+	gameState.TimerRemaining = 0
 	gameState.MatchKills = nil
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 	gameState.Projectiles = []Projectile{}
@@ -355,6 +356,32 @@ func startInputPhase() {
 	// Start timer for input phase
 	roundID := gameState.RoundID
 	roundDuration := time.Duration(initialDurationSec) * time.Second
+
+	// 1-second countdown ticker for synchronized HUD and viewer extension timer updates
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				gameState.mu.Lock()
+				if gameState.Phase != phaseInput || gameState.RoundID != roundID {
+					gameState.mu.Unlock()
+					return
+				}
+				if gameState.TimerRemaining > 0 {
+					gameState.TimerRemaining--
+					gameState.mu.Unlock()
+					broadcast(msgStateUpdate, &gameState)
+				} else {
+					gameState.mu.Unlock()
+				}
+			case <-cancelChan:
+				return
+			}
+		}
+	}()
+
 	go func() {
 		select {
 		case <-time.After(roundDuration):
@@ -498,6 +525,7 @@ func executeActionPhaseForRound(roundID int) {
 	}
 	fastForwardScheduled = false
 	gameState.Phase = phaseAction
+	gameState.TimerRemaining = 0
 
 	// Apply action for those who didn't command: random mix of move and fire
 	for _, p := range gameState.Players {

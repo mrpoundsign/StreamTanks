@@ -1,10 +1,12 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
 	"golang.org/x/net/websocket"
-	"net/http"
 )
 
 func TestHubRegistration(t *testing.T) {
@@ -59,5 +61,57 @@ func TestTrustFirstAuthenticator(t *testing.T) {
 	_, err2 := auth.Authenticate(req2)
 	if err2 == nil {
 		t.Error("Expected error for missing channel parameter")
+	}
+}
+
+func TestHubStateCachingAndViewerSync(t *testing.T) {
+	hub := NewHub()
+	channel := "mrpoundsign"
+
+	// Broadcast payload before any viewer connects
+	statePayload := map[string]interface{}{
+		"type": "GAME_STATE",
+		"payload": map[string]interface{}{
+			"phase":           "INPUT",
+			"timer_remaining": float64(15),
+			"round_id":        float64(2),
+		},
+	}
+	hub.BroadcastToViewers(channel, statePayload)
+
+	// Verify cached state in hub
+	hub.mu.RLock()
+	cached := hub.latestState[channel]
+	hub.mu.RUnlock()
+	if cached == nil {
+		t.Fatalf("Expected state to be cached for channel %s, but got nil", channel)
+	}
+
+	// Create a mock server that receives initial message from RegisterViewer
+	msgChan := make(chan map[string]interface{}, 1)
+	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		var received map[string]interface{}
+		if err := websocket.JSON.Receive(ws, &received); err == nil {
+			msgChan <- received
+		}
+	}))
+	defer server.Close()
+
+	viewerWs, err := websocket.Dial("ws://"+server.Listener.Addr().String(), "", "http://localhost/")
+	if err != nil {
+		t.Fatalf("Failed to create mock viewer websocket: %v", err)
+	}
+	defer func() { _ = viewerWs.Close() }()
+
+	// RegisterViewer should immediately deliver cached state
+	hub.RegisterViewer(channel, viewerWs)
+
+	select {
+	case msg := <-msgChan:
+		if msg["type"] != "GAME_STATE" {
+			t.Errorf("Expected message type 'GAME_STATE', got '%v'", msg["type"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Errorf("Timed out waiting for initial cached state delivery to new viewer")
 	}
 }

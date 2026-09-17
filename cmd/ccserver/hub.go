@@ -13,72 +13,89 @@ import (
 
 // Hub manages active host connections and routes viewer messages to them.
 type Hub struct {
-	mu      sync.RWMutex
-	hosts   map[string]*websocket.Conn
-	viewers map[string]map[*websocket.Conn]bool
+	mu          sync.RWMutex
+	hosts       map[string]*websocket.Conn
+	viewers     map[string]map[*websocket.Conn]bool
+	latestState map[string]interface{}
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		hosts:   make(map[string]*websocket.Conn),
-		viewers: make(map[string]map[*websocket.Conn]bool),
+		hosts:       make(map[string]*websocket.Conn),
+		viewers:     make(map[string]map[*websocket.Conn]bool),
+		latestState: make(map[string]interface{}),
 	}
 }
 
 // RegisterHost attempts to claim the specified channel for a host connection.
 // Returns an error if the channel is already actively claimed.
 func (h *Hub) RegisterHost(channel string, ws *websocket.Conn) error {
+	cleanChan := strings.ToLower(channel)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if _, exists := h.hosts[channel]; exists {
+	if _, exists := h.hosts[cleanChan]; exists {
 		return errors.New("channel already claimed")
 	}
 
-	h.hosts[channel] = ws
-	log.Printf("Host registered for channel: %s", channel)
+	h.hosts[cleanChan] = ws
+	log.Printf("Host registered for channel: %s", cleanChan)
 	return nil
 }
 
 // UnregisterHost removes the host connection for a channel.
 func (h *Hub) UnregisterHost(channel string, ws *websocket.Conn) {
+	cleanChan := strings.ToLower(channel)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if existingWs, exists := h.hosts[channel]; exists && existingWs == ws {
-		delete(h.hosts, channel)
-		log.Printf("Host unregistered for channel: %s", channel)
+	if existingWs, exists := h.hosts[cleanChan]; exists && existingWs == ws {
+		delete(h.hosts, cleanChan)
+		delete(h.latestState, cleanChan)
+		log.Printf("Host unregistered for channel: %s", cleanChan)
 	}
 }
 
 // RegisterViewer registers a viewer connection for a channel.
+// If cached state exists for the channel, it is immediately sent to the new viewer.
 func (h *Hub) RegisterViewer(channel string, ws *websocket.Conn) {
+	cleanChan := strings.ToLower(channel)
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if _, exists := h.viewers[channel]; !exists {
-		h.viewers[channel] = make(map[*websocket.Conn]bool)
+	if _, exists := h.viewers[cleanChan]; !exists {
+		h.viewers[cleanChan] = make(map[*websocket.Conn]bool)
 	}
-	h.viewers[channel][ws] = true
-}
+	h.viewers[cleanChan][ws] = true
+	cached := h.latestState[cleanChan]
+	h.mu.Unlock()
 
-// UnregisterViewer removes a viewer connection.
-func (h *Hub) UnregisterViewer(channel string, ws *websocket.Conn) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if _, exists := h.viewers[channel]; exists {
-		delete(h.viewers[channel], ws)
-		if len(h.viewers[channel]) == 0 {
-			delete(h.viewers, channel)
+	if cached != nil {
+		if err := websocket.JSON.Send(ws, cached); err != nil {
+			log.Printf("Failed to send initial cached state to viewer on %s: %v", cleanChan, err)
 		}
 	}
 }
 
-// BroadcastToViewers sends a message to all viewers listening to a channel.
+// UnregisterViewer removes a viewer connection.
+func (h *Hub) UnregisterViewer(channel string, ws *websocket.Conn) {
+	cleanChan := strings.ToLower(channel)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, exists := h.viewers[cleanChan]; exists {
+		delete(h.viewers[cleanChan], ws)
+		if len(h.viewers[cleanChan]) == 0 {
+			delete(h.viewers, cleanChan)
+		}
+	}
+}
+
+// BroadcastToViewers sends a message to all viewers listening to a channel and caches the latest payload.
 func (h *Hub) BroadcastToViewers(channel string, payload interface{}) {
-	h.mu.RLock()
-	channelViewers, exists := h.viewers[channel]
+	cleanChan := strings.ToLower(channel)
+	h.mu.Lock()
+	h.latestState[cleanChan] = payload
+	channelViewers, exists := h.viewers[cleanChan]
 	if !exists {
-		h.mu.RUnlock()
+		h.mu.Unlock()
 		return
 	}
 	// Copy connections so we don't hold the lock while sending over the network
@@ -86,19 +103,20 @@ func (h *Hub) BroadcastToViewers(channel string, payload interface{}) {
 	for ws := range channelViewers {
 		conns = append(conns, ws)
 	}
-	h.mu.RUnlock()
+	h.mu.Unlock()
 
 	for _, ws := range conns {
 		if err := websocket.JSON.Send(ws, payload); err != nil {
-			log.Printf("Failed to broadcast to viewer on channel %s: %v", channel, err)
+			log.Printf("Failed to broadcast to viewer on channel %s: %v", cleanChan, err)
 		}
 	}
 }
 
 // RouteMessage forwards a JSON payload to the specific channel's host.
 func (h *Hub) RouteMessage(channel string, payload interface{}) error {
+	cleanChan := strings.ToLower(channel)
 	h.mu.RLock()
-	ws, exists := h.hosts[channel]
+	ws, exists := h.hosts[cleanChan]
 	h.mu.RUnlock()
 
 	if !exists {
@@ -109,7 +127,7 @@ func (h *Hub) RouteMessage(channel string, payload interface{}) error {
 	// Since we are using golang.org/x/net/websocket, we use JSON.Send.
 	err := websocket.JSON.Send(ws, payload)
 	if err != nil {
-		log.Printf("Error sending message to host on channel %s: %v", channel, err)
+		log.Printf("Error sending message to host on channel %s: %v", cleanChan, err)
 		return err
 	}
 

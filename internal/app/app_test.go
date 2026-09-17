@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"math"
@@ -2134,5 +2135,84 @@ func TestCCCommandsAndStorage(t *testing.T) {
 
 	// Clean up
 	StopCCClient()
+}
+
+func TestBroadcastViewerState(t *testing.T) {
+	resetGameStateForTest()
+
+	msgChan := make(chan WSMessage, 10)
+	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		for {
+			var m WSMessage
+			if err := websocket.JSON.Receive(ws, &m); err == nil {
+				msgChan <- m
+			} else {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+
+	clientWS, err := websocket.Dial("ws://"+server.Listener.Addr().String(), "", "http://localhost/")
+	if err != nil {
+		t.Fatalf("failed to dial mock server: %v", err)
+	}
+	defer func() { _ = clientWS.Close() }()
+
+	setCCConn(clientWS)
+	defer setCCConn(nil)
+
+	// 1. Initial broadcast sends state
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	gameState.RoundID = 1
+	gameState.TimerRemaining = 15
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+
+	select {
+	case msg := <-msgChan:
+		if msg.Type != "GAME_STATE" {
+			t.Fatalf("expected message type GAME_STATE, got %s", msg.Type)
+		}
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		if err := json.Unmarshal(payloadBytes, &vs); err != nil {
+			t.Fatalf("failed to unmarshal ViewerState: %v", err)
+		}
+		if vs.Phase != phaseInput || vs.RoundID != 1 || vs.TimerRemaining != 15 {
+			t.Errorf("unexpected ViewerState: %+v", vs)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for ViewerState")
+	}
+
+	// 2. Duplicate broadcast should be deduplicated (no message sent)
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		t.Fatalf("expected duplicate state to be suppressed, but received: %+v", msg)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no duplicate message
+	}
+
+	// 3. Changed timer should trigger new update
+	gameState.mu.Lock()
+	gameState.TimerRemaining = 14
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		_ = json.Unmarshal(payloadBytes, &vs)
+		if vs.TimerRemaining != 14 {
+			t.Errorf("expected updated TimerRemaining 14, got %d", vs.TimerRemaining)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for updated ViewerState")
+	}
 }
 
