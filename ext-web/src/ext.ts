@@ -23,17 +23,55 @@ let currentPhaseStr: string = "IDLE";
 
 // DOM Element Selectors
 const viewportSvg = document.getElementById("viewport-svg") as SVGSVGElement | null;
+const protractorOverlayGroup = document.getElementById("protractor-overlay-group");
 const protractorHitArea = document.getElementById("protractor-hit-area");
 const angleNeedle = document.getElementById("angle-needle");
 const needleHead = document.getElementById("needle-head");
+const angleBadgeGroup = document.getElementById("angle-badge-group");
+const mobileAngleBadge = document.querySelector(".mobile-angle-badge") as HTMLElement | null;
 const valAngle = document.getElementById("val-angle");
+
+function setAimingVisible(visible: boolean) {
+    if (protractorOverlayGroup) {
+        if (visible) {
+            protractorOverlayGroup.classList.remove("hidden");
+        } else {
+            protractorOverlayGroup.classList.add("hidden");
+        }
+    }
+    if (angleNeedle) {
+        angleNeedle.style.display = visible ? "" : "none";
+    }
+    if (needleHead) {
+        needleHead.style.display = visible ? "" : "none";
+    }
+    if (angleBadgeGroup) {
+        angleBadgeGroup.style.display = visible ? "" : "none";
+    }
+    if (mobileAngleBadge) {
+        mobileAngleBadge.style.display = visible ? "" : "none";
+    }
+}
 
 const sliderPower = document.getElementById("slider-power") as HTMLInputElement | null;
 const valPower = document.getElementById("val-power");
 const verticalPowerTrack = document.getElementById("vertical-power-track");
 const powerFillBar = document.getElementById("power-fill-bar");
-const powerThumb = document.getElementById("power-thumb");
 const phaseBadge = document.getElementById("phase-badge");
+const desktopTimer = document.getElementById("desktop-timer");
+const currentActionBadge = document.getElementById("current-action-badge");
+
+function setCurrentAction(actionText: string) {
+    if (currentActionBadge) {
+        if (actionText && currentPhaseStr === "INPUT") {
+            currentActionBadge.textContent = actionText;
+            currentActionBadge.classList.remove("hidden");
+        } else {
+            currentActionBadge.textContent = "";
+            currentActionBadge.classList.add("hidden");
+        }
+    }
+}
 
 const adminControls = document.getElementById("admin-controls");
 const playerSetup = document.getElementById("player-setup");
@@ -221,7 +259,17 @@ function startCountdownTimer() {
         if (currentPhaseStr === "INPUT" && localTimerRemaining > 0) {
             localTimerRemaining--;
             if (phaseBadge) {
-                phaseBadge.textContent = `INPUT (${localTimerRemaining}s)`;
+                phaseBadge.textContent = isMobile ? `INPUT (${localTimerRemaining}s)` : "INPUT PHASE";
+            }
+            if (desktopTimer) {
+                desktopTimer.textContent = `${localTimerRemaining}`;
+                if (localTimerRemaining <= 5) {
+                    desktopTimer.style.color = "#ff003c";
+                    desktopTimer.style.textShadow = "0 0 15px #ff003c";
+                } else {
+                    desktopTimer.style.color = "#ffffff";
+                    desktopTimer.style.textShadow = "0 0 10px #00ffcc";
+                }
             }
         }
     }, 1000);
@@ -236,16 +284,33 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
         phaseBadge.className = `phase-badge ${cleanPhase.toLowerCase()}`;
         if (cleanPhase === "INPUT") {
             const displaySec = timerRemaining !== undefined ? timerRemaining : localTimerRemaining;
-            phaseBadge.textContent = displaySec > 0 ? `INPUT (${displaySec}s)` : "INPUT";
-        } else if (cleanPhase === "IDLE") {
-            const countStr = playersCount !== undefined ? ` (${playersCount} joined)` : "";
-            phaseBadge.textContent = `IDLE${countStr}`;
-        } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
-            phaseBadge.textContent = "FIRING";
-        } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
-            phaseBadge.textContent = "ROUND OVER";
+            phaseBadge.textContent = isMobile ? (displaySec > 0 ? `INPUT (${displaySec}s)` : "INPUT") : "INPUT PHASE";
+            if (desktopTimer) {
+                desktopTimer.textContent = `${displaySec}`;
+                desktopTimer.classList.remove("hidden");
+                if (displaySec <= 5) {
+                    desktopTimer.style.color = "#ff003c";
+                    desktopTimer.style.textShadow = "0 0 15px #ff003c";
+                } else {
+                    desktopTimer.style.color = "#ffffff";
+                    desktopTimer.style.textShadow = "0 0 10px #00ffcc";
+                }
+            }
         } else {
-            phaseBadge.textContent = cleanPhase;
+            setCurrentAction("");
+            if (desktopTimer) {
+                desktopTimer.classList.add("hidden");
+            }
+            if (cleanPhase === "IDLE") {
+                const countStr = playersCount !== undefined ? ` (${playersCount} joined)` : "";
+                phaseBadge.textContent = isMobile ? `IDLE${countStr}` : `WAITING FOR PLAYERS${countStr}`;
+            } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
+                phaseBadge.textContent = "FIRING";
+            } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
+                phaseBadge.textContent = "ROUND OVER";
+            } else {
+                phaseBadge.textContent = cleanPhase;
+            }
         }
     }
 
@@ -258,6 +323,7 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
     const isOnBattlefield = (currentUsername && activePlayers.includes(currentUsername)) || hasJoined;
 
     if (cleanPhase === "IDLE") {
+        setAimingVisible(false);
         if (adminControls && isModOrBroadcaster) adminControls.classList.remove("hidden");
         if (playerSetup) {
             if (!isOnBattlefield) {
@@ -271,15 +337,18 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
     } else if (cleanPhase === "INPUT") {
         if (adminControls) adminControls.classList.add("hidden");
         if (isOnBattlefield) {
+            setAimingVisible(true);
             if (playerControls) playerControls.classList.remove("hidden");
             if (playerSetup) playerSetup.classList.add("hidden");
             if (btnFire) (btnFire as HTMLButtonElement).disabled = false;
         } else {
+            setAimingVisible(false);
             if (playerSetup) playerSetup.classList.remove("hidden");
             if (playerControls) playerControls.classList.add("hidden");
         }
         if (statusMessage) statusMessage.classList.add("hidden");
     } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
+        setAimingVisible(false);
         if (adminControls) adminControls.classList.add("hidden");
         if (statusMessage) {
             statusMessage.textContent = "CANNONS FIRING...";
@@ -287,6 +356,7 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
         }
         if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
     } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
+        setAimingVisible(false);
         if (statusMessage) {
             statusMessage.textContent = winner ? `WINNER: ${winner}` : "ROUND OVER";
             statusMessage.classList.remove("hidden");
@@ -402,21 +472,27 @@ btnJoin?.addEventListener("click", () => {
     hasJoined = true;
     logMessage("Tank deployed!");
     if (playerSetup) playerSetup.classList.add("hidden");
-    if (playerControls) playerControls.classList.remove("hidden");
+    if (currentPhaseStr === "INPUT") {
+        if (playerControls) playerControls.classList.remove("hidden");
+        setAimingVisible(true);
+    }
 });
 
 btnLeft?.addEventListener("click", () => {
     sendCommand("%left");
+    setCurrentAction("LOCKED: MOVE LEFT");
     logMessage("Moving left...");
 });
 
 btnRight?.addEventListener("click", () => {
     sendCommand("%right");
+    setCurrentAction("LOCKED: MOVE RIGHT");
     logMessage("Moving right...");
 });
 
 btnFire?.addEventListener("click", () => {
     sendCommand(`%fire ${currentAngle} ${currentPower}`);
+    setCurrentAction(`LOCKED: FIRE ${currentAngle}° @ ${currentPower}%`);
     logMessage(`Fired: ${currentAngle}° @ ${currentPower}%`);
 });
 
@@ -437,3 +513,4 @@ initProtractorAiming();
 setAngle(45);
 initVerticalPower();
 setPower(100);
+setAimingVisible(false);

@@ -101,12 +101,12 @@ body {
 
 /* Desktop Top Action & Status Bar (covers stream's top HUD) */
 .desktop-top-hud {
-    background: rgba(10, 15, 25, 0.96);
+    background: rgba(10, 15, 25, 0.98);
     border: 2px solid rgba(0, 255, 204, 0.45);
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85), 0 0 15px rgba(0, 255, 204, 0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.9), 0 0 15px rgba(0, 255, 204, 0.15);
     backdrop-filter: blur(10px);
-    padding: 10px 24px;
+    padding: 12px 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -114,7 +114,19 @@ body {
     gap: 8px;
     pointer-events: auto;
     width: 100%;
+    min-height: 135px;
     box-sizing: border-box;
+}
+
+.desktop-timer {
+    font-family: var(--font-heading);
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #ffffff;
+    text-shadow: 0 0 10px var(--neon-cyan);
+    line-height: 1;
+    margin: 2px 0;
 }
 
 .top-hud-row {
@@ -122,6 +134,32 @@ body {
     align-items: center;
     justify-content: center;
     gap: 12px;
+}
+
+/* Queued Action Feedback Badge */
+.current-action-badge {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    background: rgba(0, 255, 204, 0.12);
+    border: 1px solid var(--neon-cyan);
+    box-shadow: 0 0 10px rgba(0, 255, 204, 0.4);
+    padding: 4px 16px;
+    border-radius: 6px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: center;
+    margin: 2px 0;
+    display: inline-block;
+}
+
+.mobile-action-badge {
+    width: fit-content;
+    align-self: center;
+    font-size: 12px;
+    padding: 4px 14px;
+    margin: 0 auto 6px;
 }
 
 /* Desktop Tactical Panel (underneath protractor) */

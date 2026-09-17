@@ -44,12 +44,18 @@
         </g>
 
         <!-- Top Action/Status Bar directly covering the stream's native top HUD -->
-        <foreignObject x="630" y="12" width="660" height="110">
+        <foreignObject x="560" y="14" width="800" height="160">
             <div class="desktop-top-hud" xmlns="http://www.w3.org/1999/xhtml">
                 <div class="top-hud-row">
-                    <span id="phase-badge" class="phase-badge idle">IDLE</span>
+                    <span id="phase-badge" class="phase-badge idle">WAITING FOR PLAYERS</span>
                     <div id="status-message" class="status-message hidden">CANNONS FIRING...</div>
                 </div>
+
+                <!-- Large Countdown Timer (replaces covered stream countdown) -->
+                <div id="desktop-timer" class="desktop-timer hidden">20</div>
+
+                <!-- Queued Move/Action Feedback Badge -->
+                <div id="current-action-badge" class="current-action-badge hidden"></div>
 
                 <!-- Admin Start Match (broadcaster / mod only) -->
                 <section id="admin-controls" class="hidden">
