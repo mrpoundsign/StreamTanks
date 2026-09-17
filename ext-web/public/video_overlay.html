@@ -43,13 +43,12 @@
             </g>
         </g>
 
-        <!-- Tactical Controls situated directly underneath the protractor arc -->
-        <foreignObject x="90" y="325" width="320" height="420">
-            <div id="app" class="tactical-panel" xmlns="http://www.w3.org/1999/xhtml">
-                <!-- Panel Header -->
-                <div class="panel-header">
-                    <span class="panel-title">FIRE CONTROL</span>
+        <!-- Top Action/Status Bar directly covering the stream's native top HUD -->
+        <foreignObject x="630" y="12" width="660" height="110">
+            <div class="desktop-top-hud" xmlns="http://www.w3.org/1999/xhtml">
+                <div class="top-hud-row">
                     <span id="phase-badge" class="phase-badge idle">IDLE</span>
+                    <div id="status-message" class="status-message hidden">CANNONS FIRING...</div>
                 </div>
 
                 <!-- Admin Start Match (broadcaster / mod only) -->
@@ -61,7 +60,12 @@
                 <section id="player-setup" class="hidden">
                     <button id="btn-join" class="btn primary glowing-cyan">DEPLOY TANK</button>
                 </section>
+            </div>
+        </foreignObject>
 
+        <!-- Tactical Controls situated directly underneath the protractor arc -->
+        <foreignObject x="90" y="325" width="320" height="300">
+            <div id="app" class="tactical-panel" xmlns="http://www.w3.org/1999/xhtml">
                 <!-- Player Controls -->
                 <section id="player-controls" class="hidden">
                     <!-- Power Slider -->
@@ -82,9 +86,6 @@
                     <!-- Fire Cannon Button -->
                     <button id="btn-fire" class="btn primary glowing-magenta">FIRE CANNON</button>
                 </section>
-
-                <!-- Status notification during simulation -->
-                <div id="status-message" class="status-message hidden">CANNONS FIRING...</div>
 
                 <!-- Real-time feedback toast -->
                 <div id="message-log"></div>
