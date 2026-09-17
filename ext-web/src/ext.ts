@@ -30,6 +30,9 @@ const valAngle = document.getElementById("val-angle");
 
 const sliderPower = document.getElementById("slider-power") as HTMLInputElement | null;
 const valPower = document.getElementById("val-power");
+const verticalPowerTrack = document.getElementById("vertical-power-track");
+const powerFillBar = document.getElementById("power-fill-bar");
+const powerThumb = document.getElementById("power-thumb");
 const phaseBadge = document.getElementById("phase-badge");
 
 const adminControls = document.getElementById("admin-controls");
@@ -98,6 +101,7 @@ function initProtractorAiming() {
     }
 
     protractorHitArea.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
         isAiming = true;
         protractorHitArea.classList.add("active");
         try {
@@ -108,6 +112,7 @@ function initProtractorAiming() {
 
     protractorHitArea.addEventListener("pointermove", (e) => {
         if (!isAiming) return;
+        e.preventDefault();
         computeAngle(e.clientX, e.clientY);
     });
 
@@ -125,11 +130,76 @@ function initProtractorAiming() {
     protractorHitArea.addEventListener("pointercancel", endAiming);
 }
 
-// Power Slider listener
-if (sliderPower && valPower) {
-    sliderPower.addEventListener("input", (e) => {
-        currentPower = parseInt((e.target as HTMLInputElement).value, 10);
+// Power Setter & UI sync
+function setPower(val: number) {
+    currentPower = Math.max(1, Math.min(100, Math.round(val)));
+
+    if (valPower) {
         valPower.textContent = `${currentPower}%`;
+    }
+
+    if (sliderPower && sliderPower.value !== String(currentPower)) {
+        sliderPower.value = String(currentPower);
+    }
+
+    if (powerFillBar) {
+        powerFillBar.style.height = `${currentPower}%`;
+    }
+
+    if (powerThumb) {
+        powerThumb.style.bottom = `${currentPower}%`;
+    }
+}
+
+// Vertical Power Gauge Pointer Events (prevents mobile horizontal swipe conflict)
+function initVerticalPower() {
+    if (!verticalPowerTrack) return;
+
+    let isDragging = false;
+
+    function computePower(clientY: number) {
+        const rect = verticalPowerTrack!.getBoundingClientRect();
+        if (rect.height <= 0) return;
+        // Inverted: top is 100%, bottom is 0%
+        const pct = ((rect.bottom - clientY) / rect.height) * 100;
+        setPower(pct);
+    }
+
+    verticalPowerTrack.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        isDragging = true;
+        verticalPowerTrack.classList.add("active");
+        try {
+            verticalPowerTrack.setPointerCapture(e.pointerId);
+        } catch (_) {}
+        computePower(e.clientY);
+    });
+
+    verticalPowerTrack.addEventListener("pointermove", (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        computePower(e.clientY);
+    });
+
+    const endDrag = (e: PointerEvent) => {
+        if (isDragging) {
+            isDragging = false;
+            verticalPowerTrack.classList.remove("active");
+            try {
+                verticalPowerTrack.releasePointerCapture(e.pointerId);
+            } catch (_) {}
+        }
+    };
+
+    verticalPowerTrack.addEventListener("pointerup", endDrag);
+    verticalPowerTrack.addEventListener("pointercancel", endDrag);
+}
+
+// Power Slider listener (desktop overlay)
+if (sliderPower) {
+    sliderPower.addEventListener("input", (e) => {
+        const val = parseInt((e.target as HTMLInputElement).value, 10);
+        setPower(val);
     });
 }
 
@@ -362,6 +432,8 @@ if (window.Twitch && window.Twitch.ext) {
     connectWebSocket();
 }
 
-// Initialize Protractor & Initial Angle
+// Initialize Aiming & Initial Values
 initProtractorAiming();
 setAngle(45);
+initVerticalPower();
+setPower(100);
