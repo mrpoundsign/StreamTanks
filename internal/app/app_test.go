@@ -2050,3 +2050,48 @@ func TestMatchKillsRecap(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 }
+
+func TestClearAppliedCraters_Concurrent(t *testing.T) {
+	clearAppliedCraters()
+
+	var wg sync.WaitGroup
+	workers := 10
+	iterations := 100
+
+	// Concurrent writers
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				appliedCratersMu.Lock()
+				appliedCraters[fmt.Sprintf("shot_%d_%d", workerID, j)] = true
+				appliedCratersMu.Unlock()
+				time.Sleep(time.Millisecond)
+			}
+		}(i)
+	}
+
+	// Concurrent clearers
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				clearAppliedCraters()
+				time.Sleep(time.Millisecond)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Ensure final state is clear
+	clearAppliedCraters()
+
+	appliedCratersMu.Lock()
+	if len(appliedCraters) != 0 {
+		t.Errorf("expected appliedCraters to be empty, got %d", len(appliedCraters))
+	}
+	appliedCratersMu.Unlock()
+}
