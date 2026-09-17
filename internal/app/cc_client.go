@@ -16,7 +16,63 @@ import (
 var (
 	ccMu     sync.Mutex
 	ccCancel context.CancelFunc
+
+	ccConnMu        sync.Mutex
+	ccConn          *websocket.Conn
+	lastViewerState ViewerState
 )
+
+func setCCConn(conn *websocket.Conn) {
+	ccConnMu.Lock()
+	defer ccConnMu.Unlock()
+	ccConn = conn
+	if conn == nil {
+		lastViewerState = ViewerState{}
+	}
+}
+
+// BroadcastViewerState sends a compact snapshot of the game state to the C&C relay.
+// Identical consecutive states are deduplicated to prevent unnecessary network traffic.
+func BroadcastViewerState() {
+	ccConnMu.Lock()
+	conn := ccConn
+	if conn == nil {
+		ccConnMu.Unlock()
+		return
+	}
+
+	gameState.mu.Lock()
+	aliveCount := 0
+	for _, p := range gameState.Players {
+		if !p.IsDead {
+			aliveCount++
+		}
+	}
+	vs := ViewerState{
+		Phase:          gameState.Phase,
+		TimerRemaining: gameState.TimerRemaining,
+		RoundID:        gameState.RoundID,
+		Winner:         gameState.Winner,
+		PlayersCount:   aliveCount,
+	}
+	gameState.mu.Unlock()
+
+	if vs == lastViewerState {
+		ccConnMu.Unlock()
+		return
+	}
+	lastViewerState = vs
+	ccConnMu.Unlock()
+
+	msg := WSMessage{
+		Type:    "GAME_STATE",
+		Payload: vs,
+	}
+
+	if err := websocket.JSON.Send(conn, msg); err != nil {
+		log.Printf("[C&C] Failed to send viewer state update: %v", err)
+	}
+}
 
 // StartCCClientManager initiates or restarts the background C&C relay connection.
 func StartCCClientManager(channel string) {
@@ -61,6 +117,8 @@ func StopCCClient() {
 		ccCancel()
 		ccCancel = nil
 	}
+
+	setCCConn(nil)
 
 	gameState.mu.Lock()
 	gameState.CCStatus = "disconnected"
@@ -123,13 +181,8 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 		return fmt.Errorf("dial failed: %w", err)
 	}
 
-	isRegisteredInClients := false
 	defer func() {
-		if isRegisteredInClients {
-			clientsMu.Lock()
-			delete(activeClients, ws)
-			clientsMu.Unlock()
-		}
+		setCCConn(nil)
 		_ = ws.Close()
 
 		gameState.mu.Lock()
@@ -228,15 +281,9 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 					gameState.ClaimCode = ""
 					gameState.mu.Unlock()
 
-					// Now allow game broadcast updates to reach the C&C relay
-					if !isRegisteredInClients {
-						clientsMu.Lock()
-						activeClients[ws] = true
-						clientsMu.Unlock()
-						isRegisteredInClients = true
-					}
-
+					setCCConn(ws)
 					broadcast(msgStateUpdate, &gameState)
+					BroadcastViewerState()
 				}
 
 			case "AUTH_ERROR":

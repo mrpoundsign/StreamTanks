@@ -150,6 +150,15 @@ type WSMessage struct {
 	Payload interface{} `json:"payload"`
 }
 
+// ViewerState is the compact, high-level game state payload sent to the Twitch Extension C&C relay
+type ViewerState struct {
+	Phase          string `json:"phase"`
+	TimerRemaining int    `json:"timer_remaining"`
+	RoundID        int    `json:"round_id"`
+	Winner         string `json:"winner"`
+	PlayersCount   int    `json:"players_count"`
+}
+
 // defaultEmotes provides standard Twitch emotes for players without a custom emote
 var defaultEmotes = []struct {
 	Name string

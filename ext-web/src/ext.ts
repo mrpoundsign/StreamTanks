@@ -108,7 +108,18 @@ function connectWebSocket() {
             const data = JSON.parse(event.data);
             if (data.type === "GAME_STATE" && data.payload) {
                 const phase = data.payload.phase;
-                phaseIndicator.textContent = `PHASE: ${phase}`;
+                const timerRemaining = data.payload.timer_remaining;
+                const playersCount = data.payload.players_count;
+
+                if (phase) {
+                    if (phase === "INPUT" && timerRemaining !== undefined && timerRemaining > 0) {
+                        phaseIndicator.textContent = `PHASE: ${phase} (${timerRemaining}s)`;
+                    } else if (playersCount !== undefined && phase === "IDLE") {
+                        phaseIndicator.textContent = `PHASE: ${phase} (${playersCount} joined)`;
+                    } else {
+                        phaseIndicator.textContent = `PHASE: ${phase}`;
+                    }
+                }
                 
                 // Only show Start Game when IDLE
                 if (phase !== "IDLE") {

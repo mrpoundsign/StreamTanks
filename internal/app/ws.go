@@ -25,6 +25,9 @@ func clearAppliedCraters() {
 
 func broadcast(msgType string, payload interface{}) {
 	broadcastExcept(nil, msgType, payload)
+	if msgType == msgStateUpdate {
+		BroadcastViewerState()
+	}
 }
 
 func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interface{}) {
