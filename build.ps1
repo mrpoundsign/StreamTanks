@@ -21,8 +21,13 @@ function Write-Fail ($msg) {
 }
 
 try {
-    # 1. Build TypeScript Frontend
+    # 1. Test & Build TypeScript Frontend
     if (-not $SkipFrontend) {
+        Write-Step "Testing TypeScript frontend..."
+        & npm.cmd run test
+        if ($LASTEXITCODE -ne 0) { throw "Frontend tests failed." }
+        Write-Success "Frontend tests passed."
+
         Write-Step "Building TypeScript frontend..."
         & npm.cmd run build:prod
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed." }
