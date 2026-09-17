@@ -68,6 +68,12 @@ func init() {
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
 }
 
+func getSpawnPos(terrain []float64) (float64, float64) {
+	x := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+	y := getTerrainHeight(terrain, x)
+	return x, y
+}
+
 func resetMatchState() {
 	gameState.mu.Lock()
 	if gameState.Phase != phaseCelebration {
@@ -95,8 +101,7 @@ func resetMatchState() {
 		p.Fired = false
 		p.ActionType = ""
 		p.LastActiveRound = gameState.RoundID
-		p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
-		p.Y = getTerrainHeight(gameState.Terrain, p.X)
+		p.X, p.Y = getSpawnPos(gameState.Terrain)
 	}
 	gameState.mu.Unlock()
 
@@ -107,15 +112,15 @@ func resetMatchState() {
 }
 
 var (
-	inputCancel           chan struct{}
-	inputStartTime        time.Time
-	prevRoundHadCommands  bool
-	fastForwardScheduled  bool
-	minWaitTimer          *time.Timer
-	fastForwardTimerMu    sync.Mutex
-	fastForwardTimer      *time.Timer
-	autoRoundTimerMu       sync.Mutex
-	autoRoundTimer         *time.Timer
+	inputCancel          chan struct{}
+	inputStartTime       time.Time
+	prevRoundHadCommands bool
+	fastForwardScheduled bool
+	minWaitTimer         *time.Timer
+	fastForwardTimerMu   sync.Mutex
+	fastForwardTimer     *time.Timer
+	autoRoundTimerMu     sync.Mutex
+	autoRoundTimer       *time.Timer
 )
 
 func cancelFastForward() {
@@ -217,8 +222,7 @@ func startInputPhase() {
 			if _, exists := gameState.Players[botName]; !exists {
 				randIdx := rand.IntN(len(defaultEmotes))
 				defEmote := defaultEmotes[randIdx]
-				spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
-				spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+				spawnX, spawnY := getSpawnPos(gameState.Terrain)
 				gameState.Players[botName] = &Player{
 					Name:            botName,
 					IsBot:           true,
@@ -242,8 +246,7 @@ func startInputPhase() {
 			if _, exists := gameState.Players[botKey]; !exists {
 				randIdx := rand.IntN(len(defaultEmotes))
 				defEmote := defaultEmotes[randIdx]
-				spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
-				spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+				spawnX, spawnY := getSpawnPos(gameState.Terrain)
 				gameState.Players[botKey] = &Player{
 					Name:            "", // nameless!
 					IsBot:           true,
@@ -296,9 +299,10 @@ func startInputPhase() {
 		p.Fired = false
 		p.ActionType = ""
 		if p.X <= 0 {
-			p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+			p.X, p.Y = getSpawnPos(gameState.Terrain)
+		} else {
+			p.Y = getTerrainHeight(gameState.Terrain, p.X)
 		}
-		p.Y = getTerrainHeight(gameState.Terrain, p.X)
 
 		// Bots auto-fire/move immediately so human players don't wait for them
 		if p.IsBot && !p.IsDead {
@@ -1035,8 +1039,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			}
 		}
 
-		spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
-		spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+		spawnX, spawnY := getSpawnPos(gameState.Terrain)
 
 		if botToReplace != nil {
 			// Inherit bot's position
