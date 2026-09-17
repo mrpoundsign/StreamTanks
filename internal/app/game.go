@@ -35,7 +35,7 @@ func hasPermission(user *twitch.User, requiredRole string) bool {
 	if user == nil {
 		return true
 	}
-	if user.IsBroadcaster || (channelName != "" && strings.EqualFold(user.Name, channelName)) {
+	if user.IsBroadcaster || (user.Badges != nil && user.Badges["broadcaster"] > 0) || (channelName != "" && strings.EqualFold(user.Name, channelName)) {
 		return true
 	}
 
@@ -997,6 +997,91 @@ func checkGameOverAndTransition() {
 	}
 }
 
+func handleCCCommand(user *twitch.User, args []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+
+	if len(args) == 0 {
+		newVal := !gameState.CCEnabled
+		gameState.CCEnabled = newVal
+		gameState.mu.Unlock()
+		dbVal := "0"
+		if newVal {
+			dbVal = "1"
+			saveSetting("cc_enabled", dbVal)
+			StartCCClientManager(channelName)
+		} else {
+			saveSetting("cc_enabled", dbVal)
+			StopCCClient()
+		}
+		broadcast(msgStateUpdate, &gameState)
+		return
+	}
+
+	sub := strings.ToLower(args[0])
+	switch sub {
+	case "on", "enable", "true", "1":
+		gameState.CCEnabled = true
+		gameState.mu.Unlock()
+		saveSetting("cc_enabled", "1")
+		StartCCClientManager(channelName)
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "off", "disable", "false", "0":
+		gameState.CCEnabled = false
+		gameState.mu.Unlock()
+		saveSetting("cc_enabled", "0")
+		StopCCClient()
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "url", "server":
+		if len(args) > 1 {
+			newURL := strings.TrimSpace(args[1])
+			if newURL != "" {
+				gameState.CCServerURL = newURL
+				enabled := gameState.CCEnabled
+				gameState.mu.Unlock()
+				saveSetting("cc_url", newURL)
+				if enabled {
+					StartCCClientManager(channelName)
+				}
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
+		gameState.mu.Unlock()
+		return
+
+	case "status":
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "reset", "reclaim", "repair", "re-pair":
+		gameState.mu.Unlock()
+		ResetCCHostToken(channelName)
+		return
+
+	default:
+		if strings.HasPrefix(sub, "ws://") || strings.HasPrefix(sub, "wss://") {
+			gameState.CCServerURL = args[0]
+			gameState.CCEnabled = true
+			gameState.mu.Unlock()
+			saveSetting("cc_url", args[0])
+			saveSetting("cc_enabled", "1")
+			StartCCClientManager(channelName)
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+		gameState.mu.Unlock()
+		return
+	}
+}
+
 func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt ...*twitch.User) {
 	var user *twitch.User
 	if len(userOpt) > 0 {
@@ -1142,6 +1227,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			gameState.mu.Unlock()
 			return
 		}
+		if len(parts) > 1 && strings.EqualFold(parts[1], "cc") {
+			handleCCCommand(user, parts[2:])
+			return
+		}
 		if len(parts) > 1 {
 			arg := strings.ToLower(parts[1])
 			if arg == "off" || arg == "hide" || arg == "close" || arg == "false" || arg == "0" {
@@ -1155,6 +1244,10 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		}
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
+		return
+
+	case "cc":
+		handleCCCommand(user, parts[1:])
 		return
 
 	case "commandtime", "roundtime":

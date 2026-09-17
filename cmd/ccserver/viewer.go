@@ -39,6 +39,9 @@ func ViewerAuth(tokenString string, b64Secret string) (*ViewerClaims, error) {
 	}
 
 	if claims, ok := token.Claims.(*ViewerClaims); ok && token.Valid {
+		if claims.ChannelID == "" {
+			return nil, errors.New("token missing channel_id claim")
+		}
 		return claims, nil
 	}
 

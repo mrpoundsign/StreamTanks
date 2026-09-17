@@ -90,8 +90,23 @@ func Run(cfg Config) error {
 	// Setup Twitch Client only if channel is provided
 	startTwitchBot(cfg.Channel)
 
-	if cfg.CCServerURL != "" && cfg.Channel != "" {
-		go startCCClient(cfg.CCServerURL, cfg.Channel)
+	// C&C Relay initialization
+	if cfg.CCServerURL == "off" {
+		gameState.mu.Lock()
+		gameState.CCEnabled = false
+		gameState.mu.Unlock()
+		saveSetting("cc_enabled", "0")
+	} else if cfg.CCServerURL != "" {
+		gameState.mu.Lock()
+		gameState.CCEnabled = true
+		gameState.CCServerURL = cfg.CCServerURL
+		gameState.mu.Unlock()
+		saveSetting("cc_enabled", "1")
+		saveSetting("cc_url", cfg.CCServerURL)
+	}
+
+	if cfg.Channel != "" {
+		StartCCClientManager(cfg.Channel)
 	}
 
 	// Setup WebSocket and HTTP server with no-cache headers for overlay assets
