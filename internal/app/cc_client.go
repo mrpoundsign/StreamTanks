@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,22 +44,30 @@ func BroadcastViewerState() {
 	}
 
 	gameState.mu.Lock()
-	aliveCount := 0
-	for _, p := range gameState.Players {
+	alivePlayers := make([]string, 0, len(gameState.Players))
+	for name, p := range gameState.Players {
 		if !p.IsDead {
-			aliveCount++
+			alivePlayers = append(alivePlayers, strings.ToLower(name))
 		}
 	}
+	sort.Strings(alivePlayers)
+
 	vs := ViewerState{
 		Phase:          gameState.Phase,
 		TimerRemaining: gameState.TimerRemaining,
 		RoundID:        gameState.RoundID,
 		Winner:         gameState.Winner,
-		PlayersCount:   aliveCount,
+		PlayersCount:   len(alivePlayers),
+		Players:        alivePlayers,
 	}
 	gameState.mu.Unlock()
 
-	if vs == lastViewerState {
+	if vs.Phase == lastViewerState.Phase &&
+		vs.TimerRemaining == lastViewerState.TimerRemaining &&
+		vs.RoundID == lastViewerState.RoundID &&
+		vs.Winner == lastViewerState.Winner &&
+		vs.PlayersCount == lastViewerState.PlayersCount &&
+		slices.Equal(vs.Players, lastViewerState.Players) {
 		ccConnMu.Unlock()
 		return
 	}

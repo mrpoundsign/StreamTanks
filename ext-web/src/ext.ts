@@ -11,10 +11,15 @@ const CC_SERVER_URL = "wss://st-cc.poundsigndesign.com/ws/viewer";
 
 let ws: WebSocket | null = null;
 let viewerToken: string = "";
+let currentUsername: string = "";
+let activePlayers: string[] = [];
 let hasJoined: boolean = false;
 let currentAngle: number = 45;
 let currentPower: number = 100;
 let pingInterval: number | null = null;
+let countdownInterval: number | null = null;
+let localTimerRemaining: number = 0;
+let currentPhaseStr: string = "IDLE";
 
 // DOM Element Selectors
 const viewportSvg = document.getElementById("viewport-svg") as SVGSVGElement | null;
@@ -94,9 +99,9 @@ function initProtractorAiming() {
 
     protractorHitArea.addEventListener("pointerdown", (e) => {
         isAiming = true;
-        protractorHitArea!.classList.add("active");
+        protractorHitArea.classList.add("active");
         try {
-            protractorHitArea!.setPointerCapture(e.pointerId);
+            protractorHitArea.setPointerCapture(e.pointerId);
         } catch (_) {}
         computeAngle(e.clientX, e.clientY);
     });
@@ -106,17 +111,18 @@ function initProtractorAiming() {
         computeAngle(e.clientX, e.clientY);
     });
 
-    const stopAiming = (e: PointerEvent) => {
-        if (!isAiming) return;
-        isAiming = false;
-        protractorHitArea!.classList.remove("active");
-        try {
-            protractorHitArea!.releasePointerCapture(e.pointerId);
-        } catch (_) {}
+    const endAiming = (e: PointerEvent) => {
+        if (isAiming) {
+            isAiming = false;
+            protractorHitArea.classList.remove("active");
+            try {
+                protractorHitArea.releasePointerCapture(e.pointerId);
+            } catch (_) {}
+        }
     };
 
-    protractorHitArea.addEventListener("pointerup", stopAiming);
-    protractorHitArea.addEventListener("pointercancel", stopAiming);
+    protractorHitArea.addEventListener("pointerup", endAiming);
+    protractorHitArea.addEventListener("pointercancel", endAiming);
 }
 
 // Power Slider listener
@@ -138,14 +144,29 @@ function getUserRole(token: string): string {
     }
 }
 
+// Local 1-second countdown timer for smooth synchronized UI
+function startCountdownTimer() {
+    if (countdownInterval) return;
+    countdownInterval = window.setInterval(() => {
+        if (currentPhaseStr === "INPUT" && localTimerRemaining > 0) {
+            localTimerRemaining--;
+            if (phaseBadge) {
+                phaseBadge.textContent = `INPUT (${localTimerRemaining}s)`;
+            }
+        }
+    }, 1000);
+}
+
 // UI Phase State Manager
 function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?: number, winner?: string) {
     const cleanPhase = (phase || "IDLE").toUpperCase();
+    currentPhaseStr = cleanPhase;
 
     if (phaseBadge) {
         phaseBadge.className = `phase-badge ${cleanPhase.toLowerCase()}`;
-        if (cleanPhase === "INPUT" && timerRemaining !== undefined && timerRemaining > 0) {
-            phaseBadge.textContent = `INPUT (${timerRemaining}s)`;
+        if (cleanPhase === "INPUT") {
+            const displaySec = timerRemaining !== undefined ? timerRemaining : localTimerRemaining;
+            phaseBadge.textContent = displaySec > 0 ? `INPUT (${displaySec}s)` : "INPUT";
         } else if (cleanPhase === "IDLE") {
             const countStr = playersCount !== undefined ? ` (${playersCount} joined)` : "";
             phaseBadge.textContent = `IDLE${countStr}`;
@@ -158,20 +179,36 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
         }
     }
 
+    if (cleanPhase === "IDLE" && playersCount === 0) {
+        hasJoined = false;
+    }
+
     const role = getUserRole(viewerToken);
     const isModOrBroadcaster = role === "broadcaster" || role === "moderator";
+    const isOnBattlefield = (currentUsername && activePlayers.includes(currentUsername)) || hasJoined;
 
     if (cleanPhase === "IDLE") {
         if (adminControls && isModOrBroadcaster) adminControls.classList.remove("hidden");
-        if (playerSetup && !hasJoined) playerSetup.classList.remove("hidden");
+        if (playerSetup) {
+            if (!isOnBattlefield) {
+                playerSetup.classList.remove("hidden");
+            } else {
+                playerSetup.classList.add("hidden");
+            }
+        }
         if (playerControls) playerControls.classList.add("hidden");
         if (statusMessage) statusMessage.classList.add("hidden");
     } else if (cleanPhase === "INPUT") {
         if (adminControls) adminControls.classList.add("hidden");
-        if (hasJoined && playerControls) playerControls.classList.remove("hidden");
-        if (playerSetup && !hasJoined) playerSetup.classList.remove("hidden");
+        if (isOnBattlefield) {
+            if (playerControls) playerControls.classList.remove("hidden");
+            if (playerSetup) playerSetup.classList.add("hidden");
+            if (btnFire) (btnFire as HTMLButtonElement).disabled = false;
+        } else {
+            if (playerSetup) playerSetup.classList.remove("hidden");
+            if (playerControls) playerControls.classList.add("hidden");
+        }
         if (statusMessage) statusMessage.classList.add("hidden");
-        if (btnFire) (btnFire as HTMLButtonElement).disabled = false;
     } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
         if (adminControls) adminControls.classList.add("hidden");
         if (statusMessage) {
@@ -194,6 +231,7 @@ function connectWebSocket() {
         return;
     }
 
+    startCountdownTimer();
     logMessage("Connecting to C&C...");
     ws = new WebSocket(`${CC_SERVER_URL}?token=${viewerToken}`);
 
@@ -218,11 +256,24 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            if (data.type === "GAME_STATE" && data.payload) {
+            if (data.type === "VIEWER_INFO" && data.payload) {
+                if (data.payload.user) {
+                    currentUsername = String(data.payload.user).toLowerCase();
+                }
+                updateUIForPhase(currentPhaseStr, localTimerRemaining);
+            } else if (data.type === "GAME_STATE" && data.payload) {
                 const phase = data.payload.phase;
                 const timerRemaining = data.payload.timer_remaining;
                 const playersCount = data.payload.players_count;
                 const winner = data.payload.winner;
+
+                if (Array.isArray(data.payload.players)) {
+                    activePlayers = data.payload.players.map((p: string) => String(p).toLowerCase());
+                }
+
+                if (timerRemaining !== undefined) {
+                    localTimerRemaining = timerRemaining;
+                }
 
                 updateUIForPhase(phase, timerRemaining, playersCount, winner);
             }

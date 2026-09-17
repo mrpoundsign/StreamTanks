@@ -97,6 +97,15 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 
 		log.Printf("Viewer %s connected for channel %s", viewerID, channelID)
 
+		// Send viewer identity and channel context to viewer client
+		_ = websocket.JSON.Send(ws, map[string]interface{}{
+			"type": "VIEWER_INFO",
+			"payload": map[string]interface{}{
+				"user":    viewerID,
+				"channel": channelID,
+			},
+		})
+
 		hub.RegisterViewer(channelID, ws)
 		defer hub.UnregisterViewer(channelID, ws)
 
