@@ -4,13 +4,13 @@ go 1.27.0
 
 require (
 	github.com/gempir/go-twitch-irc/v4 v4.4.1
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.58.0
 )
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
