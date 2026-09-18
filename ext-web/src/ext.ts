@@ -31,6 +31,8 @@ const angleBadgeGroup = document.getElementById("angle-badge-group");
 const mobileAngleBadge = document.querySelector(".mobile-angle-badge") as HTMLElement | null;
 const valAngle = document.getElementById("val-angle");
 
+const pivotCenter = document.getElementById("pivot-center") || document.querySelector(".pivot-center");
+
 function setAimingVisible(visible: boolean) {
     if (protractorOverlayGroup) {
         if (visible) {
@@ -38,18 +40,33 @@ function setAimingVisible(visible: boolean) {
         } else {
             protractorOverlayGroup.classList.add("hidden");
         }
+        (protractorOverlayGroup as HTMLElement).style.display = visible ? "" : "none";
+        (protractorOverlayGroup as HTMLElement).style.visibility = visible ? "visible" : "hidden";
+        protractorOverlayGroup.setAttribute("visibility", visible ? "visible" : "hidden");
+    }
+    if (protractorHitArea) {
+        (protractorHitArea as HTMLElement).style.display = visible ? "" : "none";
+        (protractorHitArea as HTMLElement).style.visibility = visible ? "visible" : "hidden";
     }
     if (angleNeedle) {
-        angleNeedle.style.display = visible ? "" : "none";
+        (angleNeedle as HTMLElement).style.display = visible ? "" : "none";
+        (angleNeedle as HTMLElement).style.visibility = visible ? "visible" : "hidden";
     }
     if (needleHead) {
-        needleHead.style.display = visible ? "" : "none";
+        (needleHead as HTMLElement).style.display = visible ? "" : "none";
+        (needleHead as HTMLElement).style.visibility = visible ? "visible" : "hidden";
     }
     if (angleBadgeGroup) {
-        angleBadgeGroup.style.display = visible ? "" : "none";
+        (angleBadgeGroup as HTMLElement).style.display = visible ? "" : "none";
+        (angleBadgeGroup as HTMLElement).style.visibility = visible ? "visible" : "hidden";
+    }
+    if (pivotCenter) {
+        (pivotCenter as HTMLElement).style.display = visible ? "" : "none";
+        (pivotCenter as HTMLElement).style.visibility = visible ? "visible" : "hidden";
     }
     if (mobileAngleBadge) {
         mobileAngleBadge.style.display = visible ? "" : "none";
+        mobileAngleBadge.style.visibility = visible ? "visible" : "hidden";
     }
 }
 

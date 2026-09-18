@@ -21,6 +21,7 @@
   var angleBadgeGroup = document.getElementById("angle-badge-group");
   var mobileAngleBadge = document.querySelector(".mobile-angle-badge");
   var valAngle = document.getElementById("val-angle");
+  var pivotCenter = document.getElementById("pivot-center") || document.querySelector(".pivot-center");
   function setAimingVisible(visible) {
     if (protractorOverlayGroup) {
       if (visible) {
@@ -28,18 +29,33 @@
       } else {
         protractorOverlayGroup.classList.add("hidden");
       }
+      protractorOverlayGroup.style.display = visible ? "" : "none";
+      protractorOverlayGroup.style.visibility = visible ? "visible" : "hidden";
+      protractorOverlayGroup.setAttribute("visibility", visible ? "visible" : "hidden");
+    }
+    if (protractorHitArea) {
+      protractorHitArea.style.display = visible ? "" : "none";
+      protractorHitArea.style.visibility = visible ? "visible" : "hidden";
     }
     if (angleNeedle) {
       angleNeedle.style.display = visible ? "" : "none";
+      angleNeedle.style.visibility = visible ? "visible" : "hidden";
     }
     if (needleHead) {
       needleHead.style.display = visible ? "" : "none";
+      needleHead.style.visibility = visible ? "visible" : "hidden";
     }
     if (angleBadgeGroup) {
       angleBadgeGroup.style.display = visible ? "" : "none";
+      angleBadgeGroup.style.visibility = visible ? "visible" : "hidden";
+    }
+    if (pivotCenter) {
+      pivotCenter.style.display = visible ? "" : "none";
+      pivotCenter.style.visibility = visible ? "visible" : "hidden";
     }
     if (mobileAngleBadge) {
       mobileAngleBadge.style.display = visible ? "" : "none";
+      mobileAngleBadge.style.visibility = visible ? "visible" : "hidden";
     }
   }
   var sliderPower = document.getElementById("slider-power");

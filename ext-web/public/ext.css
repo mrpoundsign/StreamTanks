@@ -49,6 +49,11 @@ body {
     pointer-events: none;
 }
 
+.protractor-group.hidden {
+    display: none !important;
+    visibility: hidden !important;
+}
+
 .hit-area {
     fill: rgba(0, 255, 204, 0.001); /* Captures mouse/touch clicks */
     cursor: crosshair;
@@ -394,6 +399,7 @@ body {
 
 .hidden {
     display: none !important;
+    visibility: hidden !important;
 }
 
 /* ==========================================================================
