@@ -74,18 +74,17 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 			return
 		}
 
-		// Use UserID if they granted identity, otherwise OpaqueUserID
-		viewerID := claims.UserID
-		if viewerID == "" {
-			viewerID = claims.OpaqueUserID
-		} else if twitchClient != nil {
-			// If we have a numeric UserID and the API is configured, resolve it!
-			if name, err := twitchClient.GetUsername(viewerID); err == nil {
-				viewerID = name
+		// Resolve viewer username ONLY if UserID is present (identity granted)
+		var viewerUsername string
+		twitchUserID := claims.UserID
+		if twitchUserID != "" && twitchClient != nil {
+			if name, err := twitchClient.GetUsername(twitchUserID); err == nil {
+				viewerUsername = name
 			} else {
-				log.Printf("Failed to resolve username for %s: %v", viewerID, err)
+				log.Printf("Failed to resolve username for Twitch UserID %s: %v", twitchUserID, err)
 			}
 		}
+
 		channelID := claims.ChannelID
 		if twitchClient != nil {
 			if name, err := twitchClient.GetUsername(channelID); err == nil {
@@ -95,14 +94,15 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 			}
 		}
 
-		log.Printf("Viewer %s connected for channel %s", viewerID, channelID)
+		log.Printf("Viewer (twitch_id: %s, opaque: %s, name: %s) connected for channel %s", twitchUserID, claims.OpaqueUserID, viewerUsername, channelID)
 
 		// Send viewer identity and channel context to viewer client
 		_ = websocket.JSON.Send(ws, map[string]interface{}{
 			"type": "VIEWER_INFO",
 			"payload": map[string]interface{}{
-				"user":    viewerID,
-				"channel": channelID,
+				"user":      viewerUsername,
+				"twitch_id": twitchUserID,
+				"channel":   channelID,
 			},
 		})
 
@@ -113,22 +113,26 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 		for {
 			var cmdPayload interface{}
 			if err := websocket.JSON.Receive(ws, &cmdPayload); err != nil {
-				log.Printf("Viewer %s disconnected from channel %s", viewerID, channelID)
+				log.Printf("Viewer %s disconnected from channel %s", viewerUsername, channelID)
 				break
 			}
 
-			// We wrap the raw command in an envelope that identifies the user so the Host knows who fired
-			// The original game expects a WSMessage where Payload is the actual action (e.g. "FIRE 45 80")
-			// but we need to inject the viewer ID.
-			// 
-			// Let's pass an envelope to the Host:
-			// { "type": "EXTENSION_COMMAND", "payload": { "user": "...", "command": ... } }
+			if viewerUsername == "" {
+				log.Printf("[Security] Rejected command from unlinked viewer (opaque: %s): identity share required", claims.OpaqueUserID)
+				_ = websocket.JSON.Send(ws, map[string]interface{}{
+					"type": "AUTH_REQUIRED",
+					"payload": "Twitch identity link required to participate in StreamTanks",
+				})
+				continue
+			}
 
+			// Pass an envelope to the Host with resolved username and permanent Twitch UserID
 			envelope := map[string]interface{}{
 				"type": "EXTENSION_COMMAND",
 				"payload": map[string]interface{}{
-					"user": viewerID,
-					"command": cmdPayload,
+					"user":      viewerUsername,
+					"twitch_id": twitchUserID,
+					"command":   cmdPayload,
 				},
 			}
 

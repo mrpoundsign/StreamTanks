@@ -70,6 +70,57 @@
   var btnFire = document.getElementById("btn-fire");
   var btnLeft = document.getElementById("btn-left");
   var btnRight = document.getElementById("btn-right");
+  var landingOverlay = document.getElementById("landing-overlay");
+  var mobileLanding = document.getElementById("mobile-landing");
+  var landingLauncher = document.getElementById("landing-launcher");
+  var btnConnectTwitch = document.getElementById("btn-connect-twitch");
+  var btnConnectTwitchMobile = document.getElementById("btn-connect-twitch-mobile");
+  var btnDismissLanding = document.getElementById("btn-dismiss-landing");
+  var btnCloseLanding = document.getElementById("btn-close-landing");
+  var btnOpenLanding = document.getElementById("btn-open-landing");
+  var isLinked = false;
+  var landingDismissed = false;
+  function isOpaque(name) {
+    return /^[UA]\d+$/i.test(name);
+  }
+  function checkIdentityLinked(token) {
+    if (!window.Twitch || !window.Twitch.ext) {
+      return true;
+    }
+    try {
+      const payloadStr = atob(token.split(".")[1]);
+      const payload = JSON.parse(payloadStr);
+      if (payload.user_id && payload.user_id !== "" && !isOpaque(payload.user_id)) {
+        return true;
+      }
+    } catch (_) {
+    }
+    if (window.Twitch.ext.viewer?.isLinked && window.Twitch.ext.viewer?.id && !isOpaque(window.Twitch.ext.viewer.id)) {
+      return true;
+    }
+    return false;
+  }
+  function updateLandingVisibility() {
+    if (isLinked) {
+      if (landingOverlay) landingOverlay.classList.add("hidden");
+      if (mobileLanding) mobileLanding.classList.add("hidden");
+      if (landingLauncher) landingLauncher.classList.add("hidden");
+    } else {
+      if (landingDismissed) {
+        if (landingOverlay) landingOverlay.classList.add("hidden");
+        if (landingLauncher) landingLauncher.classList.remove("hidden");
+      } else {
+        if (landingOverlay) landingOverlay.classList.remove("hidden");
+        if (landingLauncher) landingLauncher.classList.add("hidden");
+      }
+      if (mobileLanding) mobileLanding.classList.remove("hidden");
+    }
+  }
+  function promptIdentityShare() {
+    if (window.Twitch?.ext?.actions) {
+      window.Twitch.ext.actions.requestIdShare();
+    }
+  }
   var isMobile = document.body.classList.contains("mobile-body");
   var pivotX = isMobile ? 160 : 250;
   var pivotY = isMobile ? 160 : 250;
@@ -263,6 +314,17 @@
     if (cleanPhase === "IDLE" && playersCount === 0) {
       hasJoined = false;
     }
+    if (!isLinked) {
+      setAimingVisible(false);
+      if (adminControls) adminControls.classList.add("hidden");
+      if (playerSetup) playerSetup.classList.add("hidden");
+      if (playerControls) playerControls.classList.add("hidden");
+      if (desktopTimer) desktopTimer.classList.add("hidden");
+      if (statusMessage) statusMessage.classList.add("hidden");
+      updateLandingVisibility();
+      return;
+    }
+    updateLandingVisibility();
     const role = getUserRole(viewerToken);
     const isModOrBroadcaster = role === "broadcaster" || role === "moderator";
     const isOnBattlefield = currentUsername && activePlayers.includes(currentUsername) || hasJoined;
@@ -325,15 +387,29 @@
         }
       }, 45e3);
       updateUIForPhase("IDLE");
+      if (hasJoined) {
+        sendCommand("%join");
+      }
     };
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "VIEWER_INFO" && data.payload) {
-          if (data.payload.user) {
-            currentUsername = String(data.payload.user).toLowerCase();
+          const userStr = data.payload.user ? String(data.payload.user).trim() : "";
+          if (userStr && !isOpaque(userStr)) {
+            currentUsername = userStr.toLowerCase();
+            isLinked = true;
+          } else {
+            currentUsername = "";
+            isLinked = false;
           }
+          updateLandingVisibility();
           updateUIForPhase(currentPhaseStr, localTimerRemaining);
+        } else if (data.type === "AUTH_REQUIRED") {
+          isLinked = false;
+          landingDismissed = false;
+          updateLandingVisibility();
+          logMessage(data.payload || "Twitch identity link required.");
         } else if (data.type === "GAME_STATE" && data.payload) {
           const phase = data.payload.phase;
           const timerRemaining = data.payload.timer_remaining;
@@ -365,6 +441,11 @@
     };
   }
   function sendCommand(cmd) {
+    if (!isLinked) {
+      logMessage("Twitch account link required to play.");
+      promptIdentityShare();
+      return;
+    }
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       logMessage("Error: Not connected.");
       return;
@@ -384,11 +465,29 @@
       }
     }, 4e3);
   }
+  btnConnectTwitch?.addEventListener("click", promptIdentityShare);
+  btnConnectTwitchMobile?.addEventListener("click", promptIdentityShare);
+  btnDismissLanding?.addEventListener("click", () => {
+    landingDismissed = true;
+    updateLandingVisibility();
+  });
+  btnCloseLanding?.addEventListener("click", () => {
+    landingDismissed = true;
+    updateLandingVisibility();
+  });
+  btnOpenLanding?.addEventListener("click", () => {
+    landingDismissed = false;
+    updateLandingVisibility();
+  });
   btnStartMatch?.addEventListener("click", () => {
     sendCommand("%startgame");
     logMessage("Match starting...");
   });
   btnJoin?.addEventListener("click", () => {
+    if (!isLinked) {
+      promptIdentityShare();
+      return;
+    }
     sendCommand("%join");
     hasJoined = true;
     logMessage("Tank deployed!");
@@ -415,11 +514,24 @@
   });
   if (window.Twitch && window.Twitch.ext) {
     window.Twitch.ext.onAuthorized((auth) => {
+      const tokenChanged = viewerToken !== "" && viewerToken !== auth.token;
       viewerToken = auth.token;
-      connectWebSocket();
+      const previouslyLinked = isLinked;
+      isLinked = checkIdentityLinked(viewerToken);
+      updateLandingVisibility();
+      if (tokenChanged && ws) {
+        ws.close();
+      } else {
+        connectWebSocket();
+      }
+      if (!previouslyLinked && isLinked) {
+        logMessage("Twitch account connected!");
+      }
     });
   } else {
     console.log("Twitch helper not detected; running in standalone test mode.");
+    isLinked = true;
+    updateLandingVisibility();
     connectWebSocket();
   }
   initProtractorAiming();
@@ -427,5 +539,6 @@
   initVerticalPower();
   setPower(100);
   setAimingVisible(false);
+  updateLandingVisibility();
 })();
 //# sourceMappingURL=ext.js.map

@@ -99,6 +99,34 @@
         </foreignObject>
     </svg>
 
+    <!-- Onboarding Landing Card (displayed when Twitch identity link is required) -->
+    <div id="landing-overlay" class="landing-overlay hidden">
+        <div class="landing-card">
+            <button id="btn-close-landing" class="landing-close" title="Minimize">&times;</button>
+            <div class="landing-tag">TWITCH INTERACTIVE EXTENSION</div>
+            <h1 class="landing-title">STREAMTANKS BATTLEFIELD</h1>
+            <p class="landing-desc">
+                Join the live stream artillery battle directly from your screen! Aim your cannon with the interactive protractor, adjust shot power, maneuver across dynamic destructible terrain, and climb the stream leaderboard.
+            </p>
+            <div class="landing-notice">
+                <span class="notice-icon">🛡️</span>
+                <span>Twitch identity linking is required so the stream overlay can track your tank, eliminations, and leaderboard wins.</span>
+            </div>
+            <div class="landing-actions">
+                <button id="btn-connect-twitch" class="btn primary glowing-cyan landing-btn">CONNECT TWITCH TO PLAY</button>
+                <button id="btn-dismiss-landing" class="btn secondary landing-btn">NOT NOW</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Minimized Launcher Pill (for viewers who dismissed the landing card) -->
+    <div id="landing-launcher" class="landing-launcher hidden">
+        <button id="btn-open-landing" class="launcher-pill">
+            <span class="launcher-icon">🎮</span>
+            <span>PLAY STREAMTANKS</span>
+        </button>
+    </div>
+
     <script src="ext.js"></script>
 </body>
 </html>
