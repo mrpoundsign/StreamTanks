@@ -792,6 +792,9 @@ function updateUI(): void {
       const kills = stateRef?.matchKills ?? [];
       if (kills.length > 0) {
         celebrationRecap.style.display = 'flex';
+        const isMultiCol = kills.length > 6;
+        celebrationRecap.classList.toggle('multi-col', isMultiCol);
+        recapList.classList.toggle('multi-col', isMultiCol);
         for (const k of kills) {
           const li = document.createElement('li');
           li.className = 'recap-item';

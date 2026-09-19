@@ -351,14 +351,19 @@ canvas {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85), 0 0 25px rgba(0, 255, 204, 0.2);
     backdrop-filter: blur(12px);
     padding: 16px 28px;
-    min-width: 520px;
-    max-width: 800px;
-    max-height: 280px;
-    overflow-y: auto;
+    min-width: 580px;
+    max-width: 820px;
+    max-height: 720px;
     display: flex;
     flex-direction: column;
     align-items: center;
     animation: recapFadeIn 0.4s ease-out;
+    transition: max-width 0.3s ease, min-width 0.3s ease;
+}
+
+#celebration-recap.multi-col {
+    min-width: 1040px;
+    max-width: 1320px;
 }
 
 @keyframes recapFadeIn {
@@ -389,15 +394,22 @@ canvas {
     gap: 8px;
 }
 
+#recap-list.multi-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 20px;
+}
+
 .recap-item {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 6px 14px;
+    gap: 10px;
+    padding: 5px 14px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    white-space: nowrap;
 }
 
 .recap-name.player {
