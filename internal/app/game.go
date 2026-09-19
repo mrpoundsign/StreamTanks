@@ -30,7 +30,7 @@ var gameState = GameState{
 	BotPoints:     1,
 	BotList:       defaultBotList,
 	ProtractorX:   250,
-	ProtractorY:   350,
+	ProtractorY:   270,
 }
 
 func hasPermission(user *twitch.User, requiredRole string) bool {
@@ -1446,6 +1446,13 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			saveSetting("terrain_min", strconv.Itoa(tMin))
 			saveSetting("terrain_max", strconv.Itoa(tMax))
 
+			// Clamp ProtractorY if it now exceeds highest terrain point
+			maxY := max(int(math.Floor(float64(defaultTerrainHeight)*(1.0-float64(tMax)/100.0))), 100)
+			if gameState.ProtractorY > maxY {
+				gameState.ProtractorY = maxY
+				saveSetting("protractor_y", strconv.Itoa(maxY))
+			}
+
 			if gameState.Phase == phaseIdle {
 				gameState.Terrain = generateTerrain(tMin, tMax)
 				for _, p := range gameState.Players {
@@ -1705,7 +1712,9 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			switch {
 			case arg1 == "reset":
 				gameState.ProtractorX = 250
-				gameState.ProtractorY = 350
+				maxY := max(int(math.Floor(float64(defaultTerrainHeight)*(1.0-float64(gameState.TerrainMax)/100.0))), 100)
+				py := min(350, maxY)
+				gameState.ProtractorY = py
 			case len(parts) >= 3:
 				var px, py int
 				_, err1 := fmt.Sscanf(parts[1], "%d", &px)
@@ -1714,15 +1723,16 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 					gameState.mu.Unlock()
 					return
 				}
-				if px < 150 {
-					px = 150
-				} else if px > 600 {
-					px = 600
+				if px < 100 {
+					px = 100
+				} else if px > 1820 {
+					px = 1820
 				}
-				if py < 200 {
-					py = 200
-				} else if py > 650 {
-					py = 650
+				maxY := max(int(math.Floor(float64(defaultTerrainHeight)*(1.0-float64(gameState.TerrainMax)/100.0))), 100)
+				if py < 100 {
+					py = 100
+				} else if py > maxY {
+					py = maxY
 				}
 				gameState.ProtractorX = px
 				gameState.ProtractorY = py
@@ -1732,19 +1742,19 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			}
 			px := gameState.ProtractorX
 			py := gameState.ProtractorY
-			
+
 			nosave := false
 			if len(parts) >= 4 && strings.ToLower(parts[3]) == "nosave" {
 				nosave = true
 			}
-			
+
 			gameState.mu.Unlock()
-			
+
 			if !nosave {
 				saveSetting("protractor_x", strconv.Itoa(px))
 				saveSetting("protractor_y", strconv.Itoa(py))
 			}
-			
+
 			broadcast(msgStateUpdate, &gameState)
 			BroadcastViewerState()
 			return

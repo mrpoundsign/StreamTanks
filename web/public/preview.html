@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamTanks - Overlay & Extension Composite Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #0b0c10;
+            font-family: 'Orbitron', sans-serif;
+            position: relative;
+        }
+        #preview-stage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1920px;
+            height: 1080px;
+            transform-origin: center center;
+            box-shadow: 0 0 50px rgba(0, 255, 204, 0.15), 0 0 0 1px rgba(0, 255, 204, 0.3);
+            background-color: #050608;
+            overflow: hidden;
+        }
+        .preview-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1920px;
+            height: 1080px;
+            border: none;
+            overflow: hidden;
+        }
+        #game-layer {
+            z-index: 1;
+            pointer-events: none;
+        }
+        #extension-layer {
+            z-index: 2;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="preview-stage">
+        <!-- Layer 1: Native OBS Game Overlay Canvas & HUD -->
+        <iframe id="game-layer" class="preview-layer" src="/" title="StreamTanks Game Overlay"></iframe>
+
+        <!-- Layer 2: Twitch Extension Transparent Video Overlay -->
+        <iframe id="extension-layer" class="preview-layer" src="/ext/video_overlay.html" title="Twitch Extension Overlay"></iframe>
+    </div>
+
+    <script>
+        function scaleStage() {
+            const stage = document.getElementById('preview-stage');
+            if (!stage) return;
+            // Add subtle padding margin so borders aren't clipped by scrollbars or window edges
+            const padding = 24;
+            const availW = Math.max(100, window.innerWidth - padding);
+            const availH = Math.max(100, window.innerHeight - padding);
+            const scale = Math.min(availW / 1920, availH / 1080);
+            stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        }
+        window.addEventListener('resize', scaleStage);
+        window.addEventListener('DOMContentLoaded', scaleStage);
+        scaleStage();
+    </script>
+</body>
+</html>

@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"log"
+	"maps"
 	"strings"
 	"sync"
 
@@ -23,14 +24,14 @@ func clearAppliedCraters() {
 	appliedCraters = make(map[string]bool)
 }
 
-func broadcast(msgType string, payload interface{}) {
+func broadcast(msgType string, payload any) {
 	broadcastExcept(nil, msgType, payload)
 	if msgType == msgStateUpdate {
 		BroadcastViewerState()
 	}
 }
 
-func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interface{}) {
+func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 	payloadCopy := payload
 
 	if payload == &gameState {
@@ -41,9 +42,7 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 			playersCopy[k] = &pCopy
 		}
 		lbCopy := make(map[string]int, len(gameState.Leaderboard))
-		for k, v := range gameState.Leaderboard {
-			lbCopy[k] = v
-		}
+		maps.Copy(lbCopy, gameState.Leaderboard)
 		terrainCopy := make([]float64, len(gameState.Terrain))
 		copy(terrainCopy, gameState.Terrain)
 		projCopy := make([]Projectile, len(gameState.Projectiles))
@@ -84,6 +83,8 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload interfa
 			MatchKills:     matchKillsCopy,
 			Projectiles:    projCopy,
 			Explosions:     expCopy,
+			ProtractorX:    gameState.ProtractorX,
+			ProtractorY:    gameState.ProtractorY,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy

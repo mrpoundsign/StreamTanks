@@ -126,8 +126,8 @@ func (a *HMACAuthenticator) Authenticate(r *http.Request) (string, error) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token = strings.TrimSpace(after)
 		}
 	}
 

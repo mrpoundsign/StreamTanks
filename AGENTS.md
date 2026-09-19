@@ -9,6 +9,7 @@
 > 3. **One ticket at a time**: We work on exactly one issue/ticket at a time unless explicitly directed otherwise. Exactly **1 commit per issue**.
 > 4. **User tests GUI before committing**: Always stop and let the user manually test the GUI/overlay before any changes are committed to git.
 > 5. **Prioritize Built-in Agent Tools Over Shelling Out**: Always use built-in tools (`grep_search`, `list_dir`, `view_file`, and Go MCP tools) for searching code, finding files, and inspecting contents. Do not shell out to PowerShell commands (e.g., `Select-String`, `grep`, `dir`, `cat`) when built-in tools are capable of performing the search or inspection. Only shell out via `run_command` when strictly necessary (e.g., git operations, building/running code, tests, or `gh` CLI).
+> 6. **Always Check for Go Modernization**: Always run `go fix -diff ./...` to check for modernization diffs to evaluate before completing Go backend tasks.
 
 ---
 
@@ -127,6 +128,10 @@ All commands default to the `%` prefix (configurable via `%prefix`):
    .\build.bat
    ```
    Runs TypeScript build (`npm run build:prod`), Go unit test suite (`go test -v ./...`), linter (`golangci-lint-v2 run ./...`), and binary compilation (`go build -o streamtanks.exe ./cmd/streamtanks`).
+   - Optional flags:
+     - `-FixDiff`: Inspects Go modernization diffs (`go fix -diff ./...`) without modifying files.
+     - `-Fix`: Applies standard Go modernizations (`go fix ./...`).
+     - `-SkipFrontend`, `-SkipTest`, `-SkipLint`: Skips respective pipeline stages.
 2. **Running the Server**:
    ```bash
    go run ./cmd/streamtanks -channel <channel_name> -addr :8102

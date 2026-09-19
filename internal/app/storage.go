@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -176,12 +177,12 @@ func loadSettings() {
 					}
 				case "protractor_x":
 					var px int
-					if _, err := fmt.Sscanf(v, "%d", &px); err == nil && px >= 150 && px <= 600 {
+					if _, err := fmt.Sscanf(v, "%d", &px); err == nil && px >= 100 && px <= 1820 {
 						gameState.ProtractorX = px
 					}
 				case "protractor_y":
 					var py int
-					if _, err := fmt.Sscanf(v, "%d", &py); err == nil && py >= 200 && py <= 650 {
+					if _, err := fmt.Sscanf(v, "%d", &py); err == nil && py >= 100 && py <= 1000 {
 						gameState.ProtractorY = py
 					}
 				}
@@ -197,8 +198,16 @@ func loadSettings() {
 	if gameState.ProtractorX == 0 {
 		gameState.ProtractorX = 250
 	}
+	tMax := gameState.TerrainMax
+	if tMax == 0 {
+		tMax = 75
+	}
+	maxProtractorY := max(int(math.Floor(float64(defaultTerrainHeight)*(1.0-float64(tMax)/100.0))), 100)
 	if gameState.ProtractorY == 0 {
 		gameState.ProtractorY = 350
+	}
+	if gameState.ProtractorY > maxProtractorY {
+		gameState.ProtractorY = maxProtractorY
 	}
 	gameState.BotList = loadBotList()
 }
@@ -300,6 +309,3 @@ func removeBotFromList(username string) {
 		log.Println("DB removeBotFromList error:", err)
 	}
 }
-
-
-

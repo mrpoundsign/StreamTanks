@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "types": ["twitch-ext"]
   },
-  "include": ["web/src/**/*"]
+  "include": ["web/src/**/*", "ext-web/src/**/*"]
 }

@@ -1,11 +1,7 @@
 // Twitch Extension Frontend Logic (Desktop Protractor Overlay & Mobile UI)
 // Connects to the C&C WebSocket server to relay commands from viewer to StreamTanks.
 
-declare global {
-    interface Window {
-        Twitch: any;
-    }
-}
+export {};
 
 const CC_SERVER_URL = "wss://st-cc.poundsigndesign.com/ws/viewer";
 
@@ -20,6 +16,11 @@ let pingInterval: number | null = null;
 let countdownInterval: number | null = null;
 let localTimerRemaining: number = 0;
 let currentPhaseStr: string = "IDLE";
+let lastProtractorX: number = -1;
+let lastProtractorY: number = -1;
+let protractorPreviewUntil: number = 0;
+let protractorPreviewTimeout: number | null = null;
+const isStandaloneDev = !window.Twitch || !window.Twitch.ext;
 
 // DOM Element Selectors
 const viewportSvg = document.getElementById("viewport-svg") as SVGSVGElement | null;
@@ -70,10 +71,24 @@ function setAimingVisible(visible: boolean) {
     }
 }
 
+function showProtractorPreview(durationMs: number = 2500) {
+    protractorPreviewUntil = Date.now() + durationMs;
+    setAimingVisible(true);
+    if (protractorPreviewTimeout) {
+        clearTimeout(protractorPreviewTimeout);
+    }
+    protractorPreviewTimeout = window.setTimeout(() => {
+        if (currentPhaseStr !== "INPUT" && !isStandaloneDev) {
+            setAimingVisible(false);
+        }
+    }, durationMs);
+}
+
 const sliderPower = document.getElementById("slider-power") as HTMLInputElement | null;
 const valPower = document.getElementById("val-power");
 const verticalPowerTrack = document.getElementById("vertical-power-track");
 const powerFillBar = document.getElementById("power-fill-bar");
+const powerThumb = document.getElementById("power-thumb");
 const phaseBadge = document.getElementById("phase-badge");
 const desktopTimer = document.getElementById("desktop-timer");
 const currentActionBadge = document.getElementById("current-action-badge");
@@ -419,20 +434,30 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
     const isOnBattlefield = (currentUsername && activePlayers.includes(currentUsername)) || hasJoined;
 
     if (cleanPhase === "IDLE") {
-        setAimingVisible(false);
+        if (Date.now() < protractorPreviewUntil || isStandaloneDev) {
+            setAimingVisible(true);
+        } else {
+            setAimingVisible(false);
+        }
         if (adminControls && isModOrBroadcaster) adminControls.classList.remove("hidden");
         if (playerSetup) {
-            if (!isOnBattlefield) {
+            if (!isOnBattlefield && !isStandaloneDev) {
                 playerSetup.classList.remove("hidden");
             } else {
                 playerSetup.classList.add("hidden");
             }
         }
-        if (playerControls) playerControls.classList.add("hidden");
+        if (playerControls) {
+            if (isStandaloneDev) {
+                playerControls.classList.remove("hidden");
+            } else {
+                playerControls.classList.add("hidden");
+            }
+        }
         if (statusMessage) statusMessage.classList.add("hidden");
     } else if (cleanPhase === "INPUT") {
         if (adminControls) adminControls.classList.add("hidden");
-        if (isOnBattlefield) {
+        if (isOnBattlefield || isStandaloneDev) {
             setAimingVisible(true);
             if (playerControls) playerControls.classList.remove("hidden");
             if (playerSetup) playerSetup.classList.add("hidden");
@@ -461,21 +486,30 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
     }
 }
 
-// WebSocket Connection to C&C Relay
+// WebSocket Connection to C&C Relay or Local Game Instance
 function connectWebSocket() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         return;
     }
 
     startCountdownTimer();
-    logMessage("Connecting to C&C...");
-    ws = new WebSocket(`${CC_SERVER_URL}?token=${viewerToken}`);
+    const isLocalDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (isLocalDev) {
+        logMessage("Connecting to local StreamTanks server...");
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${proto}//${window.location.host}/ws?client=extension`);
+    } else {
+        logMessage("Connecting to C&C...");
+        ws = new WebSocket(`${CC_SERVER_URL}?token=${viewerToken}`);
+    }
 
     ws.onopen = () => {
         logMessage("Connected!");
 
         // Send the initial auth payload expected by the server
-        ws!.send(JSON.stringify({ jwt: viewerToken }));
+        if (!isLocalDev) {
+            ws!.send(JSON.stringify({ jwt: viewerToken }));
+        }
 
         // Start heartbeat ping
         if (pingInterval) clearInterval(pingInterval);
@@ -513,14 +547,17 @@ function connectWebSocket() {
                 landingDismissed = false;
                 updateLandingVisibility();
                 logMessage(data.payload || "Twitch identity link required.");
-            } else if (data.type === "GAME_STATE" && data.payload) {
-                const phase = data.payload.phase;
-                const timerRemaining = data.payload.timer_remaining;
-                const playersCount = data.payload.players_count;
-                const winner = data.payload.winner;
+            } else if ((data.type === "GAME_STATE" || data.type === "STATE_UPDATE") && data.payload) {
+                const payload = data.payload;
+                const phase = payload.phase;
+                const timerRemaining = payload.timer_remaining ?? payload.timerRemaining;
+                const playersCount = payload.players_count ?? (payload.players ? Object.keys(payload.players).length : 0);
+                const winner = payload.winner;
 
-                if (Array.isArray(data.payload.players)) {
-                    activePlayers = data.payload.players.map((p: string) => String(p).toLowerCase());
+                if (Array.isArray(payload.players)) {
+                    activePlayers = payload.players.map((p: string) => String(p).toLowerCase());
+                } else if (payload.players && typeof payload.players === 'object') {
+                    activePlayers = Object.keys(payload.players).map((p: string) => p.toLowerCase());
                 }
 
                 if (timerRemaining !== undefined) {
@@ -528,14 +565,25 @@ function connectWebSocket() {
                 }
 
                 if (!isMobile) {
-                    if (typeof data.payload.protractor_x === 'number') {
-                        pivotX = data.payload.protractor_x;
+                    const px = payload.protractor_x ?? payload.protractorX;
+                    const py = payload.protractor_y ?? payload.protractorY;
+                    let posChanged = false;
+                    if (typeof px === 'number') {
+                        if (lastProtractorX !== px) posChanged = true;
+                        pivotX = px;
+                        lastProtractorX = px;
                     }
-                    if (typeof data.payload.protractor_y === 'number') {
-                        pivotY = data.payload.protractor_y;
+                    if (typeof py === 'number') {
+                        if (lastProtractorY !== py) posChanged = true;
+                        pivotY = py;
+                        lastProtractorY = py;
                     }
                     if (protractorOverlayGroup) {
                         protractorOverlayGroup.setAttribute("transform", `translate(${pivotX}, ${pivotY})`);
+                    }
+                    if (posChanged) {
+                        setAngle(currentAngle);
+                        showProtractorPreview(2500);
                     }
                 }
 
@@ -649,6 +697,16 @@ btnFire?.addEventListener("click", () => {
 });
 
 // Twitch Helper Initialization
+const isLocalDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+if (isLocalDev || !window.Twitch || !window.Twitch.ext) {
+    // Standalone local preview mode or opened directly in browser
+    console.log("Running in standalone/local preview mode.");
+    isLinked = true;
+    updateLandingVisibility();
+    connectWebSocket();
+}
+
 if (window.Twitch && window.Twitch.ext) {
     window.Twitch.ext.onAuthorized((auth: any) => {
         const tokenChanged = viewerToken !== "" && viewerToken !== auth.token;
@@ -661,7 +719,7 @@ if (window.Twitch && window.Twitch.ext) {
         if (tokenChanged && ws) {
             // Reconnect WebSocket so C&C server re-authenticates with new identity token
             ws.close();
-        } else {
+        } else if (!ws || ws.readyState === WebSocket.CLOSED) {
             connectWebSocket();
         }
 
@@ -669,12 +727,6 @@ if (window.Twitch && window.Twitch.ext) {
             logMessage("Twitch account connected!");
         }
     });
-} else {
-    // Local preview mode without Twitch extension iframe
-    console.log("Twitch helper not detected; running in standalone test mode.");
-    isLinked = true;
-    updateLandingVisibility();
-    connectWebSocket();
 }
 
 // Initialize Aiming & Initial Values
@@ -682,5 +734,5 @@ initProtractorAiming();
 setAngle(45);
 initVerticalPower();
 setPower(100);
-setAimingVisible(false);
+setAimingVisible(isStandaloneDev);
 updateLandingVisibility();

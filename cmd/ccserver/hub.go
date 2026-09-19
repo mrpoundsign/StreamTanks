@@ -16,14 +16,14 @@ type Hub struct {
 	mu          sync.RWMutex
 	hosts       map[string]*websocket.Conn
 	viewers     map[string]map[*websocket.Conn]bool
-	latestState map[string]interface{}
+	latestState map[string]any
 }
 
 func NewHub() *Hub {
 	return &Hub{
 		hosts:       make(map[string]*websocket.Conn),
 		viewers:     make(map[string]map[*websocket.Conn]bool),
-		latestState: make(map[string]interface{}),
+		latestState: make(map[string]any),
 	}
 }
 
@@ -89,7 +89,7 @@ func (h *Hub) UnregisterViewer(channel string, ws *websocket.Conn) {
 }
 
 // BroadcastToViewers sends a message to all viewers listening to a channel and caches the latest payload.
-func (h *Hub) BroadcastToViewers(channel string, payload interface{}) {
+func (h *Hub) BroadcastToViewers(channel string, payload any) {
 	cleanChan := strings.ToLower(channel)
 	h.mu.Lock()
 	h.latestState[cleanChan] = payload
@@ -113,7 +113,7 @@ func (h *Hub) BroadcastToViewers(channel string, payload interface{}) {
 }
 
 // RouteMessage forwards a JSON payload to the specific channel's host.
-func (h *Hub) RouteMessage(channel string, payload interface{}) error {
+func (h *Hub) RouteMessage(channel string, payload any) error {
 	cleanChan := strings.ToLower(channel)
 	h.mu.RLock()
 	ws, exists := h.hosts[cleanChan]
@@ -146,11 +146,11 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 			channel, err := auth.Authenticate(req)
 
 			// Single dedicated reader goroutine for this WebSocket connection
-			msgChan := make(chan interface{})
+			msgChan := make(chan any)
 			errChan := make(chan error, 1)
 			go func() {
 				for {
-					var m interface{}
+					var m any
 					if err := websocket.JSON.Receive(ws, &m); err != nil {
 						errChan <- err
 						return
@@ -163,7 +163,7 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 				reqChannel := strings.ToLower(strings.TrimSpace(req.URL.Query().Get("channel")))
 				if reqChannel == "" || claimMgr == nil {
 					log.Printf("Host authentication rejected: %v", err)
-					_ = websocket.JSON.Send(ws, map[string]interface{}{
+					_ = websocket.JSON.Send(ws, map[string]any{
 						"type":    "AUTH_ERROR",
 						"payload": err.Error(),
 					})
@@ -175,9 +175,9 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 				defer cancel()
 
 				log.Printf("Host challenge issued for channel %s (code: %s)", reqChannel, code)
-				if sendErr := websocket.JSON.Send(ws, map[string]interface{}{
+				if sendErr := websocket.JSON.Send(ws, map[string]any{
 					"type": "AUTH_CHALLENGE",
-					"payload": map[string]interface{}{
+					"payload": map[string]any{
 						"channel":    reqChannel,
 						"code":       code,
 						"command":    "%claim " + code,
@@ -196,9 +196,9 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 						channel = reqChannel
 						auth.InvalidateOlderTokens(channel, time.Now().Unix())
 						newToken := auth.GenerateToken(channel)
-						_ = websocket.JSON.Send(ws, map[string]interface{}{
+						_ = websocket.JSON.Send(ws, map[string]any{
 							"type": "AUTH_SUCCESS",
-							"payload": map[string]interface{}{
+							"payload": map[string]any{
 								"channel": channel,
 								"token":   newToken,
 							},
@@ -213,7 +213,7 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 
 					case <-time.After(5 * time.Minute):
 						log.Printf("Host challenge timed out for channel %s", reqChannel)
-						_ = websocket.JSON.Send(ws, map[string]interface{}{
+						_ = websocket.JSON.Send(ws, map[string]any{
 							"type":    "AUTH_ERROR",
 							"payload": "Claim timed out. Reconnect to retry.",
 						})
@@ -227,9 +227,9 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 				}
 			} else {
 				// Immediately authenticated via valid token
-				_ = websocket.JSON.Send(ws, map[string]interface{}{
+				_ = websocket.JSON.Send(ws, map[string]any{
 					"type": "AUTH_SUCCESS",
-					"payload": map[string]interface{}{
+					"payload": map[string]any{
 						"channel": channel,
 					},
 				})
@@ -237,7 +237,7 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 
 			if err := h.RegisterHost(channel, ws); err != nil {
 				log.Printf("Host registration failed for %s: %v", channel, err)
-				_ = websocket.JSON.Send(ws, map[string]interface{}{
+				_ = websocket.JSON.Send(ws, map[string]any{
 					"type":    "AUTH_ERROR",
 					"payload": err.Error(),
 				})

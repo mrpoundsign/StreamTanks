@@ -125,6 +125,17 @@ func Run(cfg Config) error {
 		fileSystem = http.FS(subFS)
 	}
 
+	// Serve extension assets (/ext/) for local development and testing
+	if _, err := os.Stat("./ext-web/public"); err == nil {
+		extHandler := http.StripPrefix("/ext", http.FileServer(http.Dir("./ext-web/public")))
+		mux.HandleFunc("/ext/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+			extHandler.ServeHTTP(w, r)
+		})
+	}
+
 	fileHandler := http.FileServer(fileSystem)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -142,6 +153,7 @@ func Run(cfg Config) error {
 	}
 	log.Printf("StreamTanks overlay running at: %s", displayURL)
 	log.Printf("StreamTanks admin console running at: %s/admin", displayURL)
+	log.Printf("StreamTanks composite preview running at: %s/preview.html", displayURL)
 
 	return http.ListenAndServe(cfg.ListenAddr, mux)
 }

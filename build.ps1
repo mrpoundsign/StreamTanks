@@ -3,7 +3,9 @@
 param(
     [switch]$SkipFrontend,
     [switch]$SkipTest,
-    [switch]$SkipLint
+    [switch]$SkipLint,
+    [switch]$FixDiff,
+    [switch]$Fix
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,7 +36,20 @@ try {
         Write-Success "Frontend built successfully."
     }
 
-    # 2. Run Go Tests
+    # 2. Go Modernization (Optional checks)
+    if ($FixDiff) {
+        Write-Step "Inspecting Go modernization diffs (go fix -diff ./...)..."
+        & go fix -diff ./...
+        Write-Success "Go fix diff check finished."
+    }
+    if ($Fix) {
+        Write-Step "Applying Go modernizations (go fix ./...)..."
+        & go fix ./...
+        if ($LASTEXITCODE -ne 0) { throw "go fix failed." }
+        Write-Success "Go fix applied."
+    }
+
+    # 3. Run Go Tests
     if (-not $SkipTest) {
         Write-Step "Running Go test suite..."
         & go test -v ./...

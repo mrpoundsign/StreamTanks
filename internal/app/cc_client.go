@@ -315,8 +315,8 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 
 			case "EXTENSION_COMMAND":
 				var extCmd struct {
-					User    string      `json:"user"`
-					Command interface{} `json:"command"`
+					User    string `json:"user"`
+					Command any    `json:"command"`
 				}
 				if err := json.Unmarshal(env.Payload, &extCmd); err != nil {
 					continue

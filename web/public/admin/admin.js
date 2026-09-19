@@ -187,6 +187,12 @@
             if (cfgTerrainMin) cfgTerrainMin.value = tMin;
             if (cfgTerrainMax) cfgTerrainMax.value = tMax;
             if (terrainRangeVal) terrainRangeVal.innerText = `${tMin}% — ${tMax}%`;
+            
+            // Highest point a tank can be is at the highest terrain elevation
+            const maxPy = Math.max(100, Math.floor(1080 * (1 - tMax / 100)));
+            if (cfgProtractorY) {
+                cfgProtractorY.max = maxPy;
+            }
         }
 
         if (!isProtractorDirty) {
@@ -443,6 +449,17 @@
         let maxVal = parseInt(cfgTerrainMax.value, 10);
         if (minVal > maxVal - 10) minVal = maxVal - 10;
         terrainRangeVal.innerText = `${minVal}% — ${maxVal}%`;
+
+        const maxPy = Math.max(100, Math.floor(1080 * (1 - maxVal / 100)));
+        if (cfgProtractorY) {
+            cfgProtractorY.max = maxPy;
+            if (parseInt(cfgProtractorY.value, 10) > maxPy) {
+                cfgProtractorY.value = maxPy;
+                if (protractorPosVal) {
+                    protractorPosVal.innerText = `X: ${cfgProtractorX.value}, Y: ${maxPy}`;
+                }
+            }
+        }
     }
     cfgTerrainMin.addEventListener('input', syncTerrainSliderLabel);
     cfgTerrainMax.addEventListener('input', syncTerrainSliderLabel);

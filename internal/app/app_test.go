@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -47,6 +48,8 @@ func resetGameStateForTest() {
 	gameState.BotFill = true
 	gameState.BotPoints = 1
 	gameState.BotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
+	gameState.ProtractorX = 250
+	gameState.ProtractorY = 270
 
 	cancelAutoRoundTimer()
 	cancelFastForward()
@@ -196,8 +199,8 @@ func TestConcurrentBroadcastAndStateAccess(t *testing.T) {
 
 	// Connect simulated clients
 	const numClients = 5
-	var conns []*websocket.Conn
-	for i := 0; i < numClients; i++ {
+	conns := make([]*websocket.Conn, 0, numClients)
+	for range numClients {
 		conn, err := websocket.Dial(wsURL, "", server.URL)
 		if err != nil {
 			t.Fatalf("failed to dial websocket: %v", err)
@@ -228,7 +231,7 @@ func TestConcurrentBroadcastAndStateAccess(t *testing.T) {
 
 	// Concurrently broadcast and process commands
 	var opWg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		opWg.Add(1)
 		playerID := fmt.Sprintf("User%d", i)
 		go func(name string) {
@@ -648,13 +651,12 @@ func TestAdminDashboardEndpoint(t *testing.T) {
 	}
 }
 
-
 func TestInactivePlayerRandomDirection(t *testing.T) {
 	leftCount := 0
 	rightCount := 0
 	fireCount := 0
 
-	for trial := 0; trial < 150; trial++ {
+	for range 150 {
 		resetGameStateForTest()
 
 		gameState.mu.Lock()
@@ -1173,7 +1175,7 @@ func TestScoringPerKill(t *testing.T) {
 
 	// 2. Environmental death (abyss): Charlie dies with no killer
 	processCommand("Charlie", "%join PogChamp", nil)
-	
+
 	gameState.mu.Lock()
 	gameState.Phase = phaseAction
 	charlie := gameState.Players["Charlie"]
@@ -1196,7 +1198,7 @@ func TestScoringPerKill(t *testing.T) {
 	if gameState.Leaderboard["Charlie"] != 0 {
 		t.Errorf("expected Charlie score to be 0, got %d", gameState.Leaderboard["Charlie"])
 	}
-	
+
 	// Game over should be triggered by updatePhysicsStep because only Alice is left
 	// Since Alice is the winner, she gets +5 points
 	if gameState.Leaderboard["Alice"] != 6 {
@@ -1743,13 +1745,7 @@ func TestBotConfigurationCommands(t *testing.T) {
 	// 4. %botlist add / remove
 	processCommand("Streamer", "%botlist add EliteSniper", nil, broadcaster)
 	gameState.mu.Lock()
-	found := false
-	for _, b := range gameState.BotList {
-		if b == "EliteSniper" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(gameState.BotList, "EliteSniper")
 	if !found {
 		gameState.mu.Unlock()
 		t.Fatalf("expected EliteSniper to be added to BotList")
@@ -2247,3 +2243,88 @@ func TestBroadcastViewerState(t *testing.T) {
 	}
 }
 
+func TestProtractorCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test_protractor.db")
+	if err := initDB(dbPath); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer closeDB()
+
+	resetGameStateForTest()
+
+	// 1. Check default
+	gameState.mu.Lock()
+	if gameState.ProtractorX != 250 || gameState.ProtractorY != 270 {
+		t.Fatalf("expected defaults 250, 270, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
+	}
+	gameState.mu.Unlock()
+
+	// 2. Run command via processCommand with terrainMax=50 (maxY = 1080 * 0.5 = 540)
+	processCommand("Admin", "%terrain 20 50", nil, nil)
+	processCommand("Admin", "%protractor 1500 500", nil, nil)
+
+	gameState.mu.Lock()
+	if gameState.ProtractorX != 1500 || gameState.ProtractorY != 500 {
+		t.Fatalf("expected 1500, 500 after command, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Verify saved to DB
+	if xVal := getSetting("protractor_x"); xVal != "1500" {
+		t.Fatalf("expected db protractor_x to be 1500, got %s", xVal)
+	}
+	if yVal := getSetting("protractor_y"); yVal != "500" {
+		t.Fatalf("expected db protractor_y to be 500, got %s", yVal)
+	}
+
+	// 4. Test maxY clamping: TerrainMax=75 -> maxY = 1080 * 0.25 = 270
+	processCommand("Admin", "%terrain 20 75", nil, nil)
+	gameState.mu.Lock()
+	if gameState.ProtractorY != 270 {
+		t.Fatalf("expected protractorY to be clamped to 270 after terrain change, got %d", gameState.ProtractorY)
+	}
+	gameState.mu.Unlock()
+
+	// Trying to set Y above 270 clamps it to 270
+	processCommand("Admin", "%protractor 1000 600", nil, nil)
+	gameState.mu.Lock()
+	if gameState.ProtractorX != 1000 || gameState.ProtractorY != 270 {
+		t.Fatalf("expected 1000, 270 due to maxY clamping, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
+	}
+	gameState.mu.Unlock()
+
+	// 5. Test nosave
+	processCommand("Admin", "%protractor 300 200 nosave", nil, nil)
+	gameState.mu.Lock()
+	if gameState.ProtractorX != 300 || gameState.ProtractorY != 200 {
+		t.Fatalf("expected 300, 200 after nosave, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
+	}
+	gameState.mu.Unlock()
+	if xVal := getSetting("protractor_x"); xVal != "1000" {
+		t.Fatalf("expected db protractor_x to remain 1000 after nosave, got %s", xVal)
+	}
+
+	// 6. Test reset
+	processCommand("Admin", "%protractor reset", nil, nil)
+	gameState.mu.Lock()
+	if gameState.ProtractorX != 250 || gameState.ProtractorY != 270 {
+		t.Fatalf("expected 250, 270 after reset (clamped to maxY 270), got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
+	}
+	// 7. Test JSON marshaling of GameState
+	data, err := json.Marshal(&gameState)
+	gameState.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to marshal gameState: %v", err)
+	}
+	var rawMap map[string]any
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if rawMap["protractorX"] != float64(250) || rawMap["protractorY"] != float64(270) {
+		t.Fatalf("expected JSON keys protractorX=250, protractorY=270, got protractorX=%v, protractorY=%v", rawMap["protractorX"], rawMap["protractorY"])
+	}
+
+	// 8. Test broadcastExcept deep copy of GameState preserves ProtractorX and ProtractorY
+	broadcast(msgStateUpdate, &gameState)
+}

@@ -11,7 +11,7 @@ import (
 
 func TestHubRegistration(t *testing.T) {
 	hub := NewHub()
-	
+
 	// Create a dummy connection
 	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {}))
 	defer server.Close()
@@ -69,9 +69,9 @@ func TestHubStateCachingAndViewerSync(t *testing.T) {
 	channel := "mrpoundsign"
 
 	// Broadcast payload before any viewer connects
-	statePayload := map[string]interface{}{
+	statePayload := map[string]any{
 		"type": "GAME_STATE",
-		"payload": map[string]interface{}{
+		"payload": map[string]any{
 			"phase":           "INPUT",
 			"timer_remaining": float64(15),
 			"round_id":        float64(2),
@@ -88,9 +88,9 @@ func TestHubStateCachingAndViewerSync(t *testing.T) {
 	}
 
 	// Create a mock server that receives initial message from RegisterViewer
-	msgChan := make(chan map[string]interface{}, 1)
+	msgChan := make(chan map[string]any, 1)
 	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		var received map[string]interface{}
+		var received map[string]any
 		if err := websocket.JSON.Receive(ws, &received); err == nil {
 			msgChan <- received
 		}

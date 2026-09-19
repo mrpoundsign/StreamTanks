@@ -787,8 +787,8 @@ net.onMessage((msg: WSMessage) => {
         protractorPreviewUntil = Date.now() + 2000;
       }
 
-      const leftX = Math.max(10, px - 210);
-      const topY = Math.max(10, py - 310);
+      const leftX = Math.min(Math.max(10, px - 210), 1920 - 360);
+      const topY = Math.min(Math.max(10, py - 310), 1080 - 200);
       leaderboardEl.style.left = `${leftX}px`;
       leaderboardEl.style.top = `${topY}px`;
     }
