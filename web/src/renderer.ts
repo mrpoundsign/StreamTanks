@@ -25,21 +25,29 @@ export function drawTerrain(ctx: CanvasRenderingContext2D, terrain: number[]): v
   ctx.shadowBlur = 0; // reset
 }
 
-export function drawGiantProtractor(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
+export function drawGiantProtractor(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  isDead: boolean = false
+): void {
   ctx.save();
   ctx.translate(centerX, centerY); // Configurable position
 
-  ctx.strokeStyle = 'rgba(0, 255, 204, 0.5)';
+  const arcColor = isDead ? 'rgba(255, 0, 60, 0.6)' : 'rgba(0, 255, 204, 0.5)';
+  const glowColor = isDead ? '#ff003c' : '#00ffcc';
+
+  ctx.strokeStyle = arcColor;
   ctx.lineWidth = 10;
   ctx.shadowBlur = 20;
-  ctx.shadowColor = '#00ffcc';
+  ctx.shadowColor = glowColor;
 
   // Draw giant arc
   ctx.beginPath();
   ctx.arc(0, 0, 150, Math.PI, 0);
   ctx.stroke();
 
-  ctx.fillStyle = '#00ffcc';
+  ctx.fillStyle = glowColor;
   ctx.font = '24px Orbitron';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -87,12 +95,22 @@ export function drawGiantProtractor(ctx: CanvasRenderingContext2D, centerX: numb
     ctx.stroke();
   }
 
-  // Center indicator & crosshair
-  ctx.fillStyle = '#ff003c';
-  ctx.shadowColor = '#ff003c';
-  ctx.beginPath();
-  ctx.arc(0, 0, 8, 0, Math.PI * 2);
-  ctx.fill();
+  if (isDead) {
+    // Large skull emoji centered in the protractor
+    ctx.font = '72px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = '#ff003c';
+    ctx.fillText('💀', 0, -25);
+  } else {
+    // Center indicator & crosshair
+    ctx.fillStyle = '#ff003c';
+    ctx.shadowColor = '#ff003c';
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }

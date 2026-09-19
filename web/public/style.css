@@ -173,6 +173,20 @@ canvas {
     animation: fadeout 5s forwards;
 }
 
+.pts-added {
+    color: #00ffcc;
+    font-weight: 700;
+    margin-left: 4px;
+    text-shadow: 0 0 6px rgba(0, 255, 204, 0.6);
+}
+
+.pts-removed {
+    color: #ff003c;
+    font-weight: 700;
+    margin-left: 4px;
+    text-shadow: 0 0 6px rgba(255, 0, 60, 0.6);
+}
+
 @keyframes fadeout {
     0% { opacity: 1; }
     80% { opacity: 1; }

@@ -109,6 +109,8 @@ export interface KillEvent {
   impactY?: number;
   roundId?: number;
   timestamp?: number;
+  pointsLost?: number;
+  pointsAwarded?: number;
 }
 
 export interface Projectile {
@@ -143,6 +145,9 @@ export interface PlayerDiedPayload {
   victimIsBot?: boolean;
   killer?: string;
   killerIsBot?: boolean;
+  pointsLost?: number;
+  pointsAwarded?: number;
+  bountyAwarded?: number;
 }
 
 export interface WSMessage<T = unknown> {

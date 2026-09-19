@@ -159,6 +159,22 @@ func cancelAutoRoundTimer() {
 	}
 }
 
+func getTopPlayerLocked() string {
+	var topUser string
+	maxScore := 0
+	for user, score := range gameState.Leaderboard {
+		if score > maxScore {
+			maxScore = score
+			topUser = user
+		} else if score == maxScore && score > 0 {
+			if topUser == "" || strings.ToLower(user) < strings.ToLower(topUser) {
+				topUser = user
+			}
+		}
+	}
+	return topUser
+}
+
 func triggerAutoRound() {
 	gameState.mu.Lock()
 	ar := gameState.AutoRound
@@ -185,7 +201,8 @@ func triggerAutoRound() {
 					humanCount++
 				}
 			}
-			if humanCount == 0 {
+			topUser := getTopPlayerLocked()
+			if humanCount == 0 && topUser == "" {
 				gameState.mu.Unlock()
 				return
 			}
@@ -204,11 +221,26 @@ func startInputPhase() {
 
 	gameState.mu.Lock()
 
-	// If starting from IDLE, drop any unjoined roamers
+	// If starting from IDLE, ensure top player from leaderboard is added and joined
 	if gameState.Phase == phaseIdle {
+		topUser := getTopPlayerLocked()
+		if topUser != "" {
+			if p, exists := gameState.Players[topUser]; exists {
+				p.Joined = true
+			}
+		}
+
+		// Drop any unjoined roamers
 		for key, p := range gameState.Players {
 			if !p.IsBot && !p.Joined {
 				delete(gameState.Players, key)
+			}
+		}
+
+		// If top player wasn't already in gameState.Players, spawn them now as joined
+		if topUser != "" {
+			if _, exists := gameState.Players[topUser]; !exists {
+				spawnNewPlayerLocked(topUser, true)
 			}
 		}
 	}
@@ -672,11 +704,24 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 		if dist < radius+20.0 {
 			p.IsDead = true
 
+			// 5% point loss for human victim on death (rounded down)
+			loss := 0
+			if !p.IsBot {
+				victimScore := gameState.Leaderboard[name]
+				loss = victimScore / 20
+				if loss > 0 {
+					gameState.Leaderboard[name] -= loss
+					deductScore(name, loss)
+				}
+			}
+
 			// Handle kill attribution
 			killerPlayer := gameState.Players[owner]
 			killerIsBot := false
 			angle := 0
 			power := 0
+			bountyAwarded := 0
+			pointsAwarded := 0
 			if killerPlayer != nil {
 				killerIsBot = killerPlayer.IsBot
 				angle = killerPlayer.Angle
@@ -686,29 +731,37 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 					if p.IsBot {
 						pts = gameState.BotPoints
 					}
-					if pts > 0 {
-						gameState.Leaderboard[owner] += pts
-						addScore(owner, pts)
+					totalPts := pts + loss
+					if totalPts > 0 {
+						gameState.Leaderboard[owner] += totalPts
+						addScore(owner, totalPts)
 					}
+					bountyAwarded = loss
+					pointsAwarded = totalPts
 				}
 			}
 			gameState.MatchKills = append(gameState.MatchKills, KillEvent{
-				Killer:      owner,
-				KillerIsBot: killerIsBot,
-				Victim:      name,
-				VictimIsBot: p.IsBot,
-				Angle:       angle,
-				Power:       power,
-				ImpactX:     cx,
-				ImpactY:     cy,
-				RoundID:     gameState.RoundID,
-				Timestamp:   time.Now().UnixMilli(),
+				Killer:        owner,
+				KillerIsBot:   killerIsBot,
+				Victim:        name,
+				VictimIsBot:   p.IsBot,
+				Angle:         angle,
+				Power:         power,
+				ImpactX:       cx,
+				ImpactY:       cy,
+				RoundID:       gameState.RoundID,
+				Timestamp:     time.Now().UnixMilli(),
+				PointsLost:    loss,
+				PointsAwarded: pointsAwarded,
 			})
 			broadcast(msgPlayerDied, PlayerDiedPayload{
-				Victim:      name,
-				VictimIsBot: p.IsBot,
-				Killer:      owner,
-				KillerIsBot: killerIsBot,
+				Victim:        name,
+				VictimIsBot:   p.IsBot,
+				Killer:        owner,
+				KillerIsBot:   killerIsBot,
+				PointsLost:    loss,
+				PointsAwarded: pointsAwarded,
+				BountyAwarded: bountyAwarded,
 			})
 		}
 	}
@@ -790,6 +843,15 @@ func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 		if p.Y >= defaultTerrainHeight {
 			if !p.IsDead {
 				p.IsDead = true
+				loss := 0
+				if !p.IsBot {
+					victimScore := gameState.Leaderboard[name]
+					loss = victimScore / 20
+					if loss > 0 {
+						gameState.Leaderboard[name] -= loss
+						deductScore(name, loss)
+					}
+				}
 				gameState.MatchKills = append(gameState.MatchKills, KillEvent{
 					Victim:      name,
 					VictimIsBot: p.IsBot,
@@ -801,6 +863,7 @@ func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 				broadcast(msgPlayerDied, PlayerDiedPayload{
 					Victim:      name,
 					VictimIsBot: p.IsBot,
+					PointsLost:  loss,
 				})
 			}
 		}
@@ -1876,7 +1939,8 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 					humanCount++
 				}
 			}
-			if humanCount == 0 {
+			topUser := getTopPlayerLocked()
+			if humanCount == 0 && topUser == "" {
 				gameState.mu.Unlock()
 				return
 			}

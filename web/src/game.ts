@@ -118,10 +118,10 @@ function escapeHtml(str: string): string {
   return div.innerHTML;
 }
 
-function showKillMessage(msg: string): void {
+function showKillMessage(html: string): void {
   const el = document.createElement('div');
   el.className = 'kill-message';
-  el.innerText = msg;
+  el.innerHTML = html;
   killFeed.appendChild(el);
   setTimeout(() => {
     if (killFeed.contains(el)) {
@@ -613,8 +613,14 @@ function updateUI(): void {
       phaseBadge.innerText = 'INPUT PHASE';
       phaseBadge.className = 'hud-badge input';
     }
+    const joinedHumans = Object.values(stateRef?.players || {}).filter(p => !p.isBot && p.joined);
+    const isHumanDead = joinedHumans.length > 0 && joinedHumans.every(p => p.isDead);
     if (hudInstructions) {
-      hudInstructions.innerHTML = `<span class="cmd-highlight">${prefix}fire &lt;angle&gt; &lt;power&gt;</span> | <span class="cmd-highlight">${prefix}left</span> | <span class="cmd-highlight">${prefix}right</span>`;
+      if (isHumanDead) {
+        hudInstructions.innerHTML = `<span class="cmd-highlight" style="color: #ff003c; border-color: #ff003c; background: rgba(255, 0, 60, 0.15);">💀 ELIMINATED</span>`;
+      } else {
+        hudInstructions.innerHTML = `<span class="cmd-highlight">${prefix}fire &lt;angle&gt; &lt;power&gt;</span> | <span class="cmd-highlight">${prefix}left</span> | <span class="cmd-highlight">${prefix}right</span>`;
+      }
     }
     if (hudAvatar) {
       hudAvatar.style.display = 'none';
@@ -714,15 +720,17 @@ function updateUI(): void {
           const victimIsBot = k.victimIsBot;
           const victimClass = victimIsBot ? 'recap-name bot' : 'recap-name player';
           const victimTag = victimIsBot ? '<span class="bot-tag">BOT</span>' : '';
+          const victimLoss = (k.pointsLost && k.pointsLost > 0) ? ` <span class="pts-removed">(-${k.pointsLost})</span>` : '';
 
           if (k.killer) {
             const killerIsBot = k.killerIsBot;
             const killerClass = killerIsBot ? 'recap-name bot' : 'recap-name player';
             const killerTag = killerIsBot ? '<span class="bot-tag">BOT</span>' : '';
+            const killerPts = (k.pointsAwarded && k.pointsAwarded > 0) ? ` <span class="pts-added">(+${k.pointsAwarded})</span>` : '';
 
-            li.innerHTML = `<span class="${killerClass}">${escapeHtml(k.killer)}${killerTag}</span><span class="recap-action">💥 destroyed</span><span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}</span>`;
+            li.innerHTML = `<span class="${killerClass}">${escapeHtml(k.killer)}${killerTag}${killerPts}</span><span class="recap-action">💥 destroyed</span><span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}${victimLoss}</span>`;
           } else {
-            li.innerHTML = `<span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}</span><span class="recap-action abyss">fell into the abyss</span>`;
+            li.innerHTML = `<span class="${victimClass}">${escapeHtml(k.victim)}${victimTag}${victimLoss}</span><span class="recap-action abyss">fell into the abyss</span>`;
           }
           recapList.appendChild(li);
         }
@@ -907,10 +915,14 @@ net.onMessage((msg: WSMessage) => {
     }
   } else if (msg.type === MsgPlayerDied) {
     const payload = msg.payload as PlayerDiedPayload;
+    const victimLoss = payload.pointsLost ?? 0;
+    const victimLossTag = victimLoss > 0 ? ` <span class="pts-removed">(-${victimLoss})</span>` : '';
     if (payload.killer) {
-      showKillMessage(`${payload.killer} destroyed ${payload.victim}!`);
+      const killerGain = payload.pointsAwarded ?? payload.bountyAwarded ?? 0;
+      const killerGainTag = killerGain > 0 ? ` <span class="pts-added">(+${killerGain})</span>` : '';
+      showKillMessage(`${escapeHtml(payload.killer)}${killerGainTag} destroyed ${escapeHtml(payload.victim)}${victimLossTag}!`);
     } else {
-      showKillMessage(`${payload.victim} fell into the abyss!`);
+      showKillMessage(`${escapeHtml(payload.victim)}${victimLossTag} fell into the abyss!`);
     }
     if (players[payload.victim]) {
       players[payload.victim].isDead = true;
@@ -945,7 +957,9 @@ function draw(): void {
     // If we are previewing in IDLE, make it slightly translucent
     const isPreview = currentPhase !== 'INPUT';
     if (isPreview) ctx.globalAlpha = 0.5;
-    drawGiantProtractor(ctx, stateRef?.protractorX ?? 250, stateRef?.protractorY ?? 350);
+    const joinedHumans = Object.values(players).filter((p) => !p.isBot && p.joined);
+    const isHumanDead = joinedHumans.length > 0 && joinedHumans.every((p) => p.isDead);
+    drawGiantProtractor(ctx, stateRef?.protractorX ?? 250, stateRef?.protractorY ?? 350, isHumanDead);
     if (isPreview) ctx.globalAlpha = 1.0;
   }
   drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache, avatarImgCache);

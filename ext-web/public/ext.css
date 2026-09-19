@@ -104,6 +104,11 @@ body {
     letter-spacing: 1px;
 }
 
+.dead-skull {
+    filter: drop-shadow(0 0 20px rgba(255, 0, 60, 0.9));
+    pointer-events: none;
+}
+
 /* Desktop Top Action & Status Bar (covers stream's top HUD) */
 .desktop-top-hud {
     background: rgba(10, 15, 25, 0.98);

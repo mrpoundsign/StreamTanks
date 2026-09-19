@@ -80,6 +80,16 @@ func addScore(username string, points int) {
 	}
 }
 
+func deductScore(username string, points int) {
+	if db == nil || points <= 0 {
+		return
+	}
+	_, err := db.Exec(`UPDATE leaderboard SET wins = MAX(0, wins - ?) WHERE LOWER(username) = LOWER(?)`, points, username)
+	if err != nil {
+		log.Println("DB deductScore error:", err)
+	}
+}
+
 func loadSettings() {
 	if db == nil {
 		return

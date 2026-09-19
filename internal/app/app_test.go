@@ -2663,4 +2663,302 @@ func TestConcurrentJoinedArrayAndBroadcastStress(t *testing.T) {
 	}
 }
 
+func TestTopPlayerAutoJoin_FromIdle(t *testing.T) {
+	resetGameStateForTest()
+
+	// Setup leaderboard with a top player
+	gameState.mu.Lock()
+	gameState.Leaderboard["Champion"] = 100
+	gameState.Leaderboard["SecondPlace"] = 50
+	gameState.mu.Unlock()
+
+	// Start input phase without any chatters joining explicitly
+	startInputPhase()
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected phaseInput when top player is on leaderboard, got %s", gameState.Phase)
+	}
+
+	champ := gameState.Players["Champion"]
+	if champ == nil {
+		t.Fatalf("expected Champion to be added to the match automatically")
+	}
+	if !champ.Joined {
+		t.Errorf("expected Champion.Joined to be true, got false")
+	}
+	if champ.IsBot {
+		t.Errorf("expected Champion to be human (!IsBot)")
+	}
+
+	if _, exists := gameState.Players["SecondPlace"]; exists {
+		t.Errorf("expected SecondPlace NOT to be added (only top player should be auto-joined)")
+	}
+
+	// Verify bots filled remaining slots up to MinPlayers (5)
+	if len(gameState.Players) != 5 {
+		t.Errorf("expected 5 total players (1 top player + 4 bots), got %d", len(gameState.Players))
+	}
+}
+
+func TestTopPlayerAutoJoin_TieBreaker(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Leaderboard["PlayerZ"] = 50
+	gameState.Leaderboard["PlayerA"] = 50
+	top := getTopPlayerLocked()
+	gameState.mu.Unlock()
+
+	if top != "PlayerA" {
+		t.Errorf("expected deterministic alphabetical tie-breaker PlayerA, got %s", top)
+	}
+}
+
+func TestAutoRoundTimer_WithTopPlayer(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Leaderboard["Champion"] = 100
+	gameState.AutoRound = -1 // 500ms immediate delay
+	gameState.mu.Unlock()
+
+	triggerAutoRound()
+
+	time.Sleep(600 * time.Millisecond)
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected AutoRound timer to transition to phaseInput with top player, got %s", gameState.Phase)
+	}
+	if _, exists := gameState.Players["Champion"]; !exists {
+		t.Fatalf("expected Champion to be spawned into match by AutoRound timer")
+	}
+}
+
+func TestAutoRoundTimer_EmptyLeaderboard(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.AutoRound = -1
+	gameState.mu.Unlock()
+
+	triggerAutoRound()
+
+	time.Sleep(600 * time.Millisecond)
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseIdle {
+		t.Fatalf("expected AutoRound timer to remain in phaseIdle when leaderboard is empty, got %s", gameState.Phase)
+	}
+}
+
+func TestDeathPenalty_HumanKillsHuman(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.RoundID = 1
+	gameState.Leaderboard["Alice"] = 100
+	gameState.Leaderboard["Bob"] = 50
+
+	gameState.Players["Alice"] = &Player{
+		Name:      "Alice",
+		IsBot:     false,
+		Joined:    true,
+		X:         100,
+		Y:         200,
+		LastAngle: 45,
+		LastPower: 50,
+	}
+	gameState.Players["Bob"] = &Player{
+		Name:   "Bob",
+		IsBot:  false,
+		Joined: true,
+		X:      300,
+		Y:      200,
+	}
+	gameState.mu.Unlock()
+
+	// Alice hits Bob with an explosion at (300, 200) with radius 50
+	gameState.mu.Lock()
+	checkTankCollisions(300, 200, 50, "Alice")
+
+	// Bob has 50 points: loss = 50 / 20 = 2 points
+	// Bob new score: 50 - 2 = 48
+	// Alice receives: 1 (kill) + 2 (bounty) = +3 -> 100 + 3 = 103
+	if gameState.Leaderboard["Bob"] != 48 {
+		t.Errorf("expected Bob score 48 after 5%% loss, got %d", gameState.Leaderboard["Bob"])
+	}
+	if gameState.Leaderboard["Alice"] != 103 {
+		t.Errorf("expected Alice score 103 (+1 kill +2 bounty), got %d", gameState.Leaderboard["Alice"])
+	}
+	if !gameState.Players["Bob"].IsDead {
+		t.Errorf("expected Bob to be marked dead")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestDeathPenalty_BotKillsHuman(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.RoundID = 1
+	gameState.Leaderboard["Bob"] = 100
+
+	gameState.Players["TargetBot"] = &Player{
+		Name:      "TargetBot",
+		IsBot:     true,
+		Joined:    true,
+		X:         100,
+		Y:         200,
+		LastAngle: 45,
+		LastPower: 50,
+	}
+	gameState.Players["Bob"] = &Player{
+		Name:   "Bob",
+		IsBot:  false,
+		Joined: true,
+		X:      300,
+		Y:      200,
+	}
+	gameState.mu.Unlock()
+
+	// TargetBot kills Bob
+	gameState.mu.Lock()
+	checkTankCollisions(300, 200, 50, "TargetBot")
+
+	// Bob has 100 points: loss = 100 / 20 = 5 points
+	// Bob new score: 100 - 5 = 95
+	// TargetBot is a bot, so no points awarded to bot
+	if gameState.Leaderboard["Bob"] != 95 {
+		t.Errorf("expected Bob score 95 after 5%% loss to bot, got %d", gameState.Leaderboard["Bob"])
+	}
+	if _, exists := gameState.Leaderboard["TargetBot"]; exists {
+		t.Errorf("expected TargetBot not to receive leaderboard points")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestDeathPenalty_FallingIntoAbyss(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.RoundID = 1
+	gameState.Leaderboard["Bob"] = 60
+
+	// Carve terrain at X=500 down to bottom of screen (abyss)
+	gameState.Terrain[500] = float64(defaultTerrainHeight)
+
+	gameState.Players["Bob"] = &Player{
+		Name:   "Bob",
+		IsBot:  false,
+		Joined: true,
+		X:      500,
+		Y:      float64(defaultTerrainHeight),
+	}
+
+	updateTankMovements(1.0, false)
+
+	// Bob has 60 points: loss = 60 / 20 = 3 points
+	// Bob new score: 60 - 3 = 57
+	if gameState.Leaderboard["Bob"] != 57 {
+		t.Errorf("expected Bob score 57 after falling into abyss, got %d", gameState.Leaderboard["Bob"])
+	}
+	if !gameState.Players["Bob"].IsDead {
+		t.Errorf("expected Bob to be marked dead")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestDeathPenalty_ScoreUnderTwenty(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.RoundID = 1
+	gameState.Leaderboard["Alice"] = 10
+	gameState.Leaderboard["Bob"] = 19
+
+	gameState.Players["Alice"] = &Player{
+		Name:      "Alice",
+		IsBot:     false,
+		Joined:    true,
+		X:         100,
+		Y:         200,
+		LastAngle: 45,
+		LastPower: 50,
+	}
+	gameState.Players["Bob"] = &Player{
+		Name:   "Bob",
+		IsBot:  false,
+		Joined: true,
+		X:      300,
+		Y:      200,
+	}
+	gameState.mu.Unlock()
+
+	// Alice kills Bob (who has 19 points: 19 / 20 = 0 points lost)
+	gameState.mu.Lock()
+	checkTankCollisions(300, 200, 50, "Alice")
+
+	if gameState.Leaderboard["Bob"] != 19 {
+		t.Errorf("expected Bob score to remain 19 (loss = 0), got %d", gameState.Leaderboard["Bob"])
+	}
+	// Alice gets 1 kill point + 0 bounty = +1 -> 11
+	if gameState.Leaderboard["Alice"] != 11 {
+		t.Errorf("expected Alice score 11 (+1 kill +0 bounty), got %d", gameState.Leaderboard["Alice"])
+	}
+	gameState.mu.Unlock()
+}
+
+func TestDeathPenalty_BotVictim(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.RoundID = 1
+	gameState.Leaderboard["Alice"] = 10
+
+	gameState.Players["Alice"] = &Player{
+		Name:      "Alice",
+		IsBot:     false,
+		Joined:    true,
+		X:         100,
+		Y:         200,
+		LastAngle: 45,
+		LastPower: 50,
+	}
+	gameState.Players["TargetBot"] = &Player{
+		Name:   "TargetBot",
+		IsBot:  true,
+		Joined: true,
+		X:      300,
+		Y:      200,
+	}
+	gameState.mu.Unlock()
+
+	// Alice kills TargetBot
+	gameState.mu.Lock()
+	checkTankCollisions(300, 200, 50, "Alice")
+
+	// Alice gets BotPoints (1), 0 bounty
+	if gameState.Leaderboard["Alice"] != 11 {
+		t.Errorf("expected Alice score 11 from bot kill, got %d", gameState.Leaderboard["Alice"])
+	}
+	if _, exists := gameState.Leaderboard["TargetBot"]; exists {
+		t.Errorf("expected TargetBot not to appear on leaderboard")
+	}
+	gameState.mu.Unlock()
+}
+
+
 

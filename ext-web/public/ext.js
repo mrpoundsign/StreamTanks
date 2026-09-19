@@ -10,6 +10,7 @@
   var canStartGame = false;
   var canJoinGame = true;
   var hasJoined = false;
+  var isPlayerDead = false;
   var currentAngle = 45;
   var currentPower = 100;
   var pingInterval = null;
@@ -31,6 +32,7 @@
   var mobileAngleBadge = document.querySelector(".mobile-angle-badge");
   var valAngle = document.getElementById("val-angle");
   var pivotCenter = document.getElementById("pivot-center") || document.querySelector(".pivot-center");
+  var deadSkull = document.getElementById("dead-skull");
   function setAimingVisible(visible) {
     if (protractorOverlayGroup) {
       if (visible) {
@@ -65,6 +67,10 @@
     if (mobileAngleBadge) {
       mobileAngleBadge.style.display = visible ? "" : "none";
       mobileAngleBadge.style.visibility = visible ? "visible" : "hidden";
+    }
+    if (deadSkull) {
+      deadSkull.classList.add("hidden");
+      deadSkull.style.display = "none";
     }
   }
   function showProtractorPreview(durationMs = 2500) {
@@ -315,6 +321,21 @@
     }
     return false;
   }
+  function getIsPlayerDead() {
+    if (currentPhaseStr === "IDLE") return false;
+    if (isPlayerDead) return true;
+    if (currentUsername) {
+      const joined = hasJoined || joinedPlayersList.includes(currentUsername);
+      if (joined && !activePlayers.includes(currentUsername) && (activePlayers.length > 0 || joinedPlayersList.length > 0)) {
+        return true;
+      }
+    } else if (isLocalDev) {
+      if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
+        return true;
+      }
+    }
+    return false;
+  }
   function startCountdownTimer() {
     if (countdownInterval) return;
     countdownInterval = window.setInterval(() => {
@@ -393,8 +414,14 @@
     const role = getUserRole(viewerToken);
     const isModOrBroadcaster = role === "broadcaster" || role === "moderator";
     const isJoined = getIsPlayerJoined();
+    const isDead = isJoined && getIsPlayerDead();
     const canDeploy = !isJoined && canJoinGame;
     if (cleanPhase === "IDLE") {
+      isPlayerDead = false;
+      if (deadSkull) {
+        deadSkull.classList.add("hidden");
+        deadSkull.style.display = "none";
+      }
       if (Date.now() < protractorPreviewUntil) {
         setAimingVisible(true);
       } else {
@@ -421,22 +448,80 @@
     } else if (cleanPhase === "INPUT") {
       if (adminControls) adminControls.classList.add("hidden");
       if (isJoined) {
-        setAimingVisible(true);
-        if (playerControls) playerControls.classList.remove("hidden");
-        if (playerSetup) playerSetup.classList.add("hidden");
-        if (btnFire) btnFire.disabled = false;
+        if (isDead) {
+          if (playerControls) playerControls.classList.add("hidden");
+          if (playerSetup) playerSetup.classList.add("hidden");
+          if (btnFire) btnFire.disabled = true;
+          if (protractorOverlayGroup) {
+            protractorOverlayGroup.classList.remove("hidden");
+            protractorOverlayGroup.style.display = "";
+            protractorOverlayGroup.style.visibility = "visible";
+            protractorOverlayGroup.setAttribute("visibility", "visible");
+          }
+          if (protractorHitArea) {
+            protractorHitArea.style.display = "none";
+            protractorHitArea.style.visibility = "hidden";
+          }
+          if (angleNeedle) {
+            angleNeedle.style.display = "none";
+            angleNeedle.style.visibility = "hidden";
+          }
+          if (needleHead) {
+            needleHead.style.display = "none";
+            needleHead.style.visibility = "hidden";
+          }
+          if (angleBadgeGroup) {
+            angleBadgeGroup.style.display = "none";
+            angleBadgeGroup.style.visibility = "hidden";
+          }
+          if (pivotCenter) {
+            pivotCenter.style.display = "none";
+            pivotCenter.style.visibility = "hidden";
+          }
+          if (mobileAngleBadge) {
+            mobileAngleBadge.style.display = "none";
+            mobileAngleBadge.style.visibility = "hidden";
+          }
+          if (deadSkull) {
+            deadSkull.classList.remove("hidden");
+            deadSkull.style.display = "";
+            deadSkull.style.visibility = "visible";
+          }
+          if (statusMessage) {
+            statusMessage.textContent = "ELIMINATED";
+            statusMessage.classList.remove("hidden");
+          }
+        } else {
+          if (deadSkull) {
+            deadSkull.classList.add("hidden");
+            deadSkull.style.display = "none";
+          }
+          setAimingVisible(true);
+          if (playerControls) playerControls.classList.remove("hidden");
+          if (playerSetup) playerSetup.classList.add("hidden");
+          if (btnFire) btnFire.disabled = false;
+          if (statusMessage) statusMessage.classList.add("hidden");
+        }
       } else {
         setAimingVisible(false);
+        if (deadSkull) {
+          deadSkull.classList.add("hidden");
+          deadSkull.style.display = "none";
+        }
         if (playerControls) playerControls.classList.add("hidden");
         if (canDeploy) {
           if (playerSetup) playerSetup.classList.remove("hidden");
         } else {
           if (playerSetup) playerSetup.classList.add("hidden");
         }
+        if (statusMessage) statusMessage.classList.add("hidden");
       }
-      if (statusMessage) statusMessage.classList.add("hidden");
     } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
       setAimingVisible(false);
+      if (deadSkull) {
+        deadSkull.classList.add("hidden");
+        deadSkull.style.display = "none";
+      }
       if (adminControls) adminControls.classList.add("hidden");
       if (playerSetup) playerSetup.classList.add("hidden");
       if (playerControls) playerControls.classList.add("hidden");
@@ -447,6 +532,10 @@
       if (btnFire) btnFire.disabled = true;
     } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
       setAimingVisible(false);
+      if (deadSkull) {
+        deadSkull.classList.add("hidden");
+        deadSkull.style.display = "none";
+      }
       if (adminControls) adminControls.classList.add("hidden");
       if (playerSetup) playerSetup.classList.add("hidden");
       if (playerControls) playerControls.classList.add("hidden");
@@ -573,7 +662,39 @@
               showProtractorPreview(2500);
             }
           }
+          if (phase === "IDLE") {
+            isPlayerDead = false;
+          } else {
+            if (currentUsername) {
+              const joined = hasJoined || joinedPlayersList.includes(currentUsername);
+              if (joined) {
+                isPlayerDead = !activePlayers.includes(currentUsername);
+              }
+            } else if (isLocalDev2) {
+              if (payload.players && typeof payload.players === "object") {
+                const humans = Object.values(payload.players).filter((p) => p && !p.isBot && p.joined);
+                if (humans.length > 0 && humans.every((p) => p.isDead)) {
+                  isPlayerDead = true;
+                } else if (humans.some((p) => !p.isDead)) {
+                  isPlayerDead = false;
+                }
+              } else if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
+                isPlayerDead = true;
+              } else if (activePlayers.length > 0) {
+                isPlayerDead = false;
+              }
+            }
+          }
           updateUIForPhase(phase, timerRemaining, playersCount, winner);
+        } else if (data.type === "PLAYER_DIED" && data.payload) {
+          const victim = String(data.payload.victim || "").toLowerCase();
+          if (currentUsername && victim === currentUsername) {
+            isPlayerDead = true;
+            updateUIForPhase(currentPhaseStr);
+          } else if (isLocalDev2 && (!currentUsername || victim === currentUsername)) {
+            isPlayerDead = true;
+            updateUIForPhase(currentPhaseStr);
+          }
         }
       } catch (e) {
         console.error("Failed to parse WebSocket message:", e);
