@@ -3292,5 +3292,325 @@ func TestDeathPenalty_BotVictim(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
+func TestShield_CommandAndImmunity(t *testing.T) {
+	resetGameStateForTest()
 
+	// Alice and Bob join
+	processCommand("Alice", "%join", nil)
+	processCommand("Bob", "%join", nil)
 
+	// Start game -> INPUT phase
+	processCommand("Alice", "%startgame", nil)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected phaseInput, got %s", gameState.Phase)
+	}
+	alice := gameState.Players["Alice"]
+	if alice.ShieldUsed || alice.IsShielded {
+		t.Fatalf("expected shield unused initially")
+	}
+	gameState.mu.Unlock()
+
+	// Alice activates shield
+	processCommand("Alice", "%shield", nil)
+
+	gameState.mu.Lock()
+	alice = gameState.Players["Alice"]
+	if !alice.Fired {
+		t.Errorf("expected Alice to be locked in (Fired = true)")
+	}
+	if alice.ActionType != actionShield {
+		t.Errorf("expected Alice ActionType %s, got %s", actionShield, alice.ActionType)
+	}
+	if !alice.IsShielded {
+		t.Errorf("expected Alice IsShielded to be true")
+	}
+	if !alice.ShieldUsed {
+		t.Errorf("expected Alice ShieldUsed to be true")
+	}
+	gameState.mu.Unlock()
+
+	// Alice attempts to overwrite shield with %fire - should be rejected/ignored
+	processCommand("Alice", "%fire 45 50", nil)
+	gameState.mu.Lock()
+	if alice.ActionType != actionShield {
+		t.Errorf("expected Alice to remain in shield action, got %s", alice.ActionType)
+	}
+	gameState.mu.Unlock()
+
+	// Test explosion immunity
+	gameState.mu.Lock()
+	alice.X = 200
+	alice.Y = 300
+	alice.IsDead = false
+	checkTankCollisions(200, 300, 50, "Bob")
+	if alice.IsDead {
+		t.Errorf("expected shielded Alice to survive explosion!")
+	}
+	gameState.mu.Unlock()
+
+	// Advance to next round
+	startInputPhase()
+
+	gameState.mu.Lock()
+	alice = gameState.Players["Alice"]
+	if alice.IsShielded {
+		t.Errorf("expected Alice IsShielded to reset to false on next round")
+	}
+	if !alice.ShieldUsed {
+		t.Errorf("expected Alice ShieldUsed to remain true across rounds")
+	}
+	gameState.mu.Unlock()
+
+	// Alice attempts to shield again in the same match - rejected
+	processCommand("Alice", "%shield", nil)
+	gameState.mu.Lock()
+	if alice.IsShielded {
+		t.Errorf("expected second shield use in same match to be rejected")
+	}
+	gameState.mu.Unlock()
+
+	// Reset to idle / new game
+	gameState.mu.Lock()
+	gameState.Phase = phaseIdle
+	gameState.mu.Unlock()
+
+	startInputPhase()
+	gameState.mu.Lock()
+	alice = gameState.Players["Alice"]
+	if alice.ShieldUsed {
+		t.Errorf("expected Alice ShieldUsed to reset to false in new match from IDLE")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestShield_ProjectileAbsorption(t *testing.T) {
+	resetGameStateForTest()
+
+	processCommand("Alice", "%join", nil)
+	processCommand("Bob", "%join", nil)
+	processCommand("Alice", "%startgame", nil)
+
+	// Alice shields
+	processCommand("Alice", "%shield", nil)
+
+	gameState.mu.Lock()
+	alice := gameState.Players["Alice"]
+	alice.X = 400
+	alice.Y = 500
+	alice.IsShielded = true
+
+	// Add a projectile heading straight into Alice's shield dome (center: 400, 485)
+	gameState.Projectiles = []Projectile{
+		{
+			ID:    "shot_bob",
+			X:     400,
+			Y:     485,
+			VX:    0,
+			VY:    1,
+			Owner: "Bob",
+		},
+	}
+
+	initialTerrainHeight := getTerrainHeight(gameState.Terrain, 400)
+	appliedCraters = make(map[string]bool)
+	gameState.mu.Unlock()
+
+	// Step physics
+	gameState.mu.Lock()
+	updateProjectiles(1.0, false)
+
+	if len(gameState.Projectiles) != 0 {
+		t.Errorf("expected projectile to be absorbed and removed, remaining: %d", len(gameState.Projectiles))
+	}
+	if alice.IsDead {
+		t.Errorf("expected Alice not to die from absorbed projectile")
+	}
+	newTerrainHeight := getTerrainHeight(gameState.Terrain, 400)
+	if newTerrainHeight != initialTerrainHeight {
+		t.Errorf("expected ground not to be damaged, height changed from %f to %f", initialTerrainHeight, newTerrainHeight)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestShield_BroadcastViewerState(t *testing.T) {
+	resetGameStateForTest()
+
+	msgChan := make(chan WSMessage, 10)
+	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		for {
+			var m WSMessage
+			if err := websocket.JSON.Receive(ws, &m); err == nil {
+				msgChan <- m
+			} else {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+
+	clientWS, err := websocket.Dial("ws://"+server.Listener.Addr().String(), "", "http://localhost/")
+	if err != nil {
+		t.Fatalf("failed to dial mock server: %v", err)
+	}
+	defer func() { _ = clientWS.Close() }()
+
+	setCCConn(clientWS)
+	defer setCCConn(nil)
+
+	processCommand("Alice", "%join", nil)
+	processCommand("Bob", "%join", nil)
+	processCommand("Alice", "%startgame", nil)
+	processCommand("Alice", "%shield", nil)
+
+	timeout := time.After(2 * time.Second)
+	found := false
+	for !found {
+		select {
+		case msg := <-msgChan:
+			if msg.Type == "GAME_STATE" {
+				payloadBytes, _ := json.Marshal(msg.Payload)
+				var vs ViewerState
+				if err := json.Unmarshal(payloadBytes, &vs); err == nil {
+					if slices.Contains(vs.ShieldUsedPlayers, "alice") && slices.Contains(vs.ShieldedPlayers, "alice") {
+						found = true
+					}
+				}
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for GAME_STATE broadcast with alice in ShieldUsedPlayers and ShieldedPlayers")
+		}
+	}
+}
+
+func TestBotsDoNotExistInIdlePhase(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1. In IDLE phase, verify no bots exist in gameState.Players
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseIdle, got %s", gameState.Phase)
+	}
+	for name, p := range gameState.Players {
+		if p.IsBot {
+			gameState.mu.Unlock()
+			t.Fatalf("expected no bots in idle phase, found bot %s", name)
+		}
+	}
+	gameState.mu.Unlock()
+
+	// 2. Human joins and starts game with BotFill=true and MinPlayers=3
+	gameState.mu.Lock()
+	gameState.MinPlayers = 3
+	gameState.BotFill = true
+	gameState.mu.Unlock()
+
+	processCommand("Alice", "%join", nil)
+	processCommand("Alice", "%startgame", nil)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput, got %s", gameState.Phase)
+	}
+	botCount := 0
+	for _, p := range gameState.Players {
+		if p.IsBot {
+			botCount++
+		}
+	}
+	if botCount != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected 2 bots spawned to reach MinPlayers=3, got %d", botCount)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Match rolls over to IDLE
+	gameState.mu.Lock()
+	gameState.Phase = phaseCelebration
+	gameState.mu.Unlock()
+	resetMatchState()
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseIdle, got %s", gameState.Phase)
+	}
+	for name, p := range gameState.Players {
+		if p.IsBot {
+			gameState.mu.Unlock()
+			t.Fatalf("expected all bots to be removed in idle phase, found bot %s", name)
+		}
+	}
+	gameState.mu.Unlock()
+}
+
+func TestBotShield_OnePerGame(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	gameState.RoundID = 1
+	gameState.Players["Alice"] = &Player{Name: "Alice", Joined: true, LastActiveRound: 1}
+	gameState.Players["TestBot"] = &Player{
+		Name:            "TestBot",
+		IsBot:           true,
+		Joined:          true,
+		ShieldUsed:      false,
+		IsShielded:      false,
+		LastActiveRound: 1,
+	}
+	gameState.mu.Unlock()
+
+	// Simulate bot choosing shield in Round 1
+	gameState.mu.Lock()
+	bot := gameState.Players["TestBot"]
+	bot.ActionType = actionShield
+	bot.IsShielded = true
+	bot.ShieldUsed = true
+	bot.Fired = true
+	gameState.mu.Unlock()
+
+	// Verify shield is active and consumed
+	gameState.mu.Lock()
+	if !bot.IsShielded || !bot.ShieldUsed {
+		gameState.mu.Unlock()
+		t.Fatalf("expected bot to have IsShielded=true and ShieldUsed=true")
+	}
+	gameState.mu.Unlock()
+
+	// Transition to Round 2
+	startInputPhase()
+
+	gameState.mu.Lock()
+	bot = gameState.Players["TestBot"]
+	// In Round 2: IsShielded must reset to false, but ShieldUsed must remain true
+	if bot.IsShielded {
+		gameState.mu.Unlock()
+		t.Fatalf("expected bot IsShielded to reset to false in round 2")
+	}
+	if !bot.ShieldUsed {
+		gameState.mu.Unlock()
+		t.Fatalf("expected bot ShieldUsed to remain true in round 2")
+	}
+	// Verify action choices in startInputPhase: since ShieldUsed is true, action can only be Left, Right, or Fire
+	if bot.ActionType == actionShield {
+		gameState.mu.Unlock()
+		t.Fatalf("expected bot NOT to choose shield when ShieldUsed is already true")
+	}
+	gameState.mu.Unlock()
+
+	// Roll over to IDLE: bot must be deleted
+	gameState.mu.Lock()
+	gameState.Phase = phaseCelebration
+	gameState.mu.Unlock()
+	resetMatchState()
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["TestBot"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected TestBot to be purged in idle phase")
+	}
+	gameState.mu.Unlock()
+}

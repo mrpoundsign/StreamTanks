@@ -63,7 +63,6 @@ func Run(cfg Config) error {
 		gameState.mu.Lock()
 		gameState.Debug = true
 		p1X := float64(defaultTerrainWidth)/2.0 - 100.0
-		botX := float64(defaultTerrainWidth)/2.0 + 100.0
 		gameState.Players[localPlayer] = &Player{
 			Name:            localPlayer,
 			Emote:           "Kappa",
@@ -75,19 +74,8 @@ func Run(cfg Config) error {
 			LastActiveRound: gameState.RoundID,
 			Joined:          false,
 		}
-		gameState.Players["TargetBot"] = &Player{
-			Name:            "TargetBot",
-			IsBot:           true,
-			Emote:           "PogChamp",
-			EmoteURL:        "https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/2.0",
-			LastAngle:       135,
-			LastPower:       50,
-			X:               botX,
-			Y:               getTerrainHeight(gameState.Terrain, botX),
-			LastActiveRound: gameState.RoundID,
-		}
 		gameState.mu.Unlock()
-		log.Printf("Debug mode enabled: spawned %s and TargetBot", localPlayer)
+		log.Printf("Debug mode enabled: spawned %s", localPlayer)
 	}
 
 	// Setup Twitch Client only if channel is provided

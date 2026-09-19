@@ -17,7 +17,6 @@
     const btnQuickStart = document.getElementById('btn-quick-start');
     const btnQuickBouncy = document.getElementById('btn-quick-bouncy');
     const bouncyStatusText = document.getElementById('bouncy-status-text');
-    const btnQuickJoin = document.getElementById('btn-quick-join');
     const btnToggleIdle = document.getElementById('btn-toggle-idle');
     const idleStatusText = document.getElementById('idle-status-text');
     const btnToggleBotfill = document.getElementById('btn-toggle-botfill');
@@ -150,11 +149,6 @@
             btnQuickStart.disabled = !canStartGame;
         }
 
-        const isIdlePhase = (state.phase === 'IDLE' || !state.phase);
-        const targetBotJoined = !!state.players?.['TargetBot']?.joined;
-        if (btnQuickJoin) {
-            btnQuickJoin.disabled = !isIdlePhase || targetBotJoined;
-        }
 
         const isBouncy = !!state.bouncyWalls;
         bouncyStatusText.innerText = isBouncy ? 'On (+10% bullet)' : 'Off';
@@ -282,7 +276,7 @@
                     statusText = p.joined ? 'Joined' : 'Roaming';
                 } else if (fired) {
                     statusClass = 'fired';
-                    statusText = 'Locked In';
+                    statusText = (state.phase !== 'INPUT' && p.isShielded) ? '🛡️ Shielded' : 'Locked In';
                 }
 
                 const emoteUrl = p.emoteUrl || 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0';
@@ -382,11 +376,6 @@
     btnToggleBotfill.addEventListener('click', () => {
         const nextVal = stateRef?.botFill ? 'off' : 'on';
         sendCommand(`botfill ${nextVal}`);
-    });
-
-    btnQuickJoin.addEventListener('click', () => {
-        if (btnQuickJoin.disabled) return;
-        sendCommand('join TargetBot');
     });
 
     btnResetTerrain.addEventListener('click', () => {

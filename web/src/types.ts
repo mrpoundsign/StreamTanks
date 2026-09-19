@@ -35,8 +35,9 @@ export const MsgTerrainCrater = 'TERRAIN_CRATER';
 export const ActionFire = 'FIRE';
 export const ActionLeft = 'LEFT';
 export const ActionRight = 'RIGHT';
+export const ActionShield = 'SHIELD';
 
-export type ActionType = typeof ActionFire | typeof ActionLeft | typeof ActionRight | string;
+export type ActionType = typeof ActionFire | typeof ActionLeft | typeof ActionRight | typeof ActionShield | string;
 
 export interface Player {
   name: string;
@@ -61,6 +62,8 @@ export interface Player {
   hasBounced?: boolean;
   lastActiveRound?: number;
   joined?: boolean;
+  shieldUsed?: boolean;
+  isShielded?: boolean;
 }
 
 export interface GameState {

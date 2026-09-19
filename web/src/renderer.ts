@@ -248,20 +248,13 @@ export function drawTanks(
       }
     }
 
-    // Draw Protractor & Firing state in INPUT phase
+    // Draw Radial Lines & Firing state in INPUT phase
     if (currentPhase === 'INPUT') {
       ctx.strokeStyle = p.fired ? '#00ffcc' : '#ff003c'; // Turns cyan if locked in
       ctx.shadowColor = ctx.strokeStyle;
       ctx.lineWidth = 2;
 
-      // Protractor Arc
-      ctx.beginPath();
-      ctx.arc(p.x, p.y - 10, 50, Math.PI, 0);
-      ctx.stroke();
-
-      // Degree markers
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.font = '10px Orbitron';
+      // Degree marker radial ticks (0°, 45°, 90°, 135°, 180° radial lines only)
       const angles = [0, 45, 90, 135, 180];
       for (const deg of angles) {
         const rad = (deg * Math.PI) / 180;
@@ -271,8 +264,6 @@ export function drawTanks(
         ctx.moveTo(p.x + Math.cos(rad) * innerR, p.y - 10 - Math.sin(rad) * innerR);
         ctx.lineTo(p.x + Math.cos(rad) * outerR, p.y - 10 - Math.sin(rad) * outerR);
         ctx.stroke();
-
-        ctx.fillText(deg.toString(), p.x + Math.cos(rad) * 60, p.y - 10 - Math.sin(rad) * 60);
       }
 
       // Aiming line
@@ -281,6 +272,51 @@ export function drawTanks(
       ctx.moveTo(p.x, p.y - 10);
       ctx.lineTo(p.x + Math.cos(aimAngle) * 50, p.y - 10 - Math.sin(aimAngle) * 50);
       ctx.stroke();
+    }
+
+    // Draw Shield Half-Circle / Shell (Only displayed AFTER command phase, during action/resolution)
+    if (currentPhase !== 'INPUT' && p.isShielded && !p.isDead) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      const terrainAngle = getTerrainSlopeAngle(terrain, p.x);
+      ctx.rotate(terrainAngle);
+
+      const shieldRadius = 45;
+
+      // Outer glowing semicircle barrier (arching over the player, tangent to the ground)
+      ctx.beginPath();
+      ctx.arc(0, 0, shieldRadius, Math.PI, 0);
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = '#00e5ff';
+      ctx.stroke();
+
+      // Translucent radial energy fill under the half-circle
+      const grad = ctx.createRadialGradient(
+        0, 0, 5,
+        0, 0, shieldRadius
+      );
+      grad.addColorStop(0, 'rgba(0, 229, 255, 0.05)');
+      grad.addColorStop(0.7, 'rgba(0, 229, 255, 0.2)');
+      grad.addColorStop(1, 'rgba(0, 229, 255, 0.4)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, shieldRadius, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner high-tech energy arc
+      ctx.beginPath();
+      ctx.arc(0, 0, shieldRadius - 6, Math.PI, 0);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffffff';
+      ctx.stroke();
+
+      ctx.restore();
     }
   }
 }

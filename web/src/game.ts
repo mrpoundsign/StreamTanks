@@ -22,6 +22,7 @@ import {
   ActionFire,
   ActionLeft,
   ActionRight,
+  ActionShield,
 } from './types';
 import { createDefaultTerrain, getTerrainHeight, applyCrater } from './terrain';
 import { NetworkManager } from './network';
@@ -138,7 +139,7 @@ function checkTankCollisions(cx: number, cy: number, radius: number, owner: stri
   for (const name in players) {
     if (name === owner) continue; // No self-damage
     const p = players[name];
-    if (p.isDead) continue;
+    if (p.isDead || p.isShielded) continue;
     const dist = Math.hypot(p.x - cx, p.y - cy);
     if (dist < radius + 20) {
       p.isDead = true;
@@ -196,6 +197,9 @@ function executeActions(): void {
       p.moving = true;
       p.speedMultiplier = 1.0;
       p.hasBounced = false;
+    } else if (p.actionType === ActionShield) {
+      // Hunkers down defensively with active shield
+      p.moving = false;
     }
   }
 }
@@ -338,6 +342,20 @@ function updatePhysics(dtScale: number): void {
       }
     }
 
+    // Active shield collision: completely absorbs projectile before terrain impact
+    if (!hit) {
+      for (const name in players) {
+        if (name === proj.owner) continue;
+        const p = players[name];
+        if (p.isDead || !p.isShielded) continue;
+        if (Math.hypot(p.x - proj.x, p.y - proj.y) < 45 && proj.y <= p.y + 5) {
+          hit = true;
+          createWallSpark(proj.x, proj.y);
+          break;
+        }
+      }
+    }
+
     // Terrain collision
     if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(terrain, proj.x)) {
       hit = true;
@@ -354,7 +372,7 @@ function updatePhysics(dtScale: number): void {
       for (const name in players) {
         if (name === proj.owner) continue;
         const p = players[name];
-        if (p.isDead) continue;
+        if (p.isDead || p.isShielded) continue;
         if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
           hit = true;
           destroyTerrain(proj.x, proj.y, 50, proj.id);
@@ -862,6 +880,8 @@ net.onMessage((msg: WSMessage) => {
         players[name].emoteUrl = newPlayers[name].emoteUrl;
         players[name].isDead = newPlayers[name].isDead;
         players[name].actionType = newPlayers[name].actionType;
+        players[name].shieldUsed = newPlayers[name].shieldUsed;
+        players[name].isShielded = newPlayers[name].isShielded;
       }
 
       if (!newPlayers[name].isBot) {

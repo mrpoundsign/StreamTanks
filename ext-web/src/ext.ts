@@ -16,6 +16,10 @@ let canJoinGame: boolean = true;
 let hasJoined: boolean = false;
 let isPlayerDead: boolean = false;
 let isPlayerLeaving: boolean = false;
+let shieldUsedPlayersList: string[] = [];
+let shieldedPlayersList: string[] = [];
+let isShieldUsed: boolean = false;
+let isShieldActive: boolean = false;
 let joinRequestedAt: number = 0;
 let currentAngle: number = 45;
 let currentPower: number = 100;
@@ -84,6 +88,7 @@ function setAimingVisible(visible: boolean) {
     }
     if (!visible) {
         setLeaveButtonVisible(false);
+        setShieldButtonVisible(false);
     }
 }
 
@@ -133,6 +138,7 @@ const btnFire = document.getElementById("btn-fire");
 const btnLeft = document.getElementById("btn-left");
 const btnRight = document.getElementById("btn-right");
 const btnLeave = document.getElementById("btn-leave");
+const btnShield = document.getElementById("btn-shield") as HTMLButtonElement | null;
 
 function setLeaveButtonVisible(visible: boolean) {
     if (!btnLeave) return;
@@ -147,6 +153,21 @@ function setLeaveButtonVisible(visible: boolean) {
         (btnLeave as HTMLElement).style.visibility = "hidden";
         btnLeave.setAttribute("visibility", "hidden");
     }
+}
+
+function setShieldButtonVisible(visible: boolean) {
+    const shieldButtons = document.querySelectorAll<HTMLElement>("#btn-shield, .shield-btn");
+    shieldButtons.forEach(btn => {
+        if (visible) {
+            btn.classList.remove("hidden");
+            btn.style.display = "";
+            btn.style.visibility = "visible";
+        } else {
+            btn.classList.add("hidden");
+            btn.style.display = "none";
+            btn.style.visibility = "hidden";
+        }
+    });
 }
 
 // Landing Page Elements
@@ -531,6 +552,7 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
                 if (playerControls) playerControls.classList.add("hidden");
                 if (playerSetup) playerSetup.classList.add("hidden");
                 if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
+                setShieldButtonVisible(false);
 
                 if (protractorOverlayGroup) {
                     protractorOverlayGroup.classList.remove("hidden");
@@ -585,6 +607,7 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
                 if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
                 if (btnLeft) (btnLeft as HTMLButtonElement).disabled = true;
                 if (btnRight) (btnRight as HTMLButtonElement).disabled = true;
+                setShieldButtonVisible(false);
                 setCurrentAction("LEAVING AT END OF MATCH");
                 if (statusMessage) {
                     statusMessage.textContent = "LEAVING AT END OF MATCH";
@@ -602,6 +625,22 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
                 if (btnFire) (btnFire as HTMLButtonElement).disabled = false;
                 if (btnLeft) (btnLeft as HTMLButtonElement).disabled = false;
                 if (btnRight) (btnRight as HTMLButtonElement).disabled = false;
+                if (isShieldUsed || isShieldActive) {
+                    // Remove shield button when player has no shields to use
+                    setShieldButtonVisible(false);
+                    if (isShieldActive) {
+                        if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
+                        if (btnLeft) (btnLeft as HTMLButtonElement).disabled = true;
+                        if (btnRight) (btnRight as HTMLButtonElement).disabled = true;
+                    }
+                } else {
+                    setShieldButtonVisible(true);
+                    if (btnShield) {
+                        btnShield.disabled = false;
+                        btnShield.textContent = "🛡️ ACTIVATE SHIELD (1/1)";
+                        btnShield.classList.remove("shield-active");
+                    }
+                }
                 if (statusMessage) statusMessage.classList.add("hidden");
             }
         } else {
@@ -634,9 +673,11 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
             statusMessage.classList.remove("hidden");
         }
         if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
+        setShieldButtonVisible(false);
     } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
         setAimingVisible(false);
         setLeaveButtonVisible(false);
+        setShieldButtonVisible(false);
         if (deadSkull) {
             deadSkull.classList.add("hidden");
             (deadSkull as HTMLElement).style.display = "none";
@@ -813,6 +854,42 @@ function connectWebSocket() {
                     isPlayerLeaving = false;
                 }
 
+                if (Array.isArray(payload.shield_used_players)) {
+                    shieldUsedPlayersList = payload.shield_used_players.map((p: string) => String(p).toLowerCase());
+                } else if (Array.isArray(payload.shieldUsedPlayers)) {
+                    shieldUsedPlayersList = payload.shieldUsedPlayers.map((p: string) => String(p).toLowerCase());
+                } else if (payload.players && typeof payload.players === 'object') {
+                    shieldUsedPlayersList = Object.values(payload.players)
+                        .filter((p: any) => p && p.shieldUsed)
+                        .map((p: any) => String(p.name || "").toLowerCase());
+                } else {
+                    shieldUsedPlayersList = [];
+                }
+
+                if (Array.isArray(payload.shielded_players)) {
+                    shieldedPlayersList = payload.shielded_players.map((p: string) => String(p).toLowerCase());
+                } else if (Array.isArray(payload.shieldedPlayers)) {
+                    shieldedPlayersList = payload.shieldedPlayers.map((p: string) => String(p).toLowerCase());
+                } else if (payload.players && typeof payload.players === 'object') {
+                    shieldedPlayersList = Object.values(payload.players)
+                        .filter((p: any) => p && p.isShielded)
+                        .map((p: any) => String(p.name || "").toLowerCase());
+                } else {
+                    shieldedPlayersList = [];
+                }
+
+                if (currentUsername) {
+                    isShieldUsed = shieldUsedPlayersList.includes(currentUsername);
+                    isShieldActive = shieldedPlayersList.includes(currentUsername);
+                } else if (isLocalDev && joinedPlayersList.length > 0) {
+                    const u = joinedPlayersList[0];
+                    isShieldUsed = shieldUsedPlayersList.includes(u);
+                    isShieldActive = shieldedPlayersList.includes(u);
+                } else {
+                    isShieldUsed = false;
+                    isShieldActive = false;
+                }
+
                 const currentlyJoined = getIsPlayerJoined();
                 hasJoined = currentlyJoined;
                 if (currentUsername && joinedPlayersList.includes(currentUsername)) {
@@ -822,6 +899,8 @@ function connectWebSocket() {
                 if (phase === "IDLE") {
                     isPlayerDead = false;
                     isPlayerLeaving = false;
+                    isShieldUsed = false;
+                    isShieldActive = false;
                 } else {
                     if (currentlyJoined) {
                         if (currentUsername) {
@@ -966,6 +1045,18 @@ btnFire?.addEventListener("click", () => {
     sendCommand(`%fire ${currentAngle} ${currentPower}`);
     setCurrentAction(`LOCKED: FIRE ${currentAngle}° @ ${currentPower}%`);
     logMessage(`Fired: ${currentAngle}° @ ${currentPower}%`);
+});
+
+btnShield?.addEventListener("click", () => {
+    sendCommand("%shield");
+    isShieldActive = true;
+    isShieldUsed = true;
+    setCurrentAction("LOCKED: SHIELD ACTIVATED");
+    logMessage("Shield activated! Invulnerable this round.");
+    setShieldButtonVisible(false);
+    if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
+    if (btnLeft) (btnLeft as HTMLButtonElement).disabled = true;
+    if (btnRight) (btnRight as HTMLButtonElement).disabled = true;
 });
 
 btnLeave?.addEventListener("click", (e) => {

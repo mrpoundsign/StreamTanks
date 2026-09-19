@@ -13,6 +13,10 @@
   var hasJoined = false;
   var isPlayerDead = false;
   var isPlayerLeaving = false;
+  var shieldUsedPlayersList = [];
+  var shieldedPlayersList = [];
+  var isShieldUsed = false;
+  var isShieldActive = false;
   var joinRequestedAt = 0;
   var currentAngle = 45;
   var currentPower = 100;
@@ -77,6 +81,7 @@
     }
     if (!visible) {
       setLeaveButtonVisible(false);
+      setShieldButtonVisible(false);
     }
   }
   function showProtractorPreview(durationMs = 2500) {
@@ -121,6 +126,7 @@
   var btnLeft = document.getElementById("btn-left");
   var btnRight = document.getElementById("btn-right");
   var btnLeave = document.getElementById("btn-leave");
+  var btnShield = document.getElementById("btn-shield");
   function setLeaveButtonVisible(visible) {
     if (!btnLeave) return;
     if (visible) {
@@ -134,6 +140,20 @@
       btnLeave.style.visibility = "hidden";
       btnLeave.setAttribute("visibility", "hidden");
     }
+  }
+  function setShieldButtonVisible(visible) {
+    const shieldButtons = document.querySelectorAll("#btn-shield, .shield-btn");
+    shieldButtons.forEach((btn) => {
+      if (visible) {
+        btn.classList.remove("hidden");
+        btn.style.display = "";
+        btn.style.visibility = "visible";
+      } else {
+        btn.classList.add("hidden");
+        btn.style.display = "none";
+        btn.style.visibility = "hidden";
+      }
+    });
   }
   var landingOverlay = document.getElementById("landing-overlay");
   var mobileLanding = document.getElementById("mobile-landing");
@@ -464,6 +484,7 @@
           if (playerControls) playerControls.classList.add("hidden");
           if (playerSetup) playerSetup.classList.add("hidden");
           if (btnFire) btnFire.disabled = true;
+          setShieldButtonVisible(false);
           if (protractorOverlayGroup) {
             protractorOverlayGroup.classList.remove("hidden");
             protractorOverlayGroup.style.display = "";
@@ -516,6 +537,7 @@
           if (btnFire) btnFire.disabled = true;
           if (btnLeft) btnLeft.disabled = true;
           if (btnRight) btnRight.disabled = true;
+          setShieldButtonVisible(false);
           setCurrentAction("LEAVING AT END OF MATCH");
           if (statusMessage) {
             statusMessage.textContent = "LEAVING AT END OF MATCH";
@@ -533,6 +555,21 @@
           if (btnFire) btnFire.disabled = false;
           if (btnLeft) btnLeft.disabled = false;
           if (btnRight) btnRight.disabled = false;
+          if (isShieldUsed || isShieldActive) {
+            setShieldButtonVisible(false);
+            if (isShieldActive) {
+              if (btnFire) btnFire.disabled = true;
+              if (btnLeft) btnLeft.disabled = true;
+              if (btnRight) btnRight.disabled = true;
+            }
+          } else {
+            setShieldButtonVisible(true);
+            if (btnShield) {
+              btnShield.disabled = false;
+              btnShield.textContent = "\u{1F6E1}\uFE0F ACTIVATE SHIELD (1/1)";
+              btnShield.classList.remove("shield-active");
+            }
+          }
           if (statusMessage) statusMessage.classList.add("hidden");
         }
       } else {
@@ -565,9 +602,11 @@
         statusMessage.classList.remove("hidden");
       }
       if (btnFire) btnFire.disabled = true;
+      setShieldButtonVisible(false);
     } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
       setAimingVisible(false);
       setLeaveButtonVisible(false);
+      setShieldButtonVisible(false);
       if (deadSkull) {
         deadSkull.classList.add("hidden");
         deadSkull.style.display = "none";
@@ -714,6 +753,35 @@
           } else {
             isPlayerLeaving = false;
           }
+          if (Array.isArray(payload.shield_used_players)) {
+            shieldUsedPlayersList = payload.shield_used_players.map((p) => String(p).toLowerCase());
+          } else if (Array.isArray(payload.shieldUsedPlayers)) {
+            shieldUsedPlayersList = payload.shieldUsedPlayers.map((p) => String(p).toLowerCase());
+          } else if (payload.players && typeof payload.players === "object") {
+            shieldUsedPlayersList = Object.values(payload.players).filter((p) => p && p.shieldUsed).map((p) => String(p.name || "").toLowerCase());
+          } else {
+            shieldUsedPlayersList = [];
+          }
+          if (Array.isArray(payload.shielded_players)) {
+            shieldedPlayersList = payload.shielded_players.map((p) => String(p).toLowerCase());
+          } else if (Array.isArray(payload.shieldedPlayers)) {
+            shieldedPlayersList = payload.shieldedPlayers.map((p) => String(p).toLowerCase());
+          } else if (payload.players && typeof payload.players === "object") {
+            shieldedPlayersList = Object.values(payload.players).filter((p) => p && p.isShielded).map((p) => String(p.name || "").toLowerCase());
+          } else {
+            shieldedPlayersList = [];
+          }
+          if (currentUsername) {
+            isShieldUsed = shieldUsedPlayersList.includes(currentUsername);
+            isShieldActive = shieldedPlayersList.includes(currentUsername);
+          } else if (isLocalDev2 && joinedPlayersList.length > 0) {
+            const u = joinedPlayersList[0];
+            isShieldUsed = shieldUsedPlayersList.includes(u);
+            isShieldActive = shieldedPlayersList.includes(u);
+          } else {
+            isShieldUsed = false;
+            isShieldActive = false;
+          }
           const currentlyJoined = getIsPlayerJoined();
           hasJoined = currentlyJoined;
           if (currentUsername && joinedPlayersList.includes(currentUsername)) {
@@ -722,6 +790,8 @@
           if (phase === "IDLE") {
             isPlayerDead = false;
             isPlayerLeaving = false;
+            isShieldUsed = false;
+            isShieldActive = false;
           } else {
             if (currentlyJoined) {
               if (currentUsername) {
@@ -848,6 +918,17 @@
     sendCommand(`%fire ${currentAngle} ${currentPower}`);
     setCurrentAction(`LOCKED: FIRE ${currentAngle}\xB0 @ ${currentPower}%`);
     logMessage(`Fired: ${currentAngle}\xB0 @ ${currentPower}%`);
+  });
+  btnShield?.addEventListener("click", () => {
+    sendCommand("%shield");
+    isShieldActive = true;
+    isShieldUsed = true;
+    setCurrentAction("LOCKED: SHIELD ACTIVATED");
+    logMessage("Shield activated! Invulnerable this round.");
+    setShieldButtonVisible(false);
+    if (btnFire) btnFire.disabled = true;
+    if (btnLeft) btnLeft.disabled = true;
+    if (btnRight) btnRight.disabled = true;
   });
   btnLeave?.addEventListener("click", (e) => {
     e.stopPropagation();

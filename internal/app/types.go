@@ -27,9 +27,10 @@ const (
 
 // Player actions
 const (
-	actionFire  = "FIRE"
-	actionLeft  = "LEFT"
-	actionRight = "RIGHT"
+	actionFire   = "FIRE"
+	actionLeft   = "LEFT"
+	actionRight  = "RIGHT"
+	actionShield = "SHIELD"
 )
 
 // Player models an individual artillery tank in the game
@@ -55,6 +56,8 @@ type Player struct {
 	Joined          bool    `json:"joined"`
 	Leaving         bool    `json:"leaving,omitempty"`
 	CommandsInMatch int     `json:"commandsInMatch,omitempty"`
+	ShieldUsed      bool    `json:"shieldUsed"`
+	IsShielded      bool    `json:"isShielded"`
 }
 
 // Projectile represents a tank shell in flight
@@ -120,7 +123,7 @@ type GameState struct {
 	JoinedPlayers  []string           `json:"joinedPlayers,omitempty"`
 }
 
-var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
+var defaultBotList = []string{"BattleBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
 
 // KillEvent records elimination details for post-game recap and future replays (#37)
 type KillEvent struct {
@@ -175,8 +178,10 @@ type ViewerState struct {
 	ProtractorY    int      `json:"protractor_y"`
 	CanStart       bool     `json:"can_start"`
 	CanJoin        bool     `json:"can_join"`
-	JoinedPlayers  []string `json:"joined_players,omitempty"`
-	LeavingPlayers []string `json:"leaving_players,omitempty"`
+	JoinedPlayers     []string `json:"joined_players,omitempty"`
+	LeavingPlayers    []string `json:"leaving_players,omitempty"`
+	ShieldUsedPlayers []string `json:"shield_used_players,omitempty"`
+	ShieldedPlayers   []string `json:"shielded_players,omitempty"`
 }
 
 // defaultEmotes provides standard Twitch emotes for players without a custom emote

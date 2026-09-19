@@ -85,9 +85,9 @@ func resetMatchState() {
 	gameState.Projectiles = []Projectile{}
 	gameState.Explosions = []Explosion{}
 
-	// Clean up bots from match so next match fills fresh based on current humans
+	// Clean up all bots from match so no bots exist in idle phase
 	for key, p := range gameState.Players {
-		if p.IsBot && (!gameState.Debug || key != "TargetBot") {
+		if p.IsBot {
 			delete(gameState.Players, key)
 		}
 	}
@@ -315,6 +315,10 @@ func startInputPhase() {
 
 	if gameState.Phase == phaseIdle {
 		gameState.MatchKills = nil
+		for _, p := range gameState.Players {
+			p.ShieldUsed = false
+			p.IsShielded = false
+		}
 	}
 	gameState.Phase = phaseInput
 	gameState.RoundID++
@@ -348,27 +352,35 @@ func startInputPhase() {
 	for _, p := range gameState.Players {
 		p.Fired = false
 		p.ActionType = ""
+		p.IsShielded = false
 		if p.X <= 0 {
 			p.X = rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
 		}
 		p.Y = getTerrainHeight(gameState.Terrain, p.X)
 
-		// Bots auto-fire/move immediately so human players don't wait for them
+		// Bots auto-fire/move/shield immediately so human players don't wait for them
 		if p.IsBot && !p.IsDead {
 			p.Fired = true
 			p.LastActiveRound = gameState.RoundID
-			actionChoice := rand.IntN(3)
-			switch actionChoice {
-			case 0:
-				p.ActionType = actionLeft
-			case 1:
-				p.ActionType = actionRight
-			case 2:
-				p.ActionType = actionFire
-				p.Angle = rand.IntN(131) + 20
-				p.Power = rand.IntN(61) + 30
-				p.LastAngle = p.Angle
-				p.LastPower = p.Power
+			// 10% chance to activate shield if still available (1-time use per match)
+			if !p.ShieldUsed && rand.IntN(10) == 0 {
+				p.ActionType = actionShield
+				p.IsShielded = true
+				p.ShieldUsed = true
+			} else {
+				actionChoice := rand.IntN(3)
+				switch actionChoice {
+				case 0:
+					p.ActionType = actionLeft
+				case 1:
+					p.ActionType = actionRight
+				case 2:
+					p.ActionType = actionFire
+					p.Angle = rand.IntN(131) + 20
+					p.Power = rand.IntN(61) + 30
+					p.LastAngle = p.Angle
+					p.LastPower = p.Power
+				}
 			}
 		} else if p.Leaving && !p.IsDead {
 			p.Fired = true
@@ -380,29 +392,6 @@ func startInputPhase() {
 	inputCancel = make(chan struct{})
 	cancelChan := inputCancel
 
-	// In debug mode, auto-ready the TargetBot after 1s so single player can test
-	if gameState.Debug {
-		if bot, exists := gameState.Players["TargetBot"]; exists && !bot.IsDead {
-			go func() {
-				time.Sleep(1 * time.Second)
-				gameState.mu.Lock()
-				if gameState.Phase == phaseInput && !bot.IsDead {
-					bot.Fired = true
-					bot.LastActiveRound = gameState.RoundID
-					if rand.IntN(2) == 0 {
-						bot.ActionType = actionLeft
-					} else {
-						bot.ActionType = actionRight
-					}
-					checkAllPlayersFired()
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
-				} else {
-					gameState.mu.Unlock()
-				}
-			}()
-		}
-	}
 	gameState.mu.Unlock()
 
 	broadcast(msgStateUpdate, &gameState)
@@ -699,7 +688,7 @@ func destroyTerrain(cx, cy, radius float64, shotId string) {
 
 func checkTankCollisions(cx, cy, radius float64, owner string) {
 	for name, p := range gameState.Players {
-		if name == owner || p.IsDead {
+		if name == owner || p.IsDead || p.IsShielded {
 			continue
 		}
 		dist := math.Hypot(p.X-cx, p.Y-cy)
@@ -963,6 +952,20 @@ func updateProjectiles(dtScale float64, bouncyWalls bool) {
 			}
 		}
 
+		// Active shield collision: completely absorbs projectile before terrain impact
+		if !hit {
+			for name, p := range gameState.Players {
+				if name == proj.Owner || p.IsDead || !p.IsShielded {
+					continue
+				}
+				if math.Hypot(p.X-proj.X, p.Y-proj.Y) < 45 && proj.Y <= p.Y+5 {
+					hit = true
+					createWallSpark(proj.X, proj.Y)
+					break
+				}
+			}
+		}
+
 		// Terrain collision
 		if !hit && proj.Y >= 0 && proj.Y >= getTerrainHeight(gameState.Terrain, proj.X) {
 			hit = true
@@ -973,7 +976,7 @@ func updateProjectiles(dtScale float64, bouncyWalls bool) {
 		// Direct tank collision
 		if !hit {
 			for name, p := range gameState.Players {
-				if name == proj.Owner || p.IsDead {
+				if name == proj.Owner || p.IsDead || p.IsShielded {
 					continue
 				}
 				if math.Hypot(p.X-proj.X, p.Y-proj.Y) < 20 {
@@ -2028,10 +2031,37 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			return
 		}
 
-	case "fire", "left", "right":
+	case "shield":
 		if gameState.Phase == phaseInput {
 			player, exists := gameState.Players[username]
 			if !exists || player.IsDead || !player.Joined || player.Leaving {
+				gameState.mu.Unlock()
+				return
+			}
+			if player.ShieldUsed {
+				gameState.mu.Unlock()
+				return
+			}
+
+			player.CommandsInMatch++
+			player.LastActiveRound = gameState.RoundID
+			player.ActionType = actionShield
+			player.IsShielded = true
+			player.ShieldUsed = true
+			player.Fired = true
+
+			checkAllPlayersFired()
+			gameState.mu.Unlock()
+			broadcast(msgPlayerLocked, username)
+			broadcast(msgStateUpdate, &gameState)
+			BroadcastViewerState()
+			return
+		}
+
+	case "fire", "left", "right":
+		if gameState.Phase == phaseInput {
+			player, exists := gameState.Players[username]
+			if !exists || player.IsDead || !player.Joined || player.Leaving || player.IsShielded {
 				gameState.mu.Unlock()
 				return
 			}
