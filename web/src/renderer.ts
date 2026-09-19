@@ -327,6 +327,11 @@ export function drawProjectiles(
   emoteCache: Record<string, HTMLImageElement>
 ): void {
   for (const proj of projectiles) {
+    if (proj.emoteUrl && !emoteCache[proj.emoteUrl]) {
+      const img = new Image();
+      img.src = proj.emoteUrl;
+      emoteCache[proj.emoteUrl] = img;
+    }
     const img = proj.emoteUrl ? emoteCache[proj.emoteUrl] : null;
     if (img && img.complete && img.naturalWidth > 0) {
       ctx.shadowBlur = 0;

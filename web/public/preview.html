@@ -44,7 +44,7 @@
         }
         #game-layer {
             z-index: 1;
-            pointer-events: none;
+            pointer-events: auto;
         }
         #extension-layer {
             z-index: 2;
@@ -75,6 +75,75 @@
         window.addEventListener('resize', scaleStage);
         window.addEventListener('DOMContentLoaded', scaleStage);
         scaleStage();
+
+        // Debug Command Bar / Chat pointer-events synchronization
+        const gameLayer = document.getElementById('game-layer');
+        const extLayer = document.getElementById('extension-layer');
+
+        function isOverDebugBar(e) {
+            try {
+                const gameDoc = gameLayer.contentDocument || (gameLayer.contentWindow && gameLayer.contentWindow.document);
+                if (!gameDoc) return false;
+                const debugBar = gameDoc.getElementById('debug-bar');
+                if (!debugBar || debugBar.style.display === 'none') return false;
+                const rect = debugBar.getBoundingClientRect();
+                const buffer = 15;
+                return (
+                    e.clientX >= rect.left - buffer &&
+                    e.clientX <= rect.right + buffer &&
+                    e.clientY >= rect.top - buffer &&
+                    e.clientY <= rect.bottom + buffer
+                );
+            } catch {
+                return false;
+            }
+        }
+
+        function syncPointerEvents(doc) {
+            if (!doc || doc.__hasDebugPointerSync) return;
+            doc.__hasDebugPointerSync = true;
+
+            doc.addEventListener('pointermove', (e) => {
+                if (isOverDebugBar(e)) {
+                    if (extLayer.style.pointerEvents !== 'none') {
+                        extLayer.style.pointerEvents = 'none';
+                    }
+                } else {
+                    if (extLayer.style.pointerEvents !== 'auto') {
+                        extLayer.style.pointerEvents = 'auto';
+                    }
+                }
+            });
+
+            doc.addEventListener('pointerdown', (e) => {
+                if (isOverDebugBar(e)) {
+                    extLayer.style.pointerEvents = 'none';
+                    try {
+                        const gameDoc = gameLayer.contentDocument || (gameLayer.contentWindow && gameLayer.contentWindow.document);
+                        if (gameDoc) {
+                            const target = gameDoc.elementFromPoint(e.clientX, e.clientY);
+                            if (target && typeof target.focus === 'function') {
+                                target.focus();
+                            }
+                            if (target && target.id === 'debug-send-btn' && typeof target.click === 'function') {
+                                target.click();
+                            }
+                        }
+                    } catch {}
+                }
+            });
+        }
+
+        function initLayerSync() {
+            try {
+                if (extLayer.contentDocument) syncPointerEvents(extLayer.contentDocument);
+                if (gameLayer.contentDocument) syncPointerEvents(gameLayer.contentDocument);
+            } catch {}
+        }
+
+        extLayer.addEventListener('load', initLayerSync);
+        gameLayer.addEventListener('load', initLayerSync);
+        initLayerSync();
     </script>
 </body>
 </html>

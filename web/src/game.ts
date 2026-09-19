@@ -81,6 +81,13 @@ const avatarCache: Record<string, string> = {};
 const avatarImgCache: Record<string, HTMLImageElement> = {};
 const emoteCache: Record<string, HTMLImageElement> = {};
 
+function preloadEmote(url: string): void {
+  if (!url || emoteCache[url]) return;
+  const img = new Image();
+  img.src = url;
+  emoteCache[url] = img;
+}
+
 function preloadPlayerAvatar(name: string): void {
   if (avatarImgCache[name] || name.startsWith('_bot_')) return;
   if (!avatarCache[name]) {
@@ -177,6 +184,10 @@ function executeActions(): void {
       const muzzleDist = 25;
       const spawnX = p.x + Math.cos(rad) * muzzleDist;
       const spawnY = p.y - 10 - Math.sin(rad) * muzzleDist;
+
+      if (p.emoteUrl) {
+        preloadEmote(p.emoteUrl);
+      }
 
       projectiles.push({
         id: shotId,
@@ -402,7 +413,11 @@ function updatePhysics(dtScale: number): void {
     const elapsed = celebrationStartTime > 0 ? performance.now() - celebrationStartTime : 0;
     if (celebrationWinner && celebrationWinner !== 'AI' && elapsed < 3500 && Math.random() < 0.2) {
       const p = players[celebrationWinner];
+      if (p?.emoteUrl) {
+        preloadEmote(p.emoteUrl);
+      }
       projectiles.push({
+        id: `celeb_${Math.random()}`,
         x: Math.random() * WIDTH,
         y: -30,
         vx: (Math.random() - 0.5) * 5,
@@ -855,11 +870,7 @@ net.onMessage((msg: WSMessage) => {
           joined: newPlayers[name].joined,
         };
         const emoteUrl = players[name].emoteUrl || `https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0`;
-        if (!emoteCache[emoteUrl]) {
-          const img = new Image();
-          img.src = emoteUrl;
-          emoteCache[emoteUrl] = img;
-        }
+        preloadEmote(emoteUrl);
       } else {
         if (currentPhase !== PhaseIdle || phaseChangedFromIdle) {
           players[name].x = newPlayers[name].x;
@@ -890,6 +901,7 @@ net.onMessage((msg: WSMessage) => {
 
       const url = newPlayers[name].emoteUrl;
       if (url) {
+        preloadEmote(url);
         let imgEl = document.getElementById('emote-' + name) as HTMLImageElement | null;
         if (!imgEl) {
           imgEl = document.createElement('img');
