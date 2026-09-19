@@ -10,3 +10,4 @@ node_modules/
 deploy.ps1
 planning/
 *.zip
+tmp/

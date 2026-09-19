@@ -46,6 +46,7 @@ func BroadcastViewerState() {
 	gameState.mu.Lock()
 	alivePlayers := make([]string, 0, len(gameState.Players))
 	joinedPlayers := make([]string, 0, len(gameState.Players))
+	leavingPlayers := make([]string, 0, len(gameState.Players))
 	hasAliveBot := false
 	for name, p := range gameState.Players {
 		if !p.IsDead && (gameState.Phase != phaseIdle || p.Joined) {
@@ -54,12 +55,16 @@ func BroadcastViewerState() {
 		if !p.IsBot && p.Joined {
 			joinedPlayers = append(joinedPlayers, strings.ToLower(name))
 		}
+		if !p.IsBot && p.Leaving {
+			leavingPlayers = append(leavingPlayers, strings.ToLower(name))
+		}
 		if p.IsBot && !p.IsDead {
 			hasAliveBot = true
 		}
 	}
 	sort.Strings(alivePlayers)
 	sort.Strings(joinedPlayers)
+	sort.Strings(leavingPlayers)
 
 	canStart := gameState.Phase == phaseIdle && len(joinedPlayers) > 0
 	canJoin := gameState.Phase == phaseIdle || (gameState.Phase == phaseInput && hasAliveBot)
@@ -76,6 +81,7 @@ func BroadcastViewerState() {
 		CanStart:       canStart,
 		CanJoin:        canJoin,
 		JoinedPlayers:  joinedPlayers,
+		LeavingPlayers: leavingPlayers,
 	}
 	gameState.mu.Unlock()
 
@@ -89,7 +95,8 @@ func BroadcastViewerState() {
 		vs.CanStart == lastViewerState.CanStart &&
 		vs.CanJoin == lastViewerState.CanJoin &&
 		slices.Equal(vs.Players, lastViewerState.Players) &&
-		slices.Equal(vs.JoinedPlayers, lastViewerState.JoinedPlayers) {
+		slices.Equal(vs.JoinedPlayers, lastViewerState.JoinedPlayers) &&
+		slices.Equal(vs.LeavingPlayers, lastViewerState.LeavingPlayers) {
 		ccConnMu.Unlock()
 		return
 	}

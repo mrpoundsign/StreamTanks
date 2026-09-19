@@ -104,6 +104,56 @@ body {
     letter-spacing: 1px;
 }
 
+/* Leave Match Button (Lower-Left of Protractor) */
+.leave-btn {
+    pointer-events: all;
+    cursor: pointer;
+}
+
+.leave-btn.hidden {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.leave-btn-bg {
+    fill: rgba(11, 12, 16, 0.92);
+    stroke: rgba(255, 0, 60, 0.7);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 5px rgba(255, 0, 60, 0.35));
+    transition: stroke 0.2s ease, fill 0.2s ease, filter 0.2s ease;
+}
+
+.leave-icon {
+    color: #ff3366;
+    transition: color 0.2s ease, filter 0.2s ease;
+}
+
+.leave-btn:hover .leave-btn-bg {
+    fill: rgba(255, 0, 60, 0.25);
+    stroke: #ff003c;
+    filter: drop-shadow(0 0 10px rgba(255, 0, 60, 0.8));
+}
+
+.leave-btn:hover .leave-icon {
+    color: #ffffff;
+    filter: drop-shadow(0 0 6px #ff003c);
+}
+
+.leave-btn-mobile {
+    margin-top: 8px;
+    background: rgba(255, 0, 60, 0.15) !important;
+    border: 1px solid rgba(255, 0, 60, 0.5) !important;
+    color: #ff3366 !important;
+}
+
+.leave-btn-mobile:hover,
+.leave-btn-mobile:active {
+    background: rgba(255, 0, 60, 0.35) !important;
+    border-color: #ff003c !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(255, 0, 60, 0.6) !important;
+}
+
 .dead-skull {
     filter: drop-shadow(0 0 20px rgba(255, 0, 60, 0.9));
     pointer-events: none;

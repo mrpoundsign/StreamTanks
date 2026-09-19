@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	extweb "streamtanks/ext-web"
 )
 
 func main() {
@@ -54,13 +56,21 @@ func main() {
 	http.Handle("/ws/viewer", HandleViewer(hub, *twitchSecret, twitchClient))
 
 	// Serve the Twitch Extension frontend files on /ext/ with permissive CORS headers
-	extFs := http.FileServer(http.Dir("./ext-web/public"))
+	var extFs http.FileSystem
+	if _, err := os.Stat("./ext-web/public"); err == nil {
+		extFs = http.Dir("./ext-web/public")
+	} else if subFS, err := extweb.FS(); err == nil {
+		extFs = http.FS(subFS)
+	} else {
+		extFs = http.Dir("./ext-web/public")
+	}
+	extHandler := http.StripPrefix("/ext/", http.FileServer(extFs))
 	http.HandleFunc("/ext/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		http.StripPrefix("/ext/", extFs).ServeHTTP(w, r)
+		extHandler.ServeHTTP(w, r)
 	})
 
 	// Health check endpoint

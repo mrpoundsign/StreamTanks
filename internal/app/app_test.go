@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	extweb "streamtanks/ext-web"
 	"streamtanks/web"
 
 	"github.com/gempir/go-twitch-irc/v4"
@@ -607,6 +608,7 @@ func TestEmbeddedPublicAssets(t *testing.T) {
 		"index.html",
 		"game.js",
 		"style.css",
+		"preview.html",
 		"admin/index.html",
 		"admin/admin.css",
 		"admin/admin.js",
@@ -619,6 +621,85 @@ func TestEmbeddedPublicAssets(t *testing.T) {
 		if len(content) == 0 {
 			t.Errorf("expected embedded asset %s to not be empty", fname)
 		}
+	}
+
+	// Verify embedded extension files can be read
+	extFS, err := extweb.FS()
+	if err != nil {
+		t.Fatalf("failed to open embedded extFS: %v", err)
+	}
+
+	requiredExtFiles := []string{
+		"video_overlay.html",
+		"mobile.html",
+		"config.html",
+		"ext.css",
+		"ext.js",
+	}
+	for _, fname := range requiredExtFiles {
+		content, err := fs.ReadFile(extFS, fname)
+		if err != nil {
+			t.Errorf("expected embedded extension asset %s to be readable, got error: %v", fname, err)
+		}
+		if len(content) == 0 {
+			t.Errorf("expected embedded extension asset %s to not be empty", fname)
+		}
+	}
+}
+
+func TestPreviewEndpointAndExtensionAssets(t *testing.T) {
+	subWebFS, err := web.FS()
+	if err != nil {
+		t.Fatalf("failed to open embedded web FS: %v", err)
+	}
+	subExtFS, err := extweb.FS()
+	if err != nil {
+		t.Fatalf("failed to open embedded extweb FS: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	extHandler := http.StripPrefix("/ext", http.FileServer(http.FS(subExtFS)))
+	mux.HandleFunc("/ext/", func(w http.ResponseWriter, r *http.Request) {
+		extHandler.ServeHTTP(w, r)
+	})
+
+	fileHandler := http.FileServer(http.FS(subWebFS))
+	mux.HandleFunc("/preview", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/preview.html"
+		fileHandler.ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fileHandler.ServeHTTP(w, r)
+	})
+
+	// 1. Test /preview returns 200 and contains preview stage
+	reqPreview := httptest.NewRequest("GET", "/preview", nil)
+	wPreview := httptest.NewRecorder()
+	mux.ServeHTTP(wPreview, reqPreview)
+	if wPreview.Code != 200 {
+		t.Fatalf("expected HTTP 200 for /preview, got %d", wPreview.Code)
+	}
+	if !strings.Contains(wPreview.Body.String(), "preview-stage") {
+		t.Errorf("expected /preview body to contain 'preview-stage'")
+	}
+
+	// 2. Test /preview.html returns 200
+	reqPreviewHTML := httptest.NewRequest("GET", "/preview.html", nil)
+	wPreviewHTML := httptest.NewRecorder()
+	mux.ServeHTTP(wPreviewHTML, reqPreviewHTML)
+	if wPreviewHTML.Code != 200 {
+		t.Fatalf("expected HTTP 200 for /preview.html, got %d", wPreviewHTML.Code)
+	}
+
+	// 3. Test /ext/video_overlay.html returns 200 and contains viewport-svg
+	reqExt := httptest.NewRequest("GET", "/ext/video_overlay.html", nil)
+	wExt := httptest.NewRecorder()
+	mux.ServeHTTP(wExt, reqExt)
+	if wExt.Code != 200 {
+		t.Fatalf("expected HTTP 200 for /ext/video_overlay.html, got %d", wExt.Code)
+	}
+	if !strings.Contains(wExt.Body.String(), "viewport-svg") {
+		t.Errorf("expected /ext/video_overlay.html body to contain 'viewport-svg'")
 	}
 }
 
@@ -2533,7 +2614,7 @@ func TestLeaveCommand(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. Leave during INPUT phase
+	// 2. Leave during INPUT phase delays removal until end of game (match)
 	processCommand("Alice", "%join Kappa", nil, nil)
 	processCommand("Bob", "%join LUL", nil, nil)
 	broadcaster := &twitch.User{Name: "Admin", Badges: map[string]int{"broadcaster": 1}}
@@ -2544,14 +2625,127 @@ func TestLeaveCommand(t *testing.T) {
 		gameState.mu.Unlock()
 		t.Fatalf("expected phaseInput")
 	}
+	gameState.Leaderboard["Bob"] = 100
+	bobPlayer, exists := gameState.Players["Bob"]
+	if !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to exist")
+	}
+	bobX := bobPlayer.X
+	bobY := bobPlayer.Y
 	gameState.mu.Unlock()
 
-	// Bob ragequits with %leave
+	// Bob attempts to leave during INPUT to dodge combat
 	processCommand("Bob", "%leave", nil, nil)
+	gameState.mu.Lock()
+	bob, exists := gameState.Players["Bob"]
+	if !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to remain on battlefield during match after %%leave in INPUT")
+	}
+	if !bob.Leaving {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob.Leaving to be true")
+	}
+	if !bob.Fired {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob.Fired to be true so round does not stall")
+	}
+	gameState.mu.Unlock()
+
+	// Bob cannot fire while Leaving is pending
+	processCommand("Bob", "%fire 45 50", nil, nil)
+	gameState.mu.Lock()
+	if gameState.Players["Bob"].Angle == 45 && gameState.Players["Bob"].Power == 50 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob's fire command to be rejected while Leaving")
+	}
+	gameState.mu.Unlock()
+
+	// Alice fires an active command during the match
+	processCommand("Alice", "%fire 90 50", nil, nil)
+
+	// 3. End of round 1 does NOT purge Bob (multiple players alive -> next round)
+	gameState.mu.Lock()
+	checkGameOverAndTransition()
+	// checkGameOverAndTransition unlocks gameState.mu
+
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Bob"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to remain in gameState.Players across round transitions while match continues")
+	}
+	if !gameState.Players["Bob"].Leaving {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob.Leaving to persist across rounds")
+	}
+	if !gameState.Players["Bob"].Fired {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob.Fired to be true in new round so round timer does not stall")
+	}
+
+	// 4. Bob can still be hit and lose points while leaving
+	checkTankCollisions(bobX, bobY, 40.0, "Alice")
+	if gameState.Leaderboard["Bob"] != 95 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to lose 5%% points (100 -> 95) on death while leaving, got %d", gameState.Leaderboard["Bob"])
+	}
+	if !gameState.Players["Bob"].IsDead {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to be dead after explosion damage")
+	}
+
+	// Mark remaining bots dead to trigger game over transition
+	for _, p := range gameState.Players {
+		if p.IsBot {
+			p.IsDead = true
+		}
+	}
+	gameState.mu.Unlock()
+
+	// 5. Game completes and transitions to celebration
+	gameState.mu.Lock()
+	checkGameOverAndTransition()
+	// checkGameOverAndTransition unlocks gameState.mu
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseCelebration {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseCelebration after all other opponents dead, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// 6. Reset match state (end of game) purges Bob
+	resetMatchState()
+
 	gameState.mu.Lock()
 	if _, exists := gameState.Players["Bob"]; exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected Bob to be removed from match after %%leave in INPUT")
+		t.Fatalf("expected Bob to be purged from gameState.Players at end of game (resetMatchState)")
+	}
+	if _, exists := gameState.Players["Alice"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected active player Alice to remain after match reset")
+	}
+	gameState.mu.Unlock()
+
+	// 7. Verify %join un-leaves a player who flagged %leave during active match
+	processCommand("Alice", "%join Kappa", nil, nil)
+	processCommand("Bob", "%join LUL", nil, nil)
+	processCommand("Admin", "%startgame", nil, broadcaster)
+	processCommand("Alice", "%leave", nil, nil)
+	gameState.mu.Lock()
+	if !gameState.Players["Alice"].Leaving {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice.Leaving to be true")
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Alice", "%join PogChamp", nil, nil)
+	gameState.mu.Lock()
+	if gameState.Players["Alice"].Leaving {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice.Leaving to be false after %%join")
 	}
 	gameState.mu.Unlock()
 }

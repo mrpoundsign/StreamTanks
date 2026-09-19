@@ -96,7 +96,7 @@ func resetMatchState() {
 	// and revive active players for next game.
 	for key, p := range gameState.Players {
 		if !p.IsBot {
-			if p.CommandsInMatch == 0 {
+			if p.CommandsInMatch == 0 || p.Leaving {
 				delete(gameState.Players, key)
 				continue
 			}
@@ -230,9 +230,9 @@ func startInputPhase() {
 			}
 		}
 
-		// Drop any unjoined roamers
+		// Drop any unjoined roamers or leaving players
 		for key, p := range gameState.Players {
-			if !p.IsBot && !p.Joined {
+			if !p.IsBot && (!p.Joined || p.Leaving) {
 				delete(gameState.Players, key)
 			}
 		}
@@ -366,10 +366,12 @@ func startInputPhase() {
 			case 2:
 				p.ActionType = actionFire
 				p.Angle = rand.IntN(131) + 20
-				p.Power = rand.IntN(41) + 40
+				p.Power = rand.IntN(61) + 30
 				p.LastAngle = p.Angle
 				p.LastPower = p.Power
 			}
+		} else if p.Leaving && !p.IsDead {
+			p.Fired = true
 		}
 	}
 	if inputCancel != nil {
@@ -1651,6 +1653,9 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 	case "join":
 		player, exists := gameState.Players[username]
 		if exists && player.Joined {
+			wasLeaving := player.Leaving
+			player.Leaving = false
+			emoteChanged := false
 			if len(parts) > 1 {
 				player.Emote = parts[1]
 				if len(emotes) > 0 {
@@ -1663,15 +1668,16 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 						}
 					}
 				}
-				gameState.mu.Unlock()
+				emoteChanged = true
+			}
+			gameState.mu.Unlock()
+			if emoteChanged || wasLeaving {
 				broadcast(msgStateUpdate, &gameState)
-			} else {
-				gameState.mu.Unlock()
 			}
 			return
 		}
 
-		if gameState.Phase != phaseIdle {
+		if gameState.Phase != phaseIdle && (!exists || !player.Joined) {
 			if gameState.Phase != phaseInput {
 				gameState.mu.Unlock()
 				return
@@ -1693,6 +1699,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 			player = spawnNewPlayerLocked(username, true)
 		} else {
 			player.Joined = true
+			player.Leaving = false
 		}
 		if gameState.Phase != phaseIdle {
 			player.LastActiveRound = gameState.RoundID
@@ -1720,38 +1727,27 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		return
 
 	case "leave":
-		_, exists := gameState.Players[username]
+		player, exists := gameState.Players[username]
 		if !exists {
 			gameState.mu.Unlock()
 			return
 		}
-		delete(gameState.Players, username)
 
-		switch gameState.Phase {
-		case phaseInput:
-			gameState.mu.Unlock()
-			broadcast(msgPlayerDied, PlayerDiedPayload{
-				Victim: username,
-				Killer: "",
-			})
-			gameState.mu.Lock()
-			checkAllPlayersFired()
-			gameState.mu.Unlock()
-			broadcast(msgStateUpdate, &gameState)
-			return
-		case phaseAction:
-			gameState.mu.Unlock()
-			broadcast(msgPlayerDied, PlayerDiedPayload{
-				Victim: username,
-				Killer: "",
-			})
-			broadcast(msgStateUpdate, &gameState)
-			return
-		default:
+		if gameState.Phase == phaseIdle || !player.Joined {
+			delete(gameState.Players, username)
 			gameState.mu.Unlock()
 			broadcast(msgStateUpdate, &gameState)
 			return
 		}
+
+		player.Leaving = true
+		if gameState.Phase == phaseInput {
+			player.Fired = true
+			checkAllPlayersFired()
+		}
+		gameState.mu.Unlock()
+		broadcast(msgStateUpdate, &gameState)
+		return
 
 	case "minplayers":
 		if !hasPermission(user, gameState.ConfigPerm) {
@@ -1952,7 +1948,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 	case "fire", "left", "right":
 		if gameState.Phase == phaseInput {
 			player, exists := gameState.Players[username]
-			if !exists || player.IsDead || !player.Joined {
+			if !exists || player.IsDead || !player.Joined || player.Leaving {
 				gameState.mu.Unlock()
 				return
 			}

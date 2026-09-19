@@ -10,10 +10,13 @@ let viewerToken: string = "";
 let currentUsername: string = "";
 let activePlayers: string[] = [];
 let joinedPlayersList: string[] = [];
+let leavingPlayersList: string[] = [];
 let canStartGame: boolean = false;
 let canJoinGame: boolean = true;
 let hasJoined: boolean = false;
 let isPlayerDead: boolean = false;
+let isPlayerLeaving: boolean = false;
+let joinRequestedAt: number = 0;
 let currentAngle: number = 45;
 let currentPower: number = 100;
 let pingInterval: number | null = null;
@@ -79,6 +82,9 @@ function setAimingVisible(visible: boolean) {
         deadSkull.classList.add("hidden");
         (deadSkull as HTMLElement).style.display = "none";
     }
+    if (!visible) {
+        setLeaveButtonVisible(false);
+    }
 }
 
 function showProtractorPreview(durationMs: number = 2500) {
@@ -126,6 +132,22 @@ const btnJoin = document.getElementById("btn-join");
 const btnFire = document.getElementById("btn-fire");
 const btnLeft = document.getElementById("btn-left");
 const btnRight = document.getElementById("btn-right");
+const btnLeave = document.getElementById("btn-leave");
+
+function setLeaveButtonVisible(visible: boolean) {
+    if (!btnLeave) return;
+    if (visible) {
+        btnLeave.classList.remove("hidden");
+        (btnLeave as HTMLElement).style.display = "";
+        (btnLeave as HTMLElement).style.visibility = "visible";
+        btnLeave.setAttribute("visibility", "visible");
+    } else {
+        btnLeave.classList.add("hidden");
+        (btnLeave as HTMLElement).style.display = "none";
+        (btnLeave as HTMLElement).style.visibility = "hidden";
+        btnLeave.setAttribute("visibility", "hidden");
+    }
+}
 
 // Landing Page Elements
 const landingOverlay = document.getElementById("landing-overlay");
@@ -365,30 +387,26 @@ function getUserRole(token: string): string {
 }
 
 function getIsPlayerJoined(): boolean {
-    if (hasJoined) return true;
     if (currentUsername) {
         if (joinedPlayersList.includes(currentUsername)) return true;
-        if (activePlayers.includes(currentUsername)) return true;
+        if (hasJoined && joinRequestedAt > 0 && Date.now() - joinRequestedAt < 3000) return true;
+        return false;
     }
+    if (hasJoined && joinRequestedAt > 0 && Date.now() - joinRequestedAt < 3000) return true;
     if (isLocalDev) {
-        // In local development / test UI acting as streamer:
-        // if human players are joined or active in the match, streamer is joined
-        if (joinedPlayersList.length > 0 || activePlayers.length > 0) {
-            return true;
-        }
+        return joinedPlayersList.length > 0;
     }
     return false;
 }
 
 function getIsPlayerDead(): boolean {
     if (currentPhaseStr === "IDLE") return false;
-    if (isPlayerDead) return true;
+    if (!getIsPlayerJoined()) return false;
     if (currentUsername) {
-        const joined = hasJoined || joinedPlayersList.includes(currentUsername);
-        if (joined && !activePlayers.includes(currentUsername) && (activePlayers.length > 0 || joinedPlayersList.length > 0)) {
-            return true;
-        }
-    } else if (isLocalDev) {
+        return !activePlayers.includes(currentUsername);
+    }
+    if (isPlayerDead) return true;
+    if (isLocalDev) {
         if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
             return true;
         }
@@ -455,14 +473,6 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
             } else {
                 phaseBadge.textContent = cleanPhase;
             }
-        }
-    }
-
-    if (cleanPhase === "IDLE") {
-        if (currentUsername && joinedPlayersList.length > 0) {
-            hasJoined = joinedPlayersList.includes(currentUsername);
-        } else if (playersCount === 0 || (isLocalDev && joinedPlayersList.length === 0)) {
-            hasJoined = false;
         }
     }
 
@@ -558,8 +568,26 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
                     (deadSkull as HTMLElement).style.display = "";
                     (deadSkull as HTMLElement).style.visibility = "visible";
                 }
+                setLeaveButtonVisible(false);
                 if (statusMessage) {
                     statusMessage.textContent = "ELIMINATED";
+                    statusMessage.classList.remove("hidden");
+                }
+            } else if (isPlayerLeaving) {
+                if (deadSkull) {
+                    deadSkull.classList.add("hidden");
+                    (deadSkull as HTMLElement).style.display = "none";
+                }
+                setAimingVisible(false);
+                setLeaveButtonVisible(false);
+                if (playerControls) playerControls.classList.add("hidden");
+                if (playerSetup) playerSetup.classList.add("hidden");
+                if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
+                if (btnLeft) (btnLeft as HTMLButtonElement).disabled = true;
+                if (btnRight) (btnRight as HTMLButtonElement).disabled = true;
+                setCurrentAction("LEAVING AT END OF MATCH");
+                if (statusMessage) {
+                    statusMessage.textContent = "LEAVING AT END OF MATCH";
                     statusMessage.classList.remove("hidden");
                 }
             } else {
@@ -568,13 +596,17 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
                     (deadSkull as HTMLElement).style.display = "none";
                 }
                 setAimingVisible(true);
+                setLeaveButtonVisible(true);
                 if (playerControls) playerControls.classList.remove("hidden");
                 if (playerSetup) playerSetup.classList.add("hidden");
                 if (btnFire) (btnFire as HTMLButtonElement).disabled = false;
+                if (btnLeft) (btnLeft as HTMLButtonElement).disabled = false;
+                if (btnRight) (btnRight as HTMLButtonElement).disabled = false;
                 if (statusMessage) statusMessage.classList.add("hidden");
             }
         } else {
             setAimingVisible(false);
+            setLeaveButtonVisible(false);
             if (deadSkull) {
                 deadSkull.classList.add("hidden");
                 (deadSkull as HTMLElement).style.display = "none";
@@ -589,6 +621,7 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
         }
     } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
         setAimingVisible(false);
+        setLeaveButtonVisible(false);
         if (deadSkull) {
             deadSkull.classList.add("hidden");
             (deadSkull as HTMLElement).style.display = "none";
@@ -603,6 +636,7 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
         if (btnFire) (btnFire as HTMLButtonElement).disabled = true;
     } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
         setAimingVisible(false);
+        setLeaveButtonVisible(false);
         if (deadSkull) {
             deadSkull.classList.add("hidden");
             (deadSkull as HTMLElement).style.display = "none";
@@ -759,27 +793,56 @@ function connectWebSocket() {
                     }
                 }
 
+                if (Array.isArray(payload.leaving_players)) {
+                    leavingPlayersList = payload.leaving_players.map((p: string) => String(p).toLowerCase());
+                } else if (Array.isArray(payload.leavingPlayers)) {
+                    leavingPlayersList = payload.leavingPlayers.map((p: string) => String(p).toLowerCase());
+                } else if (payload.players && typeof payload.players === 'object') {
+                    leavingPlayersList = Object.values(payload.players)
+                        .filter((p: any) => p && p.leaving)
+                        .map((p: any) => String(p.name || "").toLowerCase());
+                } else {
+                    leavingPlayersList = [];
+                }
+
+                if (currentUsername) {
+                    isPlayerLeaving = leavingPlayersList.includes(currentUsername);
+                } else if (isLocalDev) {
+                    isPlayerLeaving = leavingPlayersList.length > 0;
+                } else {
+                    isPlayerLeaving = false;
+                }
+
+                const currentlyJoined = getIsPlayerJoined();
+                hasJoined = currentlyJoined;
+                if (currentUsername && joinedPlayersList.includes(currentUsername)) {
+                    joinRequestedAt = 0;
+                }
+
                 if (phase === "IDLE") {
                     isPlayerDead = false;
+                    isPlayerLeaving = false;
                 } else {
-                    if (currentUsername) {
-                        const joined = hasJoined || joinedPlayersList.includes(currentUsername);
-                        if (joined) {
+                    if (currentlyJoined) {
+                        if (currentUsername) {
                             isPlayerDead = !activePlayers.includes(currentUsername);
-                        }
-                    } else if (isLocalDev) {
-                        if (payload.players && typeof payload.players === 'object') {
-                            const humans = Object.values(payload.players).filter((p: any) => p && !p.isBot && p.joined);
-                            if (humans.length > 0 && humans.every((p: any) => p.isDead)) {
+                        } else if (isLocalDev) {
+                            if (payload.players && typeof payload.players === 'object') {
+                                const humans = Object.values(payload.players).filter((p: any) => p && !p.isBot && p.joined);
+                                if (humans.length > 0 && humans.every((p: any) => p.isDead)) {
+                                    isPlayerDead = true;
+                                } else if (humans.some((p: any) => !p.isDead)) {
+                                    isPlayerDead = false;
+                                }
+                            } else if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
                                 isPlayerDead = true;
-                            } else if (humans.some((p: any) => !p.isDead)) {
+                            } else if (activePlayers.length > 0) {
                                 isPlayerDead = false;
                             }
-                        } else if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
-                            isPlayerDead = true;
-                        } else if (activePlayers.length > 0) {
-                            isPlayerDead = false;
                         }
+                    } else {
+                        isPlayerDead = false;
+                        isPlayerLeaving = false;
                     }
                 }
 
@@ -878,6 +941,7 @@ btnJoin?.addEventListener("click", () => {
     if (isJoined || !canJoinGame) return;
     sendCommand("%join");
     hasJoined = true;
+    joinRequestedAt = Date.now();
     logMessage("Tank deployed!");
     if (playerSetup) playerSetup.classList.add("hidden");
     if (currentPhaseStr === "INPUT") {
@@ -902,6 +966,15 @@ btnFire?.addEventListener("click", () => {
     sendCommand(`%fire ${currentAngle} ${currentPower}`);
     setCurrentAction(`LOCKED: FIRE ${currentAngle}° @ ${currentPower}%`);
     logMessage(`Fired: ${currentAngle}° @ ${currentPower}%`);
+});
+
+btnLeave?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    sendCommand("%leave");
+    setCurrentAction("LEAVING AT END OF MATCH");
+    logMessage("Leaving match...");
+    setLeaveButtonVisible(false);
 });
 
 // Twitch Helper Initialization

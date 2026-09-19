@@ -4,8 +4,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
+	extweb "streamtanks/ext-web"
 	"streamtanks/web"
 
 	"golang.org/x/net/websocket"
@@ -114,10 +116,27 @@ func Run(cfg Config) error {
 	mux := http.NewServeMux()
 	mux.Handle("/ws", websocket.Handler(handleWebSocket))
 
+	var exeDir string
+	if exePath, err := os.Executable(); err == nil {
+		exeDir = filepath.Dir(exePath)
+	}
+
+	findDirOrNil := func(candidates ...string) string {
+		for _, c := range candidates {
+			if c == "" {
+				continue
+			}
+			if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+				return c
+			}
+		}
+		return ""
+	}
+
 	// Prefer local ./web/public directory if present (for development), fallback to embedded assets
 	var fileSystem http.FileSystem
-	if _, err := os.Stat("./web/public"); err == nil {
-		fileSystem = http.Dir("./web/public")
+	if diskWeb := findDirOrNil("./web/public", filepath.Join(exeDir, "web", "public")); diskWeb != "" {
+		fileSystem = http.Dir(diskWeb)
 	} else {
 		subFS, err := web.FS()
 		if err != nil {
@@ -126,18 +145,34 @@ func Run(cfg Config) error {
 		fileSystem = http.FS(subFS)
 	}
 
-	// Serve extension assets (/ext/) for local development and testing
-	if _, err := os.Stat("./ext-web/public"); err == nil {
-		extHandler := http.StripPrefix("/ext", http.FileServer(http.Dir("./ext-web/public")))
-		mux.HandleFunc("/ext/", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-			w.Header().Set("Pragma", "no-cache")
-			w.Header().Set("Expires", "0")
-			extHandler.ServeHTTP(w, r)
-		})
+	// Serve extension assets (/ext/), preferring disk then falling back to embedded assets
+	var extFileSystem http.FileSystem
+	if diskExt := findDirOrNil("./ext-web/public", filepath.Join(exeDir, "ext-web", "public")); diskExt != "" {
+		extFileSystem = http.Dir(diskExt)
+	} else {
+		subFS, err := extweb.FS()
+		if err != nil {
+			log.Fatalf("Failed to initialize embedded extension filesystem: %v", err)
+		}
+		extFileSystem = http.FS(subFS)
 	}
 
+	extHandler := http.StripPrefix("/ext", http.FileServer(extFileSystem))
+	mux.HandleFunc("/ext/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		extHandler.ServeHTTP(w, r)
+	})
+
 	fileHandler := http.FileServer(fileSystem)
+
+	// Alias /preview to /preview.html for convenience
+	mux.HandleFunc("/preview", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/preview.html"
+		fileHandler.ServeHTTP(w, r)
+	})
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")

@@ -53,6 +53,7 @@ type Player struct {
 	HasBounced      bool    `json:"hasBounced,omitempty"`
 	LastActiveRound int     `json:"lastActiveRound"`
 	Joined          bool    `json:"joined"`
+	Leaving         bool    `json:"leaving,omitempty"`
 	CommandsInMatch int     `json:"commandsInMatch,omitempty"`
 }
 
@@ -175,6 +176,7 @@ type ViewerState struct {
 	CanStart       bool     `json:"can_start"`
 	CanJoin        bool     `json:"can_join"`
 	JoinedPlayers  []string `json:"joined_players,omitempty"`
+	LeavingPlayers []string `json:"leaving_players,omitempty"`
 }
 
 // defaultEmotes provides standard Twitch emotes for players without a custom emote
