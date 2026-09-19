@@ -37,7 +37,8 @@ StreamTanks/
 │       └── viewer.go     # Viewer WebSocket handler & Twitch chat command dispatcher
 ├── internal/
 │   └── app/              # Core backend engine & services
-│       ├── game.go       # Phase state machine, game loop, physics, commands
+│       ├── commands.go   # Twitch chat command dispatcher & dedicated handlers
+│       ├── game.go       # Phase state machine, game loop, physics, bot lifecycle
 │       ├── types.go      # GameState, Player, WSMessage structs & typed constants
 │       ├── terrain.go    # Heightmap generation, math, crater deformation
 │       ├── storage.go    # SQLite database schema, settings & leaderboard persistence
