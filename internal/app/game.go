@@ -1136,7 +1136,7 @@ func spawnNewPlayerLocked(username string, joined bool) *Player {
 
 	// Check for named bots first (following BotList order)
 	for _, botName := range gameState.BotList {
-		if p, exists := gameState.Players[botName]; exists && p.IsBot {
+		if p, exists := gameState.Players[botName]; exists && p.IsBot && !p.IsDead {
 			botToReplaceKey = botName
 			botToReplace = p
 			break
@@ -1144,7 +1144,7 @@ func spawnNewPlayerLocked(username string, joined bool) *Player {
 	}
 	if botToReplace == nil {
 		for k, p := range gameState.Players {
-			if p.IsBot && p.Name != "" {
+			if p.IsBot && !p.IsDead && p.Name != "" {
 				botToReplaceKey = k
 				botToReplace = p
 				break
@@ -1154,7 +1154,7 @@ func spawnNewPlayerLocked(username string, joined bool) *Player {
 	// If no named bot found, check for nameless bots
 	if botToReplace == nil {
 		for k, p := range gameState.Players {
-			if p.IsBot {
+			if p.IsBot && !p.IsDead {
 				botToReplaceKey = k
 				botToReplace = p
 				break
@@ -1587,6 +1587,45 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	case "join":
 		player, exists := gameState.Players[username]
+		if exists && player.Joined {
+			if len(parts) > 1 {
+				player.Emote = parts[1]
+				if len(emotes) > 0 {
+					player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", emotes[0].ID)
+				} else {
+					for _, de := range defaultEmotes {
+						if strings.EqualFold(de.Name, parts[1]) {
+							player.EmoteURL = de.URL
+							break
+						}
+					}
+				}
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
+			} else {
+				gameState.mu.Unlock()
+			}
+			return
+		}
+
+		if gameState.Phase != phaseIdle {
+			if gameState.Phase != phaseInput {
+				gameState.mu.Unlock()
+				return
+			}
+			hasAliveBot := false
+			for _, p := range gameState.Players {
+				if p.IsBot && !p.IsDead {
+					hasAliveBot = true
+					break
+				}
+			}
+			if !hasAliveBot {
+				gameState.mu.Unlock()
+				return
+			}
+		}
+
 		if !exists {
 			player = spawnNewPlayerLocked(username, true)
 		} else {

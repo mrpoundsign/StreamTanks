@@ -360,6 +360,15 @@ input[type="range"] {
     letter-spacing: 0.5px;
 }
 
+.btn:disabled,
+.btn[disabled] {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
 .btn-primary {
     background: var(--neon-red);
     color: #fff;

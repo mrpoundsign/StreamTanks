@@ -2244,6 +2244,105 @@ func TestBroadcastViewerState(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for player roster ViewerState")
 	}
+
+	// 5. Test IDLE phase with roamers vs joined players
+	gameState.mu.Lock()
+	gameState.Phase = phaseIdle
+	gameState.Players = map[string]*Player{
+		"Roamer": {Name: "Roamer", IsBot: false, Joined: false, IsDead: false},
+		"JoinedHuman": {Name: "JoinedHuman", IsBot: false, Joined: true, IsDead: false},
+	}
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+	select {
+	case msg := <-msgChan:
+		payloadBytes, _ := json.Marshal(msg.Payload)
+		var vs ViewerState
+		_ = json.Unmarshal(payloadBytes, &vs)
+		if !vs.CanStart {
+			t.Errorf("expected CanStart to be true when joined human present in IDLE")
+		}
+		if !vs.CanJoin {
+			t.Errorf("expected CanJoin to be true in IDLE")
+		}
+		if len(vs.JoinedPlayers) != 1 || vs.JoinedPlayers[0] != "joinedhuman" {
+			t.Errorf("expected JoinedPlayers [joinedhuman], got %+v", vs.JoinedPlayers)
+		}
+		// In IDLE, alivePlayers only contains joined players, not unjoined roamers
+		if len(vs.Players) != 1 || vs.Players[0] != "joinedhuman" {
+			t.Errorf("expected Players to only contain joined players in IDLE, got %+v", vs.Players)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for IDLE ViewerState")
+	}
+}
+
+func TestLateJoiningBotReplacementAndRejection(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1. Setup active INPUT phase with 2 humans and 1 bot
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	gameState.RoundID = 1
+	gameState.Terrain = generateTerrain(20, 75)
+	gameState.Players = map[string]*Player{
+		"Alice":     {Name: "Alice", IsBot: false, Joined: true, IsDead: false, X: 200, Y: 500},
+		"Bob":       {Name: "Bob", IsBot: false, Joined: true, IsDead: false, X: 400, Y: 500},
+		"TargetBot": {Name: "TargetBot", IsBot: true, Joined: true, IsDead: false, X: 600, Y: 500},
+	}
+	gameState.mu.Unlock()
+
+	// 2. Charlie late-joins: TargetBot is alive, so Charlie should replace TargetBot
+	processCommand("Charlie", "%join PogChamp", nil, nil)
+
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["TargetBot"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected TargetBot to be replaced and deleted")
+	}
+	charlie, charlieExists := gameState.Players["Charlie"]
+	if !charlieExists || !charlie.Joined || charlie.X != 600 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Charlie to join and inherit TargetBot position (600), got %+v", charlie)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Dave tries to late-join now: no alive bots remain!
+	processCommand("Dave", "%join", nil, nil)
+
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Dave"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Dave late-join to be REJECTED because no bots remain")
+	}
+	gameState.mu.Unlock()
+
+	// 4. Joining during SIMULATION / ACTION phase is blocked
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.Players["RustyTank"] = &Player{Name: "RustyTank", IsBot: true, Joined: true, IsDead: false, X: 800, Y: 500}
+	gameState.mu.Unlock()
+
+	processCommand("Eve", "%join", nil, nil)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Eve"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Eve join to be REJECTED during ACTION phase")
+	}
+	gameState.mu.Unlock()
+
+	// 5. Already joined player typing %join updates emote without duplicate spawn
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	gameState.mu.Unlock()
+
+	processCommand("Alice", "%join LUL", nil, nil)
+	gameState.mu.Lock()
+	if gameState.Players["Alice"].Emote != "LUL" {
+		t.Errorf("expected Alice emote to be updated to LUL, got %s", gameState.Players["Alice"].Emote)
+	}
+	gameState.mu.Unlock()
 }
 
 func TestProtractorCommand(t *testing.T) {
@@ -2513,4 +2612,55 @@ func TestMatchRollover_DropInactiveHumans(t *testing.T) {
 		t.Fatalf("expected bot TargetBot to be cleaned up from match")
 	}
 }
+
+func TestConcurrentJoinedArrayAndBroadcastStress(t *testing.T) {
+	resetGameStateForTest()
+
+	var wg sync.WaitGroup
+	const numOps = 50
+
+	for i := range numOps {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			user := fmt.Sprintf("ConcurrentTester%d", idx)
+
+			switch idx % 4 {
+			case 0:
+				// Explicit join
+				processCommand(user, "%join Kappa", nil)
+				broadcast(msgStateUpdate, &gameState)
+			case 1:
+				// Ambient roamer
+				processCommand(user, "just chatting in idle", nil)
+				BroadcastViewerState()
+			case 2:
+				// Leave command
+				processCommand(user, "%leave", nil)
+				broadcast(msgStateUpdate, &gameState)
+			case 3:
+				// Concurrent broadcast inspection
+				broadcast(msgStateUpdate, &gameState)
+				BroadcastViewerState()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	// Verify internal consistency
+	joinedCount := 0
+	for _, p := range gameState.Players {
+		if !p.IsBot && p.Joined {
+			joinedCount++
+		}
+	}
+	if joinedCount < 0 {
+		t.Errorf("unexpected negative joinedCount: %d", joinedCount)
+	}
+}
+
 

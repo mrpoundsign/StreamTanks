@@ -144,6 +144,18 @@
         phaseBadge.className = `phase-badge ${(state.phase || 'idle').toLowerCase()}`;
 
         // Quick button states
+        const hasJoinedHumans = Object.values(state.players || {}).some((p) => !p.isBot && p.joined);
+        const canStartGame = (state.phase === 'IDLE' || !state.phase) && hasJoinedHumans;
+        if (btnQuickStart) {
+            btnQuickStart.disabled = !canStartGame;
+        }
+
+        const isIdlePhase = (state.phase === 'IDLE' || !state.phase);
+        const targetBotJoined = !!state.players?.['TargetBot']?.joined;
+        if (btnQuickJoin) {
+            btnQuickJoin.disabled = !isIdlePhase || targetBotJoined;
+        }
+
         const isBouncy = !!state.bouncyWalls;
         bouncyStatusText.innerText = isBouncy ? 'On (+10% bullet)' : 'Off';
         btnQuickBouncy.className = isBouncy ? 'btn btn-outline' : 'btn btn-secondary';
@@ -353,6 +365,7 @@
 
     // Event Listeners: Quick Action Buttons
     btnQuickStart.addEventListener('click', () => {
+        if (btnQuickStart.disabled) return;
         sendCommand('startgame');
     });
 
@@ -372,6 +385,7 @@
     });
 
     btnQuickJoin.addEventListener('click', () => {
+        if (btnQuickJoin.disabled) return;
         sendCommand('join TargetBot');
     });
 

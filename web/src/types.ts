@@ -93,6 +93,9 @@ export interface GameState {
   explosions?: Explosion[];
   protractorX?: number;
   protractorY?: number;
+  canStart?: boolean;
+  canJoin?: boolean;
+  joinedPlayers?: string[];
 }
 
 export interface KillEvent {

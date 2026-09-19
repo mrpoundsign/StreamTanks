@@ -114,6 +114,9 @@ type GameState struct {
 	Explosions     []Explosion        `json:"explosions"`
 	ProtractorX    int                `json:"protractorX"`
 	ProtractorY    int                `json:"protractorY"`
+	CanStart       bool               `json:"canStart"`
+	CanJoin        bool               `json:"canJoin"`
+	JoinedPlayers  []string           `json:"joinedPlayers,omitempty"`
 }
 
 var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
@@ -164,6 +167,9 @@ type ViewerState struct {
 	Players        []string `json:"players,omitempty"`
 	ProtractorX    int      `json:"protractor_x"`
 	ProtractorY    int      `json:"protractor_y"`
+	CanStart       bool     `json:"can_start"`
+	CanJoin        bool     `json:"can_join"`
+	JoinedPlayers  []string `json:"joined_players,omitempty"`
 }
 
 // defaultEmotes provides standard Twitch emotes for players without a custom emote

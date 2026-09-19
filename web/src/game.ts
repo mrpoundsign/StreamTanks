@@ -592,8 +592,13 @@ function updateUI(): void {
       phaseBadge.innerText = 'WAITING FOR PLAYERS';
       phaseBadge.className = 'hud-badge idle';
     }
+    const canStartGame = Object.values(stateRef?.players || {}).some(p => !p.isBot && p.joined);
     if (hudInstructions) {
-      hudInstructions.innerHTML = `Type <span class="cmd-highlight">${prefix}startgame</span> to start | <span class="cmd-highlight">${prefix}join</span> to join`;
+      if (canStartGame) {
+        hudInstructions.innerHTML = `Type <span class="cmd-highlight">${prefix}startgame</span> to start | <span class="cmd-highlight">${prefix}join</span> to join`;
+      } else {
+        hudInstructions.innerHTML = `Type <span class="cmd-highlight">${prefix}join</span> to join`;
+      }
     }
     timerDisplay.style.display = 'none';
     celebrationDisplay.style.display = 'none';

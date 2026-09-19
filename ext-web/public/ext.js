@@ -6,6 +6,9 @@
   var viewerToken = "";
   var currentUsername = "";
   var activePlayers = [];
+  var joinedPlayersList = [];
+  var canStartGame = false;
+  var canJoinGame = true;
   var hasJoined = false;
   var currentAngle = 45;
   var currentPower = 100;
@@ -17,7 +20,8 @@
   var lastProtractorY = -1;
   var protractorPreviewUntil = 0;
   var protractorPreviewTimeout = null;
-  var isStandaloneDev = !window.Twitch || !window.Twitch.ext;
+  var isLocalDev = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  var isStandaloneDev = isLocalDev || (!window.Twitch || !window.Twitch.ext);
   var viewportSvg = document.getElementById("viewport-svg");
   var protractorOverlayGroup = document.getElementById("protractor-overlay-group");
   var protractorHitArea = document.getElementById("protractor-hit-area");
@@ -118,7 +122,7 @@
     return /^[UA]\d+$/i.test(name);
   }
   function checkIdentityLinked(token) {
-    if (!window.Twitch || !window.Twitch.ext) {
+    if (isLocalDev || !window.Twitch || !window.Twitch.ext) {
       return true;
     }
     try {
@@ -287,13 +291,29 @@
     });
   }
   function getUserRole(token) {
+    if (isLocalDev || !token) {
+      return "broadcaster";
+    }
     try {
       const payloadStr = atob(token.split(".")[1]);
       const payload = JSON.parse(payloadStr);
-      return payload.role || "viewer";
+      return payload.role || (isLocalDev ? "broadcaster" : "viewer");
     } catch (_) {
-      return "viewer";
+      return isLocalDev ? "broadcaster" : "viewer";
     }
+  }
+  function getIsPlayerJoined() {
+    if (hasJoined) return true;
+    if (currentUsername) {
+      if (joinedPlayersList.includes(currentUsername)) return true;
+      if (activePlayers.includes(currentUsername)) return true;
+    }
+    if (isLocalDev) {
+      if (joinedPlayersList.length > 0 || activePlayers.length > 0) {
+        return true;
+      }
+    }
+    return false;
   }
   function startCountdownTimer() {
     if (countdownInterval) return;
@@ -352,8 +372,12 @@
         }
       }
     }
-    if (cleanPhase === "IDLE" && playersCount === 0) {
-      hasJoined = false;
+    if (cleanPhase === "IDLE") {
+      if (currentUsername && joinedPlayersList.length > 0) {
+        hasJoined = joinedPlayersList.includes(currentUsername);
+      } else if (playersCount === 0 || isLocalDev && joinedPlayersList.length === 0) {
+        hasJoined = false;
+      }
     }
     if (!isLinked) {
       setAimingVisible(false);
@@ -368,45 +392,54 @@
     updateLandingVisibility();
     const role = getUserRole(viewerToken);
     const isModOrBroadcaster = role === "broadcaster" || role === "moderator";
-    const isOnBattlefield = currentUsername && activePlayers.includes(currentUsername) || hasJoined;
+    const isJoined = getIsPlayerJoined();
+    const canDeploy = !isJoined && canJoinGame;
     if (cleanPhase === "IDLE") {
-      if (Date.now() < protractorPreviewUntil || isStandaloneDev) {
+      if (Date.now() < protractorPreviewUntil) {
         setAimingVisible(true);
       } else {
         setAimingVisible(false);
       }
-      if (adminControls && isModOrBroadcaster) adminControls.classList.remove("hidden");
+      if (adminControls) {
+        if (isModOrBroadcaster && canStartGame) {
+          adminControls.classList.remove("hidden");
+        } else {
+          adminControls.classList.add("hidden");
+        }
+      }
       if (playerSetup) {
-        if (!isOnBattlefield && !isStandaloneDev) {
+        if (canDeploy) {
           playerSetup.classList.remove("hidden");
         } else {
           playerSetup.classList.add("hidden");
         }
       }
       if (playerControls) {
-        if (isStandaloneDev) {
-          playerControls.classList.remove("hidden");
-        } else {
-          playerControls.classList.add("hidden");
-        }
+        playerControls.classList.add("hidden");
       }
       if (statusMessage) statusMessage.classList.add("hidden");
     } else if (cleanPhase === "INPUT") {
       if (adminControls) adminControls.classList.add("hidden");
-      if (isOnBattlefield || isStandaloneDev) {
+      if (isJoined) {
         setAimingVisible(true);
         if (playerControls) playerControls.classList.remove("hidden");
         if (playerSetup) playerSetup.classList.add("hidden");
         if (btnFire) btnFire.disabled = false;
       } else {
         setAimingVisible(false);
-        if (playerSetup) playerSetup.classList.remove("hidden");
         if (playerControls) playerControls.classList.add("hidden");
+        if (canDeploy) {
+          if (playerSetup) playerSetup.classList.remove("hidden");
+        } else {
+          if (playerSetup) playerSetup.classList.add("hidden");
+        }
       }
       if (statusMessage) statusMessage.classList.add("hidden");
     } else if (cleanPhase === "SIMULATION" || cleanPhase === "ACTION") {
       setAimingVisible(false);
       if (adminControls) adminControls.classList.add("hidden");
+      if (playerSetup) playerSetup.classList.add("hidden");
+      if (playerControls) playerControls.classList.add("hidden");
       if (statusMessage) {
         statusMessage.textContent = "CANNONS FIRING...";
         statusMessage.classList.remove("hidden");
@@ -414,6 +447,9 @@
       if (btnFire) btnFire.disabled = true;
     } else if (cleanPhase === "ROUND_OVER" || cleanPhase === "CELEBRATION") {
       setAimingVisible(false);
+      if (adminControls) adminControls.classList.add("hidden");
+      if (playerSetup) playerSetup.classList.add("hidden");
+      if (playerControls) playerControls.classList.add("hidden");
       if (statusMessage) {
         statusMessage.textContent = winner ? `WINNER: ${winner}` : "ROUND OVER";
         statusMessage.classList.remove("hidden");
@@ -456,7 +492,7 @@
         const data = JSON.parse(event.data);
         if (data.type === "VIEWER_INFO" && data.payload) {
           const userStr = data.payload.user ? String(data.payload.user).trim() : "";
-          if (userStr && !isOpaque(userStr)) {
+          if (userStr && (!isOpaque(userStr) || isLocalDev2)) {
             currentUsername = userStr.toLowerCase();
             isLinked = true;
           } else {
@@ -476,10 +512,41 @@
           const timerRemaining = payload.timer_remaining ?? payload.timerRemaining;
           const playersCount = payload.players_count ?? (payload.players ? Object.keys(payload.players).length : 0);
           const winner = payload.winner;
+          if (payload.can_start !== void 0) {
+            canStartGame = !!payload.can_start;
+          } else if (payload.canStart !== void 0) {
+            canStartGame = !!payload.canStart;
+          } else {
+            canStartGame = false;
+          }
+          if (payload.can_join !== void 0) {
+            canJoinGame = !!payload.can_join;
+          } else if (payload.canJoin !== void 0) {
+            canJoinGame = !!payload.canJoin;
+          } else {
+            canJoinGame = phase === "IDLE";
+          }
+          if (Array.isArray(payload.joined_players)) {
+            joinedPlayersList = payload.joined_players.map((p) => String(p).toLowerCase());
+          } else if (Array.isArray(payload.joinedPlayers)) {
+            joinedPlayersList = payload.joinedPlayers.map((p) => String(p).toLowerCase());
+          } else {
+            joinedPlayersList = [];
+          }
           if (Array.isArray(payload.players)) {
             activePlayers = payload.players.map((p) => String(p).toLowerCase());
           } else if (payload.players && typeof payload.players === "object") {
-            activePlayers = Object.keys(payload.players).map((p) => p.toLowerCase());
+            activePlayers = Object.values(payload.players).filter((p) => p && !p.isBot && !p.isDead && (phase !== "IDLE" || p.joined)).map((p) => String(p.name || "").toLowerCase());
+            if (joinedPlayersList.length === 0) {
+              joinedPlayersList = Object.values(payload.players).filter((p) => p && !p.isBot && p.joined).map((p) => String(p.name || "").toLowerCase());
+            }
+          }
+          if (isLocalDev2 && !currentUsername) {
+            if (joinedPlayersList.length > 0) {
+              currentUsername = joinedPlayersList[0];
+            } else if (activePlayers.length > 0) {
+              currentUsername = activePlayers[0];
+            }
           }
           if (timerRemaining !== void 0) {
             localTimerRemaining = timerRemaining;
@@ -565,6 +632,7 @@
     updateLandingVisibility();
   });
   btnStartMatch?.addEventListener("click", () => {
+    if (!canStartGame) return;
     sendCommand("%startgame");
     logMessage("Match starting...");
   });
@@ -573,6 +641,8 @@
       promptIdentityShare();
       return;
     }
+    const isJoined = getIsPlayerJoined();
+    if (isJoined || !canJoinGame) return;
     sendCommand("%join");
     hasJoined = true;
     logMessage("Tank deployed!");
@@ -597,7 +667,6 @@
     setCurrentAction(`LOCKED: FIRE ${currentAngle}\xB0 @ ${currentPower}%`);
     logMessage(`Fired: ${currentAngle}\xB0 @ ${currentPower}%`);
   });
-  var isLocalDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
   if (isLocalDev || !window.Twitch || !window.Twitch.ext) {
     console.log("Running in standalone/local preview mode.");
     isLinked = true;
@@ -625,7 +694,7 @@
   setAngle(45);
   initVerticalPower();
   setPower(100);
-  setAimingVisible(isStandaloneDev);
+  setAimingVisible(false);
   updateLandingVisibility();
 })();
 //# sourceMappingURL=ext.js.map

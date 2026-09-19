@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 
@@ -51,6 +52,20 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 		copy(expCopy, gameState.Explosions)
 		matchKillsCopy := make([]KillEvent, len(gameState.MatchKills))
 		copy(matchKillsCopy, gameState.MatchKills)
+		hasAliveBot := false
+		joinedList := make([]string, 0, len(gameState.Players))
+		for _, p := range gameState.Players {
+			if !p.IsBot && p.Joined {
+				joinedList = append(joinedList, strings.ToLower(p.Name))
+			}
+			if p.IsBot && !p.IsDead {
+				hasAliveBot = true
+			}
+		}
+		slices.Sort(joinedList)
+		canStart := gameState.Phase == phaseIdle && len(joinedList) > 0
+		canJoin := gameState.Phase == phaseIdle || (gameState.Phase == phaseInput && hasAliveBot)
+
 		stateCopy := &GameState{
 			Phase:          gameState.Phase,
 			Players:        playersCopy,
@@ -85,6 +100,9 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 			Explosions:     expCopy,
 			ProtractorX:    gameState.ProtractorX,
 			ProtractorY:    gameState.ProtractorY,
+			CanStart:       canStart,
+			CanJoin:        canJoin,
+			JoinedPlayers:  joinedList,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -119,9 +137,13 @@ func handleWebSocket(ws *websocket.Conn) {
 	clientsMu.Unlock()
 
 	clientType := "Overlay"
+	isExtension := false
 	if req := ws.Request(); req != nil {
 		if req.URL.Query().Get("client") == "admin" || strings.Contains(req.Header.Get("Referer"), "/admin") {
 			clientType = "Admin Console"
+		} else if req.URL.Query().Get("client") == "extension" || strings.Contains(req.Header.Get("Referer"), "/extension") {
+			clientType = "Extension"
+			isExtension = true
 		}
 	}
 
@@ -134,6 +156,19 @@ func handleWebSocket(ws *websocket.Conn) {
 	}()
 
 	log.Printf("New WebSocket client connected (%s)\n", clientType)
+
+	// For extension clients, send VIEWER_INFO immediately so the test UI acts as the streamer
+	if isExtension {
+		_ = websocket.JSON.Send(ws, map[string]any{
+			"type": "VIEWER_INFO",
+			"payload": map[string]any{
+				"user":      getDebugUsername(),
+				"twitch_id": "local_dev",
+				"channel":   getDebugUsername(),
+				"role":      "broadcaster",
+			},
+		})
+	}
 
 	// Send initial state
 	broadcast(msgStateUpdate, &gameState)
