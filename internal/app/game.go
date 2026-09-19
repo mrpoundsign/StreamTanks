@@ -29,6 +29,8 @@ var gameState = GameState{
 	BotFill:       true,
 	BotPoints:     1,
 	BotList:       defaultBotList,
+	ProtractorX:   250,
+	ProtractorY:   350,
 }
 
 func hasPermission(user *twitch.User, requiredRole string) bool {
@@ -1692,6 +1694,61 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
 		return
+
+	case "protractor", "uipos":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			arg1 := strings.ToLower(parts[1])
+			switch {
+			case arg1 == "reset":
+				gameState.ProtractorX = 250
+				gameState.ProtractorY = 350
+			case len(parts) >= 3:
+				var px, py int
+				_, err1 := fmt.Sscanf(parts[1], "%d", &px)
+				_, err2 := fmt.Sscanf(parts[2], "%d", &py)
+				if err1 != nil || err2 != nil {
+					gameState.mu.Unlock()
+					return
+				}
+				if px < 150 {
+					px = 150
+				} else if px > 600 {
+					px = 600
+				}
+				if py < 200 {
+					py = 200
+				} else if py > 650 {
+					py = 650
+				}
+				gameState.ProtractorX = px
+				gameState.ProtractorY = py
+			default:
+				gameState.mu.Unlock()
+				return
+			}
+			px := gameState.ProtractorX
+			py := gameState.ProtractorY
+			
+			nosave := false
+			if len(parts) >= 4 && strings.ToLower(parts[3]) == "nosave" {
+				nosave = true
+			}
+			
+			gameState.mu.Unlock()
+			
+			if !nosave {
+				saveSetting("protractor_x", strconv.Itoa(px))
+				saveSetting("protractor_y", strconv.Itoa(py))
+			}
+			
+			broadcast(msgStateUpdate, &gameState)
+			BroadcastViewerState()
+			return
+		}
 
 	case "startgame", "start":
 		if !hasPermission(user, gameState.StartPerm) {

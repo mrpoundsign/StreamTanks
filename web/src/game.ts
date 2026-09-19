@@ -64,6 +64,11 @@ let projectiles: Projectile[] = [];
 const explosions: Explosion[] = [];
 let currentPhase: GamePhase = PhaseIdle;
 let previousPhase: GamePhase = PhaseIdle;
+
+// Live Preview State
+let lastProtractorX = 250;
+let lastProtractorY = 350;
+let protractorPreviewUntil = 0;
 let inputTimer = 0;
 let celebrationWinner = '';
 let celebrationStartTime = 0;
@@ -769,6 +774,24 @@ net.onMessage((msg: WSMessage) => {
     if (state.leaderboard) {
       updateLeaderboard(state.leaderboard);
     }
+    
+    // Position leaderboard relative to Protractor (Base Offset: -210px X, -310px Y)
+    if (leaderboardEl) {
+      const px = state.protractorX ?? 250;
+      const py = state.protractorY ?? 350;
+      
+      // Trigger Live Preview of the Protractor if it moved
+      if (px !== lastProtractorX || py !== lastProtractorY) {
+        lastProtractorX = px;
+        lastProtractorY = py;
+        protractorPreviewUntil = Date.now() + 2000;
+      }
+
+      const leftX = Math.max(10, px - 210);
+      const topY = Math.max(10, py - 310);
+      leaderboardEl.style.left = `${leftX}px`;
+      leaderboardEl.style.top = `${topY}px`;
+    }
 
     if (Array.isArray(state.terrain) && state.terrain.length === WIDTH) {
       terrain = state.terrain;
@@ -896,8 +919,12 @@ net.onMessage((msg: WSMessage) => {
 function draw(): void {
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   drawTerrain(ctx, terrain);
-  if (currentPhase === 'INPUT') {
-    drawGiantProtractor(ctx);
+  if (currentPhase === 'INPUT' || Date.now() < protractorPreviewUntil) {
+    // If we are previewing in IDLE, make it slightly translucent
+    const isPreview = currentPhase !== 'INPUT';
+    if (isPreview) ctx.globalAlpha = 0.5;
+    drawGiantProtractor(ctx, stateRef?.protractorX ?? 250, stateRef?.protractorY ?? 350);
+    if (isPreview) ctx.globalAlpha = 1.0;
   }
   drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache, avatarImgCache);
   drawProjectiles(ctx, projectiles, emoteCache);

@@ -154,6 +154,16 @@
                                 </div>
                             </div>
 
+                            <div class="form-group span-2">
+                                <label>HUD Position (Protractor Center): <span id="protractor-pos-val" class="highlight-val">X: 250, Y: 350</span></label>
+                                <div class="range-dual">
+                                    <input type="range" id="cfg-protractor-x" min="150" max="600" value="250" />
+                                    <input type="range" id="cfg-protractor-y" min="200" max="650" value="350" />
+                                    <button id="btn-cancel-protractor" class="btn btn-small btn-secondary">Cancel</button>
+                                    <button id="btn-apply-protractor" class="btn btn-small">Apply HUD</button>
+                                </div>
+                            </div>
+
                             <div class="form-group span-2 toggle-row">
                                 <button id="btn-toggle-idle" class="btn btn-secondary">
                                     Idle HUD: <span id="idle-status-text">On</span>

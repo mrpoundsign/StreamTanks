@@ -90,6 +90,8 @@ export interface GameState {
   matchKills?: KillEvent[];
   projectiles?: Projectile[];
   explosions?: Explosion[];
+  protractorX?: number;
+  protractorY?: number;
 }
 
 export interface KillEvent {

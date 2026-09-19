@@ -139,7 +139,7 @@
   }
   var isMobile = document.body.classList.contains("mobile-body");
   var pivotX = isMobile ? 160 : 250;
-  var pivotY = isMobile ? 160 : 250;
+  var pivotY = isMobile ? 160 : 350;
   var needleRadius = isMobile ? 110 : 160;
   function setAngle(deg) {
     currentAngle = Math.max(0, Math.min(180, Math.round(deg)));
@@ -148,8 +148,15 @@
     }
     if (angleNeedle && needleHead) {
       const rad = currentAngle * Math.PI / 180;
-      const targetX = pivotX + Math.cos(rad) * needleRadius;
-      const targetY = pivotY - Math.sin(rad) * needleRadius;
+      const targetX = (isMobile ? pivotX : 0) + Math.cos(rad) * needleRadius;
+      const targetY = (isMobile ? pivotY : 0) - Math.sin(rad) * needleRadius;
+      if (isMobile) {
+        angleNeedle.setAttribute("x1", pivotX.toString());
+        angleNeedle.setAttribute("y1", pivotY.toString());
+      } else {
+        angleNeedle.setAttribute("x1", "0");
+        angleNeedle.setAttribute("y1", "0");
+      }
       angleNeedle.setAttribute("x2", targetX.toFixed(1));
       angleNeedle.setAttribute("y2", targetY.toFixed(1));
       needleHead.setAttribute("cx", targetX.toFixed(1));
@@ -436,6 +443,17 @@
           }
           if (timerRemaining !== void 0) {
             localTimerRemaining = timerRemaining;
+          }
+          if (!isMobile) {
+            if (typeof data.payload.protractor_x === "number") {
+              pivotX = data.payload.protractor_x;
+            }
+            if (typeof data.payload.protractor_y === "number") {
+              pivotY = data.payload.protractor_y;
+            }
+            if (protractorOverlayGroup) {
+              protractorOverlayGroup.setAttribute("transform", `translate(${pivotX}, ${pivotY})`);
+            }
           }
           updateUIForPhase(phase, timerRemaining, playersCount, winner);
         }

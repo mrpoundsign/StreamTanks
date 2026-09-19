@@ -110,6 +110,8 @@ type GameState struct {
 	MatchKills     []KillEvent        `json:"matchKills,omitempty"`
 	Projectiles    []Projectile       `json:"projectiles"`
 	Explosions     []Explosion        `json:"explosions"`
+	ProtractorX    int                `json:"protractorX"`
+	ProtractorY    int                `json:"protractorY"`
 }
 
 var defaultBotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
@@ -158,6 +160,8 @@ type ViewerState struct {
 	Winner         string   `json:"winner"`
 	PlayersCount   int      `json:"players_count"`
 	Players        []string `json:"players,omitempty"`
+	ProtractorX    int      `json:"protractor_x"`
+	ProtractorY    int      `json:"protractor_y"`
 }
 
 // defaultEmotes provides standard Twitch emotes for players without a custom emote

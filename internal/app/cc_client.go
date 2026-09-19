@@ -59,6 +59,8 @@ func BroadcastViewerState() {
 		Winner:         gameState.Winner,
 		PlayersCount:   len(alivePlayers),
 		Players:        alivePlayers,
+		ProtractorX:    gameState.ProtractorX,
+		ProtractorY:    gameState.ProtractorY,
 	}
 	gameState.mu.Unlock()
 
@@ -67,6 +69,8 @@ func BroadcastViewerState() {
 		vs.RoundID == lastViewerState.RoundID &&
 		vs.Winner == lastViewerState.Winner &&
 		vs.PlayersCount == lastViewerState.PlayersCount &&
+		vs.ProtractorX == lastViewerState.ProtractorX &&
+		vs.ProtractorY == lastViewerState.ProtractorY &&
 		slices.Equal(vs.Players, lastViewerState.Players) {
 		ccConnMu.Unlock()
 		return

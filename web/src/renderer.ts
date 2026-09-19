@@ -25,9 +25,9 @@ export function drawTerrain(ctx: CanvasRenderingContext2D, terrain: number[]): v
   ctx.shadowBlur = 0; // reset
 }
 
-export function drawGiantProtractor(ctx: CanvasRenderingContext2D): void {
+export function drawGiantProtractor(ctx: CanvasRenderingContext2D, centerX: number, centerY: number): void {
   ctx.save();
-  ctx.translate(250, 250); // Top-left position
+  ctx.translate(centerX, centerY); // Configurable position
 
   ctx.strokeStyle = 'rgba(0, 255, 204, 0.5)';
   ctx.lineWidth = 10;

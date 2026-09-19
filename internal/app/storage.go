@@ -174,6 +174,16 @@ func loadSettings() {
 					if v != "" {
 						gameState.CCServerURL = v
 					}
+				case "protractor_x":
+					var px int
+					if _, err := fmt.Sscanf(v, "%d", &px); err == nil && px >= 150 && px <= 600 {
+						gameState.ProtractorX = px
+					}
+				case "protractor_y":
+					var py int
+					if _, err := fmt.Sscanf(v, "%d", &py); err == nil && py >= 200 && py <= 650 {
+						gameState.ProtractorY = py
+					}
 				}
 			}
 		}
@@ -183,6 +193,12 @@ func loadSettings() {
 	}
 	if gameState.CCStatus == "" {
 		gameState.CCStatus = "disconnected"
+	}
+	if gameState.ProtractorX == 0 {
+		gameState.ProtractorX = 250
+	}
+	if gameState.ProtractorY == 0 {
+		gameState.ProtractorY = 350
 	}
 	gameState.BotList = loadBotList()
 }

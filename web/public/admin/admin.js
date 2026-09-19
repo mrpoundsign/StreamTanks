@@ -5,6 +5,10 @@
     let reconnectTimer = null;
     const avatarCache = {};
     let isTerrainDirty = false;
+    let isProtractorDirty = false;
+    let savedProtractorX = 250;
+    let savedProtractorY = 350;
+    let protractorDebounce = null;
 
     // DOM Elements
     const phaseBadge = document.getElementById('phase-badge');
@@ -34,6 +38,9 @@
     const cfgTerrainMin = document.getElementById('cfg-terrain-min');
     const cfgTerrainMax = document.getElementById('cfg-terrain-max');
     const terrainRangeVal = document.getElementById('terrain-range-val');
+    const cfgProtractorX = document.getElementById('cfg-protractor-x');
+    const cfgProtractorY = document.getElementById('cfg-protractor-y');
+    const protractorPosVal = document.getElementById('protractor-pos-val');
 
     // C&C Relay Elements
     const ccStatusBadge = document.getElementById('cc-status-badge');
@@ -177,9 +184,19 @@
         if (!isTerrainDirty) {
             const tMin = state.terrainMin || 20;
             const tMax = state.terrainMax || 75;
-            cfgTerrainMin.value = tMin;
-            cfgTerrainMax.value = tMax;
-            terrainRangeVal.innerText = `${tMin}% — ${tMax}%`;
+            if (cfgTerrainMin) cfgTerrainMin.value = tMin;
+            if (cfgTerrainMax) cfgTerrainMax.value = tMax;
+            if (terrainRangeVal) terrainRangeVal.innerText = `${tMin}% — ${tMax}%`;
+        }
+
+        if (!isProtractorDirty) {
+            const px = state.protractorX ?? 250;
+            const py = state.protractorY ?? 350;
+            savedProtractorX = px;
+            savedProtractorY = py;
+            if (cfgProtractorX) cfgProtractorX.value = px;
+            if (cfgProtractorY) cfgProtractorY.value = py;
+            if (protractorPosVal) protractorPosVal.innerText = `X: ${px}, Y: ${py}`;
         }
 
         // C&C Relay UI Sync
@@ -437,6 +454,46 @@
         if (minVal > maxVal - 10) minVal = maxVal - 10;
         sendCommand(`terrain ${minVal} ${maxVal}`);
     });
+
+    // Real-time HUD position slider update
+    function syncProtractorSliderLabel() {
+        isProtractorDirty = true;
+        const px = parseInt(cfgProtractorX.value, 10);
+        const py = parseInt(cfgProtractorY.value, 10);
+        if (protractorPosVal) protractorPosVal.innerText = `X: ${px}, Y: ${py}`;
+        
+        if (protractorDebounce) clearTimeout(protractorDebounce);
+        protractorDebounce = setTimeout(() => {
+            sendCommand(`protractor ${px} ${py} nosave`);
+        }, 50);
+    }
+    if (cfgProtractorX && cfgProtractorY) {
+        cfgProtractorX.addEventListener('input', syncProtractorSliderLabel);
+        cfgProtractorY.addEventListener('input', syncProtractorSliderLabel);
+    }
+
+    const btnApplyProtractor = document.getElementById('btn-apply-protractor');
+    if (btnApplyProtractor) {
+        btnApplyProtractor.addEventListener('click', () => {
+            isProtractorDirty = false;
+            if (protractorDebounce) clearTimeout(protractorDebounce);
+            const px = parseInt(cfgProtractorX.value, 10);
+            const py = parseInt(cfgProtractorY.value, 10);
+            sendCommand(`protractor ${px} ${py}`);
+        });
+    }
+
+    const btnCancelProtractor = document.getElementById('btn-cancel-protractor');
+    if (btnCancelProtractor) {
+        btnCancelProtractor.addEventListener('click', () => {
+            isProtractorDirty = false;
+            if (protractorDebounce) clearTimeout(protractorDebounce);
+            cfgProtractorX.value = savedProtractorX;
+            cfgProtractorY.value = savedProtractorY;
+            if (protractorPosVal) protractorPosVal.innerText = `X: ${savedProtractorX}, Y: ${savedProtractorY}`;
+            sendCommand(`protractor ${savedProtractorX} ${savedProtractorY}`);
+        });
+    }
 
     // Event Listeners: C&C Relay
     if (btnToggleCc) {
