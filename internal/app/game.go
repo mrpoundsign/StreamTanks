@@ -1259,6 +1259,69 @@ func spawnNewPlayerLocked(username string, joined bool) *Player {
 	return p
 }
 
+func removePlayerFromMatchLocked(playerKey string) {
+	delete(gameState.Players, playerKey)
+
+	// Filter out any in-flight projectiles owned by the kicked player
+	filtered := make([]Projectile, 0, len(gameState.Projectiles))
+	for _, proj := range gameState.Projectiles {
+		if !strings.EqualFold(proj.Owner, playerKey) {
+			filtered = append(filtered, proj)
+		}
+	}
+	gameState.Projectiles = filtered
+
+	if gameState.Phase == phaseInput {
+		aliveCount := 0
+		aliveName := ""
+		totalPlayers := 0
+		humanAliveCount := 0
+		humanTotalCount := 0
+
+		for k, p := range gameState.Players {
+			totalPlayers++
+			if !p.IsBot {
+				humanTotalCount++
+				if !p.IsDead {
+					humanAliveCount++
+				}
+			}
+			if !p.IsDead {
+				aliveCount++
+				aliveName = k
+			}
+		}
+
+		isGameOver := (aliveCount <= 1) || (humanTotalCount > 0 && humanAliveCount == 0) || (totalPlayers == 0)
+
+		if isGameOver {
+			if inputCancel != nil {
+				close(inputCancel)
+				inputCancel = nil
+			}
+			if minWaitTimer != nil {
+				minWaitTimer.Stop()
+				minWaitTimer = nil
+			}
+			winner := "AI"
+			if aliveCount == 1 && !gameState.Players[aliveName].IsBot {
+				winner = aliveName
+			}
+			gameState.Phase = phaseCelebration
+			gameState.Winner = winner
+			if winner != "AI" && winner != "" {
+				gameState.Leaderboard[winner] += 5
+				addScore(winner, 5)
+			}
+			time.AfterFunc(18*time.Second, func() {
+				resetMatchState()
+			})
+		} else {
+			checkAllPlayersFired()
+		}
+	}
+}
+
 func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt ...*twitch.User) {
 	var user *twitch.User
 	if len(userOpt) > 0 {
@@ -1616,6 +1679,32 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		broadcast(msgStateUpdate, &gameState)
 		return
 
+	case "kick":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			target := strings.TrimPrefix(parts[1], "@")
+			if target != "" {
+				var playerKey string
+				for k := range gameState.Players {
+					if strings.EqualFold(k, target) {
+						playerKey = k
+						break
+					}
+				}
+				if playerKey != "" {
+					removePlayerFromMatchLocked(playerKey)
+					gameState.mu.Unlock()
+					broadcast(msgStateUpdate, &gameState)
+					return
+				}
+			}
+		}
+		gameState.mu.Unlock()
+		return
+
 	case "deleteplayer", "removeplayer":
 		if !hasPermission(user, gameState.ConfigPerm) {
 			gameState.mu.Unlock()
@@ -1628,6 +1717,16 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 					if strings.EqualFold(key, target) {
 						delete(gameState.Leaderboard, key)
 					}
+				}
+				var playerKey string
+				for k := range gameState.Players {
+					if strings.EqualFold(k, target) {
+						playerKey = k
+						break
+					}
+				}
+				if playerKey != "" {
+					removePlayerFromMatchLocked(playerKey)
 				}
 				gameState.mu.Unlock()
 				deletePlayerDB(target)

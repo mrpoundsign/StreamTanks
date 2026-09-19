@@ -113,7 +113,8 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - `%configperm <broadcaster|mod|vip|sub|all>`: Configures required role for settings commands (default: `broadcaster`).
 - `%perm <start|config> <role>`: Unified permission management command.
 - `%clearleaderboard` / `%resetleaderboard`: Clears all leaderboard statistics from SQLite and connected overlays.
-- `%deleteplayer <user>` / `%removeplayer <user>`: Removes a specific player from SQLite leaderboard and connected overlays.
+- `%kick <user>`: Kicks a player from the active match immediately, despawning their tank and clearing their in-flight projectiles.
+- `%deleteplayer <user>` / `%removeplayer <user>`: Removes a specific player from SQLite leaderboard and connected overlays (and kicks from active match if present).
 - `%minplayers <N>`: Configures minimum player count to fill with bots on match start (default: `5`, range `2`–`20`).
 - `%botfill on|off`: Toggles automatic bot filling up to minimum players (default: `true`).
 - `%botpoints <N>`: Configures leaderboard points awarded to human players for destroying a bot tank (default: `1`, range `0`–`10`).

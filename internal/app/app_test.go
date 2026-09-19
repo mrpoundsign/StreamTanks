@@ -1555,6 +1555,144 @@ func TestDeletePlayer(t *testing.T) {
 		t.Fatalf("expected Charlie to remain in SQLite database, got %v", gameState.Leaderboard)
 	}
 	gameState.mu.Unlock()
+
+	// 5. Verify %deleteplayer removes player from active match as well
+	gameState.mu.Lock()
+	gameState.Players["Charlie"] = &Player{Name: "Charlie", Joined: true}
+	gameState.mu.Unlock()
+
+	processCommand("ModUser", "%deleteplayer Charlie", nil, modUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Charlie"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Charlie to be removed from active gameState.Players by %%deleteplayer")
+	}
+	if _, exists := gameState.Leaderboard["Charlie"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Charlie to be removed from leaderboard by %%deleteplayer")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestKickCommand_RemovesPlayerAndProjectiles(t *testing.T) {
+	resetGameStateForTest()
+	_ = initDB(":memory:")
+	defer closeDB()
+
+	regularUser := &twitch.User{Name: "Regular", Badges: map[string]int{}}
+	modUser := &twitch.User{Name: "ModUser", IsMod: true}
+	broadcasterUser := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+
+	// 1. Permissions: regular user cannot kick; mod cannot kick when ConfigPerm is broadcaster
+	gameState.mu.Lock()
+	gameState.ConfigPerm = "broadcaster"
+	gameState.Leaderboard["Troll"] = 10
+	gameState.Players["Troll"] = &Player{Name: "Troll", Joined: true}
+	gameState.mu.Unlock()
+
+	processCommand("Regular", "%kick Troll", nil, regularUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Troll"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Troll not to be kicked by regular user")
+	}
+	gameState.mu.Unlock()
+
+	processCommand("ModUser", "%kick Troll", nil, modUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Troll"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Troll not to be kicked by mod when ConfigPerm is broadcaster")
+	}
+	gameState.mu.Unlock()
+
+	// 2. Broadcaster kicks Troll: player is removed from gameState.Players, but leaderboard is preserved
+	processCommand("Streamer", "%kick @troll", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Troll"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Troll to be removed from gameState.Players by %%kick")
+	}
+	if score, exists := gameState.Leaderboard["Troll"]; !exists || score != 10 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Troll's leaderboard score to be preserved after %%kick, got %d", score)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Kick in INPUT phase advances round when all remaining alive players have fired
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	gameState.ConfigPerm = "broadcaster"
+	gameState.Phase = phaseInput
+	gameState.RoundID = 1
+	inputCancel = make(chan struct{})
+	gameState.Players["Alice"] = &Player{Name: "Alice", Joined: true, Fired: true, ActionType: "FIRE"}
+	gameState.Players["Bob"] = &Player{Name: "Bob", Joined: true, Fired: false}
+	gameState.Players["_bot_1"] = &Player{Name: "_bot_1", IsBot: true, Joined: true, Fired: true}
+	gameState.mu.Unlock()
+
+	processCommand("Streamer", "%kick Bob", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Bob"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to be removed by %%kick in INPUT phase")
+	}
+	gameState.mu.Unlock()
+
+	fastForwardTimerMu.Lock()
+	ffActive := fastForwardTimer != nil
+	fastForwardTimerMu.Unlock()
+	if !ffActive {
+		t.Fatalf("expected fast-forward timer to be scheduled after kicking unfired Bob")
+	}
+
+	// 4. Kick in INPUT phase when only 1 player remains in entire game triggers immediate celebration
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	gameState.ConfigPerm = "broadcaster"
+	gameState.Phase = phaseInput
+	gameState.RoundID = 1
+	gameState.Players["Alice"] = &Player{Name: "Alice", Joined: true}
+	gameState.Players["Bob"] = &Player{Name: "Bob", Joined: true}
+	gameState.mu.Unlock()
+
+	processCommand("Streamer", "%kick Bob", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseCelebration {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseCelebration after kicking opponent leaving 1 player, got %s", gameState.Phase)
+	}
+	if gameState.Winner != "Alice" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to win when Bob is kicked, got %s", gameState.Winner)
+	}
+	gameState.mu.Unlock()
+
+	// 5. Kick in ACTION phase filters out in-flight projectiles owned by the kicked player
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	gameState.ConfigPerm = "broadcaster"
+	gameState.Phase = phaseAction
+	gameState.Players["Alice"] = &Player{Name: "Alice", Joined: true}
+	gameState.Players["Bob"] = &Player{Name: "Bob", Joined: true}
+	gameState.Projectiles = []Projectile{
+		{ID: "p1", Owner: "Alice", X: 100, Y: 100},
+		{ID: "p2", Owner: "Bob", X: 200, Y: 200},
+		{ID: "p3", Owner: "bob", X: 250, Y: 250},
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Streamer", "%kick Bob", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Bob"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to be removed from Players in ACTION phase")
+	}
+	if len(gameState.Projectiles) != 1 || gameState.Projectiles[0].Owner != "Alice" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected only Alice's projectile to remain, got %+v", gameState.Projectiles)
+	}
+	gameState.mu.Unlock()
 }
 
 func TestBotFillSystem(t *testing.T) {

@@ -590,8 +590,8 @@
         const kickBtn = e.target.closest('.btn-kick-player');
         if (kickBtn) {
             const player = kickBtn.dataset.player;
-            if (player) {
-                sendCommand(`deleteplayer ${player}`);
+            if (player && confirm(`Kick "${player}" from the active match?`)) {
+                sendCommand(`kick ${player}`);
             }
             return;
         }

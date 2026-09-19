@@ -71,7 +71,8 @@ All settings automatically save to the local database and persist across restart
 | `%idlemessage` | `on\|off` | Shows or hides the idle waiting HUD and leaderboard when waiting between matches. | `%idlemessage off` |
 | `%bouncywalls` | `[on\|off]` | Enables bouncy screen walls with a +10% speed boost for bullets and +50% speed boost for tanks. | `%bouncywalls on` |
 | `%clearleaderboard` | _none_ | Clears all player wins from SQLite database and live overlay leaderboard. | `%clearleaderboard` |
-| `%deleteplayer` | `<user>` | Removes an individual player from SQLite database and live overlay leaderboard. | `%deleteplayer troll123` |
+| `%kick` | `<user>` | Kicks a player from the active match immediately, despawning tank and projectiles. | `%kick troll123` |
+| `%deleteplayer` | `<user>` | Removes an individual player from SQLite database, live leaderboard, and active match. | `%deleteplayer troll123` |
 | `%minplayers` | `<2 - 20>` | Configures minimum player count to fill with bots on match start (default: `5`). | `%minplayers 6` |
 | `%botfill` | `[on\|off]` | Toggles filling open slots with bots up to minimum players (default: `on`). | `%botfill off` |
 | `%botpoints` | `<0 - 10>` | Points awarded to players for destroying a bot tank (default: `1`). | `%botpoints 2` |
