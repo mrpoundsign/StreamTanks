@@ -1058,6 +1058,49 @@ func TestCraterDeduplication(t *testing.T) {
 	}
 }
 
+func TestClearAppliedCraters_Concurrent(t *testing.T) {
+	clearAppliedCraters()
+
+	var wg sync.WaitGroup
+	workers := 10
+	iterations := 100
+
+	// Concurrent writers
+	for i := range workers {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for j := range iterations {
+				appliedCratersMu.Lock()
+				appliedCraters[fmt.Sprintf("shot_%d_%d", workerID, j)] = true
+				appliedCratersMu.Unlock()
+				time.Sleep(time.Millisecond)
+			}
+		}(i)
+	}
+
+	// Concurrent clearers
+	for range workers {
+		wg.Go(func() {
+			for range iterations {
+				clearAppliedCraters()
+				time.Sleep(time.Millisecond)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	// Ensure final state is clear
+	clearAppliedCraters()
+
+	appliedCratersMu.Lock()
+	if len(appliedCraters) != 0 {
+		t.Errorf("expected appliedCraters to be empty, got %d", len(appliedCraters))
+	}
+	appliedCratersMu.Unlock()
+}
+
 func TestHasPermission(t *testing.T) {
 	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
 	mod := &twitch.User{Name: "ModUser", IsMod: true}
@@ -2470,7 +2513,7 @@ func TestBroadcastViewerState(t *testing.T) {
 	gameState.mu.Lock()
 	gameState.Phase = phaseIdle
 	gameState.Players = map[string]*Player{
-		"Roamer": {Name: "Roamer", IsBot: false, Joined: false, IsDead: false},
+		"Roamer":      {Name: "Roamer", IsBot: false, Joined: false, IsDead: false},
 		"JoinedHuman": {Name: "JoinedHuman", IsBot: false, Joined: true, IsDead: false},
 	}
 	gameState.mu.Unlock()
