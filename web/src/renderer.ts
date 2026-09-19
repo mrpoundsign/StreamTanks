@@ -146,8 +146,9 @@ export function drawTanks(
     }
 
     const isHuman = !p.isBot && !name.startsWith('_bot_');
-    const showCommandMarker = isHuman && currentPhase === 'INPUT';
-    const statusColor = p.fired ? '#00ffcc' : '#ff003c';
+    const isJoinedInIdle = isHuman && currentPhase === 'IDLE' && !!p.joined;
+    const showCommandMarker = (isHuman && currentPhase === 'INPUT') || isJoinedInIdle;
+    const statusColor = isJoinedInIdle ? '#00ffcc' : (p.fired ? '#00ffcc' : '#ff003c');
 
     // Draw Name and Avatar Marker
     const displayName = (p.name && !p.name.startsWith('_bot_')) ? p.name : (!name.startsWith('_bot_') && !p.isBot ? name : '');

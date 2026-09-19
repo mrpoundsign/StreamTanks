@@ -265,6 +265,9 @@
                 if (isDead) {
                     statusClass = 'dead';
                     statusText = 'Dead';
+                } else if (state.phase === 'IDLE' && !isBot) {
+                    statusClass = p.joined ? 'alive' : 'idle';
+                    statusText = p.joined ? 'Joined' : 'Roaming';
                 } else if (fired) {
                     statusClass = 'fired';
                     statusText = 'Locked In';

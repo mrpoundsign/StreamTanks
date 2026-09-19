@@ -60,6 +60,7 @@ export interface Player {
   speedMultiplier?: number;
   hasBounced?: boolean;
   lastActiveRound?: number;
+  joined?: boolean;
 }
 
 export interface GameState {

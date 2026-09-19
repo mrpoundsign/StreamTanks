@@ -52,6 +52,8 @@ type Player struct {
 	SpeedMultiplier float64 `json:"speedMultiplier,omitempty"`
 	HasBounced      bool    `json:"hasBounced,omitempty"`
 	LastActiveRound int     `json:"lastActiveRound"`
+	Joined          bool    `json:"joined"`
+	CommandsInMatch int     `json:"commandsInMatch,omitempty"`
 }
 
 // Projectile represents a tank shell in flight

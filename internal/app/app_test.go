@@ -149,9 +149,11 @@ func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 		EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0",
 		LastAngle: 45,
 		LastPower: 50,
+		Joined:    true,
 	}
 	gameState.Players["TargetBot"] = &Player{
 		Name:      "TargetBot",
+		IsBot:     true,
 		Emote:     "PogChamp",
 		EmoteURL:  "https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/2.0",
 		LastAngle: 135,
@@ -702,9 +704,9 @@ func TestInactivePlayerNotWaitedOn(t *testing.T) {
 	gameState.mu.Lock()
 	gameState.RoundID = 1
 	// Alice was active in Round 1
-	gameState.Players["Alice"] = &Player{Name: "Alice", LastActiveRound: 1, Fired: false}
+	gameState.Players["Alice"] = &Player{Name: "Alice", LastActiveRound: 1, Fired: false, Joined: true}
 	// Bob was idle in Round 1 (LastActiveRound = 0)
-	gameState.Players["Bob"] = &Player{Name: "Bob", LastActiveRound: 0, Fired: false}
+	gameState.Players["Bob"] = &Player{Name: "Bob", LastActiveRound: 0, Fired: false, Joined: true}
 	gameState.mu.Unlock()
 
 	startInputPhase()
@@ -1040,7 +1042,8 @@ func TestPermissionCommands(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. Regular viewer cannot %startgame
+	// 2. Regular viewer cannot %startgame (even if joined)
+	processCommand("RegularViewer", "%join Kappa", nil, viewer)
 	processCommand("RegularViewer", "%startgame", nil, viewer)
 	gameState.mu.Lock()
 	if gameState.Phase != phaseIdle {
@@ -2328,3 +2331,186 @@ func TestProtractorCommand(t *testing.T) {
 	// 8. Test broadcastExcept deep copy of GameState preserves ProtractorX and ProtractorY
 	broadcast(msgStateUpdate, &gameState)
 }
+
+func TestChatterRoamingAndExplicitJoin(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1. Regular chatter sends non-command message during IDLE
+	processCommand("Chatter1", "hello everyone in chat!", nil, nil)
+	gameState.mu.Lock()
+	p1, exists := gameState.Players["Chatter1"]
+	if !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Chatter1 to exist in gameState.Players during IDLE")
+	}
+	if p1.Joined {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Chatter1 to have Joined=false as ambient roamer, got Joined=true")
+	}
+	gameState.mu.Unlock()
+
+	// 2. Chatter explicitly types %join
+	processCommand("Chatter1", "%join PogChamp", nil, nil)
+	gameState.mu.Lock()
+	p1 = gameState.Players["Chatter1"]
+	if !p1.Joined {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Chatter1 to have Joined=true after %%join")
+	}
+	if p1.Emote != "PogChamp" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected emote PogChamp, got %s", p1.Emote)
+	}
+	gameState.mu.Unlock()
+
+	// 2b. If NO players are joined, %startgame must be ignored
+	resetGameStateForTest()
+	processCommand("OnlyRoamer", "just roaming", nil, nil)
+	broadcaster := &twitch.User{Name: "Admin", Badges: map[string]int{"broadcaster": 1}}
+	processCommand("Admin", "%startgame", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Phase to remain PhaseIdle when %%startgame is called with 0 joined players, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Now Chatter1 joins, Roamer2 does not join
+	processCommand("Chatter1", "%join PogChamp", nil, nil)
+	processCommand("Roamer2", "just watching stream :)", nil, nil)
+
+	// Broadcaster starts game
+	processCommand("Admin", "%startgame", nil, broadcaster)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected PhaseInput after startgame, got %s", gameState.Phase)
+	}
+	// Roamer2 must be dropped from active match
+	if _, exists := gameState.Players["Roamer2"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected unjoined Roamer2 to be dropped from active match")
+	}
+	// Chatter1 must remain
+	if _, exists := gameState.Players["Chatter1"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected joined Chatter1 to participate in match")
+	}
+	// Admin did NOT %join, so Admin must NOT be in the match
+	if _, exists := gameState.Players["Admin"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Admin NOT to be joined or in the match without typing %%join")
+	}
+	gameState.mu.Unlock()
+
+	// 4. Chatter sends a non-command message during active match: must NOT spawn
+	processCommand("LateChatter", "hey guys what game is this", nil, nil)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["LateChatter"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected LateChatter NOT to spawn during active match without %%join")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestLeaveCommand(t *testing.T) {
+	resetGameStateForTest()
+
+	// 1. Leave in IDLE
+	processCommand("Alice", "%join Kappa", nil, nil)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Alice"]; !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to exist")
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Alice", "%leave", nil, nil)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Alice"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Alice to be removed from players after %%leave in IDLE")
+	}
+	gameState.mu.Unlock()
+
+	// 2. Leave during INPUT phase
+	processCommand("Alice", "%join Kappa", nil, nil)
+	processCommand("Bob", "%join LUL", nil, nil)
+	broadcaster := &twitch.User{Name: "Admin", Badges: map[string]int{"broadcaster": 1}}
+	processCommand("Admin", "%startgame", nil, broadcaster)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseInput {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseInput")
+	}
+	gameState.mu.Unlock()
+
+	// Bob ragequits with %leave
+	processCommand("Bob", "%leave", nil, nil)
+	gameState.mu.Lock()
+	if _, exists := gameState.Players["Bob"]; exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Bob to be removed from match after %%leave in INPUT")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestMatchRollover_DropInactiveHumans(t *testing.T) {
+	resetGameStateForTest()
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseCelebration
+	// Alice commanded during match
+	gameState.Players["Alice"] = &Player{
+		Name:            "Alice",
+		Joined:          true,
+		CommandsInMatch: 2,
+		X:               100,
+		Y:               300,
+	}
+	// Bob was AFK during match (0 commands)
+	gameState.Players["Bob"] = &Player{
+		Name:            "Bob",
+		Joined:          true,
+		CommandsInMatch: 0,
+		X:               200,
+		Y:               300,
+	}
+	// Bot
+	gameState.Players["TargetBot"] = &Player{
+		Name:  "TargetBot",
+		IsBot: true,
+	}
+	gameState.mu.Unlock()
+
+	resetMatchState()
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseIdle {
+		t.Fatalf("expected phaseIdle after resetMatchState, got %s", gameState.Phase)
+	}
+	// Bob entered 0 commands, must be dropped
+	if _, exists := gameState.Players["Bob"]; exists {
+		t.Fatalf("expected inactive Bob to be dropped from next match")
+	}
+	// Alice entered commands, must be retained and reset CommandsInMatch
+	alice, exists := gameState.Players["Alice"]
+	if !exists {
+		t.Fatalf("expected active Alice to be retained for next match")
+	}
+	if !alice.Joined {
+		t.Fatalf("expected Alice to remain Joined=true for next match")
+	}
+	if alice.CommandsInMatch != 0 {
+		t.Fatalf("expected Alice CommandsInMatch to be reset to 0, got %d", alice.CommandsInMatch)
+	}
+	// Bot TargetBot should be cleaned up (debug=false)
+	if _, exists := gameState.Players["TargetBot"]; exists {
+		t.Fatalf("expected bot TargetBot to be cleaned up from match")
+	}
+}
+

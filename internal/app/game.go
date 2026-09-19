@@ -92,8 +92,16 @@ func resetMatchState() {
 		}
 	}
 
-	// Revive all players for next game and reposition
-	for _, p := range gameState.Players {
+	// Filter out inactive humans who entered 0 commands during the completed match,
+	// and revive active players for next game.
+	for key, p := range gameState.Players {
+		if !p.IsBot {
+			if p.CommandsInMatch == 0 {
+				delete(gameState.Players, key)
+				continue
+			}
+			p.CommandsInMatch = 0
+		}
 		p.IsDead = false
 		p.Fired = false
 		p.ActionType = ""
@@ -173,7 +181,7 @@ func triggerAutoRound() {
 		if gameState.Phase == phaseIdle {
 			humanCount := 0
 			for _, p := range gameState.Players {
-				if !p.IsBot {
+				if !p.IsBot && p.Joined {
 					humanCount++
 				}
 			}
@@ -196,10 +204,19 @@ func startInputPhase() {
 
 	gameState.mu.Lock()
 
-	// Check if at least 1 real human is in the game
+	// If starting from IDLE, drop any unjoined roamers
+	if gameState.Phase == phaseIdle {
+		for key, p := range gameState.Players {
+			if !p.IsBot && !p.Joined {
+				delete(gameState.Players, key)
+			}
+		}
+	}
+
+	// Check if at least 1 real joined human is in the game
 	humanCount := 0
 	for _, p := range gameState.Players {
-		if !p.IsBot {
+		if !p.IsBot && p.Joined {
 			humanCount++
 		}
 	}
@@ -1113,6 +1130,70 @@ func handleCCCommand(user *twitch.User, args []string) {
 	}
 }
 
+func spawnNewPlayerLocked(username string, joined bool) *Player {
+	var botToReplaceKey string
+	var botToReplace *Player
+
+	// Check for named bots first (following BotList order)
+	for _, botName := range gameState.BotList {
+		if p, exists := gameState.Players[botName]; exists && p.IsBot {
+			botToReplaceKey = botName
+			botToReplace = p
+			break
+		}
+	}
+	if botToReplace == nil {
+		for k, p := range gameState.Players {
+			if p.IsBot && p.Name != "" {
+				botToReplaceKey = k
+				botToReplace = p
+				break
+			}
+		}
+	}
+	// If no named bot found, check for nameless bots
+	if botToReplace == nil {
+		for k, p := range gameState.Players {
+			if p.IsBot {
+				botToReplaceKey = k
+				botToReplace = p
+				break
+			}
+		}
+	}
+
+	spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
+	spawnY := getTerrainHeight(gameState.Terrain, spawnX)
+
+	if botToReplace != nil {
+		// Inherit bot's position
+		spawnX = botToReplace.X
+		spawnY = botToReplace.Y
+		delete(gameState.Players, botToReplaceKey)
+	}
+
+	randIdx := rand.IntN(len(defaultEmotes))
+	defEmote := defaultEmotes[randIdx]
+	lastRound := 0
+	if gameState.Phase != phaseIdle {
+		lastRound = gameState.RoundID
+	}
+	p := &Player{
+		Name:            username,
+		IsBot:           false,
+		Emote:           defEmote.Name,
+		EmoteURL:        defEmote.URL,
+		LastAngle:       45,
+		LastPower:       50,
+		X:               spawnX,
+		Y:               spawnY,
+		LastActiveRound: lastRound,
+		Joined:          joined,
+	}
+	gameState.Players[username] = p
+	return p
+}
+
 func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt ...*twitch.User) {
 	var user *twitch.User
 	if len(userOpt) > 0 {
@@ -1121,75 +1202,6 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	gameState.mu.Lock()
 
-	// Ensure player exists in state
-	if _, exists := gameState.Players[username]; !exists {
-		// A new human player is joining!
-		// Check if we can cull/replace a bot:
-		// Priority 1: Named bots (p.IsBot && p.Name != "")
-		// Priority 2: Nameless bots (p.IsBot && p.Name == "")
-		var botToReplaceKey string
-		var botToReplace *Player
-
-		// Check for named bots first (following BotList order)
-		for _, botName := range gameState.BotList {
-			if p, exists := gameState.Players[botName]; exists && p.IsBot {
-				botToReplaceKey = botName
-				botToReplace = p
-				break
-			}
-		}
-		if botToReplace == nil {
-			for k, p := range gameState.Players {
-				if p.IsBot && p.Name != "" {
-					botToReplaceKey = k
-					botToReplace = p
-					break
-				}
-			}
-		}
-		// If no named bot found, check for nameless bots
-		if botToReplace == nil {
-			for k, p := range gameState.Players {
-				if p.IsBot {
-					botToReplaceKey = k
-					botToReplace = p
-					break
-				}
-			}
-		}
-
-		spawnX := rand.Float64()*(float64(defaultTerrainWidth)-200.0) + 100.0
-		spawnY := getTerrainHeight(gameState.Terrain, spawnX)
-
-		if botToReplace != nil {
-			// Inherit bot's position
-			spawnX = botToReplace.X
-			spawnY = botToReplace.Y
-			delete(gameState.Players, botToReplaceKey)
-		}
-
-		randIdx := rand.IntN(len(defaultEmotes))
-		defEmote := defaultEmotes[randIdx]
-		lastRound := 0
-		if gameState.Phase != phaseIdle {
-			lastRound = gameState.RoundID
-		}
-		gameState.Players[username] = &Player{
-			Name:            username,
-			IsBot:           false,
-			Emote:           defEmote.Name,
-			EmoteURL:        defEmote.URL,
-			LastAngle:       45,
-			LastPower:       50,
-			X:               spawnX,
-			Y:               spawnY,
-			LastActiveRound: lastRound,
-		}
-		gameState.mu.Unlock()
-		broadcast(msgStateUpdate, &gameState)
-		gameState.mu.Lock()
-	}
-
 	currPrefix := gameState.Prefix
 	if currPrefix == "" {
 		currPrefix = "%"
@@ -1197,6 +1209,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	trimmedMsg := strings.TrimSpace(msg)
 	var cmdStr string
+	isCommand := true
 	switch {
 	case strings.HasPrefix(trimmedMsg, currPrefix):
 		cmdStr = strings.TrimPrefix(trimmedMsg, currPrefix)
@@ -1205,6 +1218,19 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 	case strings.HasPrefix(trimmedMsg, "!"):
 		cmdStr = strings.TrimPrefix(trimmedMsg, "!")
 	default:
+		isCommand = false
+	}
+
+	if !isCommand {
+		// In IDLE phase, regular chatters spawn as ambient roamers (Joined = false)
+		if gameState.Phase == phaseIdle {
+			if _, exists := gameState.Players[username]; !exists {
+				spawnNewPlayerLocked(username, false)
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
+				return
+			}
+		}
 		gameState.mu.Unlock()
 		return
 	}
@@ -1560,7 +1586,12 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		return
 
 	case "join":
-		player := gameState.Players[username]
+		player, exists := gameState.Players[username]
+		if !exists {
+			player = spawnNewPlayerLocked(username, true)
+		} else {
+			player.Joined = true
+		}
 		if gameState.Phase != phaseIdle {
 			player.LastActiveRound = gameState.RoundID
 		}
@@ -1585,6 +1616,40 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		gameState.mu.Unlock()
 		broadcast(msgStateUpdate, &gameState)
 		return
+
+	case "leave":
+		_, exists := gameState.Players[username]
+		if !exists {
+			gameState.mu.Unlock()
+			return
+		}
+		delete(gameState.Players, username)
+
+		switch gameState.Phase {
+		case phaseInput:
+			gameState.mu.Unlock()
+			broadcast(msgPlayerDied, PlayerDiedPayload{
+				Victim: username,
+				Killer: "",
+			})
+			gameState.mu.Lock()
+			checkAllPlayersFired()
+			gameState.mu.Unlock()
+			broadcast(msgStateUpdate, &gameState)
+			return
+		case phaseAction:
+			gameState.mu.Unlock()
+			broadcast(msgPlayerDied, PlayerDiedPayload{
+				Victim: username,
+				Killer: "",
+			})
+			broadcast(msgStateUpdate, &gameState)
+			return
+		default:
+			gameState.mu.Unlock()
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
 
 	case "minplayers":
 		if !hasPermission(user, gameState.ConfigPerm) {
@@ -1768,7 +1833,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		if gameState.Phase == phaseIdle {
 			humanCount := 0
 			for _, p := range gameState.Players {
-				if !p.IsBot {
+				if !p.IsBot && p.Joined {
 					humanCount++
 				}
 			}
@@ -1783,7 +1848,12 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 
 	case "fire", "left", "right":
 		if gameState.Phase == phaseInput {
-			player := gameState.Players[username]
+			player, exists := gameState.Players[username]
+			if !exists || player.IsDead || !player.Joined {
+				gameState.mu.Unlock()
+				return
+			}
+			player.CommandsInMatch++
 			player.LastActiveRound = gameState.RoundID
 			if cmd == "fire" {
 				if len(parts) >= 3 {

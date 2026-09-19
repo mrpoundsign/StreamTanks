@@ -71,6 +71,7 @@ func Run(cfg Config) error {
 			X:               p1X,
 			Y:               getTerrainHeight(gameState.Terrain, p1X),
 			LastActiveRound: gameState.RoundID,
+			Joined:          false,
 		}
 		gameState.Players["TargetBot"] = &Player{
 			Name:            "TargetBot",

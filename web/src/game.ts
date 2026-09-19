@@ -247,6 +247,18 @@ function updatePhysics(dtScale: number): void {
       }
     }
 
+    // Roaming in IDLE
+    if (currentPhase === PhaseIdle) {
+      p.x += (p.dx ?? 1.5) * dtScale;
+      if (p.x < 50) {
+        p.x = 50;
+        p.dx = Math.abs(p.dx ?? 1.5);
+      } else if (p.x > WIDTH - 50) {
+        p.x = WIDTH - 50;
+        p.dx = -Math.abs(p.dx ?? 1.5);
+      }
+    }
+
     // Boundary clamping
     if (p.x < 20) p.x = 20;
     if (p.x > WIDTH - 20) p.x = WIDTH - 20;
@@ -769,6 +781,7 @@ net.onMessage((msg: WSMessage) => {
       if (recapList) recapList.innerHTML = '';
       if (celebrationRecap) celebrationRecap.style.display = 'none';
     }
+    const phaseChangedFromIdle = currentPhase === PhaseIdle && state.phase !== PhaseIdle;
     currentPhase = state.phase;
 
     if (state.leaderboard) {
@@ -808,6 +821,7 @@ net.onMessage((msg: WSMessage) => {
           x: spawnX,
           y: spawnY,
           dx: moveDx,
+          joined: newPlayers[name].joined,
         };
         const emoteUrl = players[name].emoteUrl || `https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0`;
         if (!emoteCache[emoteUrl]) {
@@ -816,8 +830,11 @@ net.onMessage((msg: WSMessage) => {
           emoteCache[emoteUrl] = img;
         }
       } else {
-        players[name].x = newPlayers[name].x;
-        players[name].y = newPlayers[name].y;
+        if (currentPhase !== PhaseIdle || phaseChangedFromIdle) {
+          players[name].x = newPlayers[name].x;
+          players[name].y = newPlayers[name].y;
+        }
+        players[name].joined = newPlayers[name].joined;
         players[name].moving = newPlayers[name].moving;
         players[name].moveTarget = newPlayers[name].moveTarget;
         players[name].speedMultiplier = newPlayers[name].speedMultiplier;
