@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 40" width="84" height="40">
+  <defs>
+    <filter id="rocket-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <linearGradient id="hull-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+    <linearGradient id="fin-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffcc" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0.45" />
+    </linearGradient>
+  </defs>
+
+  <!-- Top Stabilizer Fin -->
+  <polygon points="12,14 20,2 30,10" fill="url(#fin-grad)" stroke="#00ffcc" stroke-width="0.6" stroke-linejoin="round" filter="url(#rocket-glow)" />
+
+  <!-- Bottom Stabilizer Fin -->
+  <polygon points="12,26 20,38 30,30" fill="url(#fin-grad)" stroke="#00ffcc" stroke-width="0.6" stroke-linejoin="round" filter="url(#rocket-glow)" />
+
+  <!-- Tail Wing Stabilizers -->
+  <polygon points="4,17 12,15 12,25 4,23" fill="#0f172a" stroke="#00ffcc" stroke-width="0.5" />
+
+  <!-- Rear Engine Exhaust Nozzle -->
+  <path d="M 8,15 L 2,13 L 2,27 L 8,25 Z" fill="#161f2e" stroke="#ff007f" stroke-width="0.75" />
+  <line x1="2" y1="15" x2="2" y2="25" stroke="#ff007f" stroke-width="0.75" />
+
+  <!-- Main Fuselage Body with Pod Wrapping Decal -->
+  <path d="M 8,14 L 20,14 C 24,4 48,4 52,14 C 62,14 72,17 80,20 C 72,23 62,26 52,26 C 48,36 24,36 20,26 L 8,26 Z" fill="url(#hull-grad)" stroke="#00ffcc" stroke-width="0.75" stroke-linejoin="round" />
+
+  <!-- Neon Hull Accent Stripes (Thin) -->
+  <path d="M 10,16 L 20,16" stroke="#00ffcc" stroke-width="0.5" opacity="0.7" />
+  <path d="M 10,24 L 20,24" stroke="#00ffcc" stroke-width="0.5" opacity="0.7" />
+  <path d="M 54,16 C 62,17 70,18.5 74,20 C 70,21.5 62,23 54,24" fill="none" stroke="#ff007f" stroke-width="0.5" opacity="0.8" />
+
+  <!-- Nosecone Tip Glowing Sensor -->
+  <circle cx="78" cy="20" r="1.2" fill="#00ffcc" filter="url(#rocket-glow)" />
+
+  <!-- Sticker Decal Cutout Rim / Bezel (Centered at 36, 20) with Thin Strokes -->
+  <circle cx="36" cy="20" r="14.5" fill="none" stroke="#00ffcc" stroke-width="0.75" filter="url(#rocket-glow)" />
+  <circle cx="36" cy="20" r="13.5" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.6" />
+</svg>

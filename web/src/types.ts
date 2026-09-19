@@ -126,6 +126,19 @@ export interface Projectile {
   owner: string;
   emoteUrl?: string;
   bounces?: number;
+  trail?: { x: number; y: number }[];
+}
+
+export interface TrailParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  maxRadius: number;
+  alpha: number;
+  decay: number;
+  color: string;
 }
 
 export interface Explosion {

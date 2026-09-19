@@ -4,6 +4,7 @@ import {
   Player,
   GameState,
   Projectile,
+  TrailParticle,
   Explosion,
   GamePhase,
   WSMessage,
@@ -30,6 +31,7 @@ import {
   drawTerrain,
   drawGiantProtractor,
   drawTanks,
+  drawTrails,
   drawProjectiles,
   drawExplosions,
 } from './renderer';
@@ -62,6 +64,7 @@ const debugSendBtn = document.getElementById('debug-send-btn') as HTMLElement;
 let terrain: number[] = createDefaultTerrain();
 const players: Record<string, Player> = {};
 let projectiles: Projectile[] = [];
+let trailParticles: TrailParticle[] = [];
 const explosions: Explosion[] = [];
 let currentPhase: GamePhase = PhaseIdle;
 let previousPhase: GamePhase = PhaseIdle;
@@ -169,6 +172,7 @@ function destroyTerrain(cx: number, cy: number, radius: number, shotId?: string)
 
 function executeActions(): void {
   projectiles = [];
+  trailParticles = [];
   for (const name in players) {
     const p = players[name];
     if (p.isDead) continue;
@@ -302,6 +306,36 @@ function updatePhysics(dtScale: number): void {
     proj.vy += 0.2 * dtScale; // Matching server gravity 0.2
     proj.y += proj.vy * dtScale;
 
+    // Record trail history for smooth contrail ribbon
+    proj.trail = proj.trail || [];
+    proj.trail.push({ x: proj.x, y: proj.y });
+    if (proj.trail.length > 20) {
+      proj.trail.shift();
+    }
+
+    // Spawn thruster exhaust smoke and sparks from rear nozzle
+    const heading = Math.atan2(proj.vy, proj.vx);
+    const nozzleDist = 34;
+    const nozzleX = proj.x - Math.cos(heading) * nozzleDist;
+    const nozzleY = proj.y - Math.sin(heading) * nozzleDist;
+
+    for (let k = 0; k < 2; k++) {
+      const spreadAngle = heading + Math.PI + (Math.random() - 0.5) * 0.6;
+      const speed = 0.5 + Math.random() * 1.5;
+      const isSmoke = Math.random() > 0.45;
+      trailParticles.push({
+        x: nozzleX + (Math.random() - 0.5) * 3,
+        y: nozzleY + (Math.random() - 0.5) * 3,
+        vx: Math.cos(spreadAngle) * speed,
+        vy: Math.sin(spreadAngle) * speed,
+        radius: isSmoke ? 2.5 : 1.2,
+        maxRadius: isSmoke ? 8 + Math.random() * 4 : 2.2,
+        alpha: 0.75,
+        decay: isSmoke ? 0.035 : 0.065,
+        color: isSmoke ? 'rgba(0, 255, 204, ALPHA)' : 'rgba(255, 120, 50, ALPHA)',
+      });
+    }
+
     let hit = false;
 
     if (proj.y < 0) {
@@ -405,6 +439,18 @@ function updatePhysics(dtScale: number): void {
     exp.alpha -= 0.05 * dtScale;
     if (exp.alpha <= 0) {
       explosions.splice(i, 1);
+    }
+  }
+
+  // Update trail particles
+  for (let i = trailParticles.length - 1; i >= 0; i--) {
+    const tp = trailParticles[i];
+    tp.x += tp.vx * dtScale;
+    tp.y += tp.vy * dtScale;
+    tp.radius += (tp.maxRadius - tp.radius) * 0.08 * dtScale;
+    tp.alpha -= tp.decay * dtScale;
+    if (tp.alpha <= 0) {
+      trailParticles.splice(i, 1);
     }
   }
 
@@ -934,6 +980,7 @@ net.onMessage((msg: WSMessage) => {
       terrain = createDefaultTerrain();
     }
     projectiles = [];
+    trailParticles = [];
     explosions.length = 0;
     appliedCraterIds.clear();
     celebrationStartTime = 0;
@@ -994,6 +1041,7 @@ function draw(): void {
     drawGiantProtractor(ctx, stateRef?.protractorX ?? 250, stateRef?.protractorY ?? 350, isHumanDead);
     if (isPreview) ctx.globalAlpha = 1.0;
   }
+  drawTrails(ctx, projectiles, trailParticles);
   drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache, avatarImgCache);
   drawProjectiles(ctx, projectiles, emoteCache);
   drawExplosions(ctx, explosions);

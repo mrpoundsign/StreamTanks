@@ -1,5 +1,8 @@
-import { WIDTH, HEIGHT, Player, Projectile, Explosion, GamePhase } from './types';
+import { WIDTH, HEIGHT, Player, Projectile, TrailParticle, Explosion, GamePhase } from './types';
 import { getTerrainSlopeAngle } from './terrain';
+
+const rocketImg = new Image();
+rocketImg.src = '/rocket.svg';
 
 export function drawTerrain(ctx: CanvasRenderingContext2D, terrain: number[]): void {
   if (terrain.length === 0) return;
@@ -321,6 +324,43 @@ export function drawTanks(
   }
 }
 
+export function drawTrails(
+  ctx: CanvasRenderingContext2D,
+  projectiles: Projectile[],
+  trailParticles: TrailParticle[]
+): void {
+  // 1. Contrail ribbons connecting recent flight positions
+  for (const proj of projectiles) {
+    if (!proj.trail || proj.trail.length < 2) continue;
+    const len = proj.trail.length;
+    for (let i = 0; i < len - 1; i++) {
+      const p1 = proj.trail[i];
+      const p2 = proj.trail[i + 1];
+      const progress = (i + 1) / len; // 0 (oldest) to 1 (newest)
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.strokeStyle = `rgba(0, 255, 204, ${progress * 0.55})`;
+      ctx.lineWidth = 1.5 + progress * 2.5;
+      ctx.shadowBlur = progress * 8;
+      ctx.shadowColor = '#00ffcc';
+      ctx.stroke();
+    }
+  }
+
+  // 2. Drifting exhaust smoke and spark particles
+  for (const p of trailParticles) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(0.5, p.radius), 0, Math.PI * 2);
+    ctx.fillStyle = p.color.replace('ALPHA', Math.max(0, p.alpha).toFixed(3));
+    ctx.shadowBlur = Math.min(10, p.alpha * 10);
+    ctx.shadowColor = p.color.includes('255, 120') ? '#ff7832' : '#00ffcc';
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 export function drawProjectiles(
   ctx: CanvasRenderingContext2D,
   projectiles: Projectile[],
@@ -332,18 +372,93 @@ export function drawProjectiles(
       img.src = proj.emoteUrl;
       emoteCache[proj.emoteUrl] = img;
     }
-    const img = proj.emoteUrl ? emoteCache[proj.emoteUrl] : null;
-    if (img && img.complete && img.naturalWidth > 0) {
-      ctx.shadowBlur = 0;
-      ctx.drawImage(img, proj.x - 7, proj.y - 7, 14, 14);
+
+    const angle = Math.atan2(proj.vy, proj.vx);
+    ctx.save();
+    ctx.translate(proj.x, proj.y);
+    ctx.rotate(angle);
+
+    // Rocket dimensions: width 84, height 40 (aspect ratio 84x40).
+    // Center of sticker in rocket.svg is at (36, 20).
+    // Placing sticker center at (0, 0) => rocket top-left is (-36, -20).
+    const rocketW = 84;
+    const rocketH = 40;
+    const rocketX = -36;
+    const rocketY = -20;
+
+    // 1. Dynamic Thruster Flame at rear nozzle (nozzle is at rocketX + 2 = -34)
+    const nozzleX = rocketX + 2;
+    const flameLen = 12 + Math.random() * 8;
+    const flameW = 4 + Math.random() * 1.5;
+    const flameGrad = ctx.createLinearGradient(nozzleX, 0, nozzleX - flameLen, 0);
+    flameGrad.addColorStop(0, '#ffffff');
+    flameGrad.addColorStop(0.2, '#00ffcc');
+    flameGrad.addColorStop(0.6, '#ff007f');
+    flameGrad.addColorStop(1, 'rgba(255, 0, 127, 0)');
+
+    ctx.beginPath();
+    ctx.moveTo(nozzleX, -flameW);
+    ctx.lineTo(nozzleX - flameLen, 0);
+    ctx.lineTo(nozzleX, flameW);
+    ctx.closePath();
+    ctx.fillStyle = flameGrad;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00ffcc';
+    ctx.fill();
+
+    // 2. Rocket Body
+    if (rocketImg.complete && rocketImg.naturalWidth > 0) {
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#00ffcc';
+      ctx.drawImage(rocketImg, rocketX, rocketY, rocketW, rocketH);
     } else {
-      ctx.fillStyle = '#00ffcc';
-      ctx.shadowBlur = 10;
+      // Fallback vector chassis if SVG not yet loaded
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#00ffcc';
+      ctx.lineWidth = 0.75;
+      ctx.shadowBlur = 4;
       ctx.shadowColor = '#00ffcc';
       ctx.beginPath();
-      ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2);
+      ctx.moveTo(-32, -8);
+      ctx.lineTo(20, -8);
+      ctx.lineTo(44, 0);
+      ctx.lineTo(20, 8);
+      ctx.lineTo(-32, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 3. Player Emote Sticker Decal centered at (0, 0)
+    const stickerRadius = 14.5;
+    const img = proj.emoteUrl ? emoteCache[proj.emoteUrl] : null;
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, stickerRadius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, -stickerRadius, -stickerRadius, stickerRadius * 2, stickerRadius * 2);
+      ctx.restore();
+
+      // Glowing sticker decal rim (thin stroke)
+      ctx.beginPath();
+      ctx.arc(0, 0, stickerRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#00ffcc';
+      ctx.lineWidth = 0.75;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#00ffcc';
+      ctx.stroke();
+    } else {
+      // Glowing cyan visor/core fallback
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#00ffcc';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#00ffcc';
       ctx.fill();
     }
+
+    ctx.restore();
   }
 }
 
