@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand/v2"
 	"strconv"
@@ -1375,6 +1376,42 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 	cmd := strings.ToLower(parts[0])
 
 	switch cmd {
+	case "channel":
+		if !hasPermission(user, gameState.ConfigPerm) {
+			gameState.mu.Unlock()
+			return
+		}
+		if len(parts) > 1 {
+			newChannel := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(parts[1], "#")))
+			if newChannel == "off" || newChannel == "clear" || newChannel == "none" || newChannel == "0" {
+				newChannel = ""
+			}
+			gameState.Channel = newChannel
+			channelName = newChannel
+			gameState.mu.Unlock()
+
+			if newChannel != "" {
+				log.Printf("Twitch channel set to: %s", newChannel)
+				saveSetting("channel", newChannel)
+			} else {
+				log.Println("Twitch channel cleared; running in local overlay mode")
+				deleteSetting("channel")
+			}
+
+			setTwitchBotChannel(newChannel)
+
+			if newChannel != "" {
+				StartCCClientManager(newChannel)
+			} else {
+				StopCCClient()
+			}
+
+			broadcast(msgStateUpdate, &gameState)
+			return
+		}
+		gameState.mu.Unlock()
+		return
+
 	case "prefix":
 		if !hasPermission(user, gameState.ConfigPerm) {
 			gameState.mu.Unlock()

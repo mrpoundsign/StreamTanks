@@ -129,6 +129,63 @@ body {
     100% { opacity: 1; filter: brightness(1.2); }
 }
 
+.channel-header-pill {
+    display: flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 12px;
+}
+
+.channel-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.channel-icon {
+    font-size: 12px;
+}
+
+.channel-tag {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.channel-val {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--neon-cyan);
+}
+
+.channel-val.unset {
+    color: var(--text-muted);
+    font-style: italic;
+    font-weight: 400;
+}
+
+.channel-edit-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.channel-edit-form input {
+    width: 140px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--neon-cyan);
+    border-radius: 4px;
+    color: #fff;
+    outline: none;
+}
+
 .connection-pill {
     display: flex;
     align-items: center;

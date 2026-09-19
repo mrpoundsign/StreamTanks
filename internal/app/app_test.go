@@ -34,6 +34,8 @@ func resetGameStateForTest() {
 	gameState.MoveDistance = 100
 	gameState.Leaderboard = make(map[string]int)
 	gameState.Debug = false
+	gameState.Channel = ""
+	channelName = ""
 	gameState.Prefix = "%"
 	gameState.PhysicsSpeed = 0.5
 	gameState.ShowConfig = false
@@ -3613,4 +3615,126 @@ func TestBotShield_OnePerGame(t *testing.T) {
 		t.Fatalf("expected TestBot to be purged in idle phase")
 	}
 	gameState.mu.Unlock()
+}
+
+func TestChannelConfigurationAndPersistence(t *testing.T) {
+	tmpDB := filepath.Join(t.TempDir(), "test_channel.db")
+	if err := initDB(tmpDB); err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	defer closeDB()
+
+	resetGameStateForTest()
+
+	// 1. Verify initial state is empty
+	gameState.mu.Lock()
+	if gameState.Channel != "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected initial gameState.Channel to be empty, got %q", gameState.Channel)
+	}
+	gameState.mu.Unlock()
+
+	// 2. Unauthorized user cannot set channel
+	unauthUser := &twitch.User{
+		Name: "viewer123",
+	}
+	processCommand("viewer123", "%channel hackerchannel", nil, unauthUser)
+	gameState.mu.Lock()
+	if gameState.Channel != "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected unauthorized channel command to be rejected")
+	}
+	gameState.mu.Unlock()
+
+	// 3. Authorized broadcaster can set channel
+	broadcasterUser := &twitch.User{
+		Name:          "streamer",
+		IsBroadcaster: true,
+	}
+	processCommand("streamer", "%channel #TestStreamer", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if gameState.Channel != "teststreamer" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected channel 'teststreamer', got %q", gameState.Channel)
+	}
+	if channelName != "teststreamer" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected channelName 'teststreamer', got %q", channelName)
+	}
+	gameState.mu.Unlock()
+
+	// Verify persistence in SQLite
+	saved := getSetting("channel")
+	if saved != "teststreamer" {
+		t.Fatalf("expected SQLite setting 'teststreamer', got %q", saved)
+	}
+
+	// 4. Test WebSocket client receives channel in STATE_UPDATE
+	server := httptest.NewServer(websocket.Handler(handleWebSocket))
+	defer server.Close()
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?client=admin"
+	conn, err := websocket.Dial(wsURL, "", server.URL)
+	if err != nil {
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	var stateMsg struct {
+		Type    string    `json:"type"`
+		Payload GameState `json:"payload"`
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err := websocket.JSON.Receive(conn, &stateMsg); err != nil {
+		t.Fatalf("failed to receive state message: %v", err)
+	}
+	if stateMsg.Payload.Channel != "teststreamer" {
+		t.Fatalf("expected broadcasted GameState.Channel to be 'teststreamer', got %q", stateMsg.Payload.Channel)
+	}
+
+	// 5. Test getDebugUsername() returns channel name
+	if getDebugUsername() != "teststreamer" {
+		t.Fatalf("expected getDebugUsername() to return 'teststreamer', got %q", getDebugUsername())
+	}
+
+	// 6. Test loadSettings() restores channel after reset
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	if gameState.Channel != "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected gameState.Channel to be cleared after reset")
+	}
+	gameState.mu.Unlock()
+
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.Channel != "teststreamer" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected loadSettings() to restore 'teststreamer', got %q", gameState.Channel)
+	}
+	if channelName != "teststreamer" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected channelName to be restored to 'teststreamer', got %q", channelName)
+	}
+	gameState.mu.Unlock()
+
+	// 6. Test clearing channel via %channel off
+	processCommand("streamer", "%channel off", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if gameState.Channel != "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected gameState.Channel to be cleared, got %q", gameState.Channel)
+	}
+	if channelName != "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected channelName to be cleared, got %q", channelName)
+	}
+	gameState.mu.Unlock()
+
+	savedAfterOff := getSetting("channel")
+	if savedAfterOff != "" {
+		t.Fatalf("expected SQLite channel setting to be deleted, got %q", savedAfterOff)
+	}
+	if getDebugUsername() != "Player1" {
+		t.Fatalf("expected getDebugUsername() to fall back to 'Player1', got %q", getDebugUsername())
+	}
 }

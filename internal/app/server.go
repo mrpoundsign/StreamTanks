@@ -28,6 +28,12 @@ type Config struct {
 var channelName string
 
 func getDebugUsername() string {
+	gameState.mu.Lock()
+	ch := gameState.Channel
+	gameState.mu.Unlock()
+	if ch != "" {
+		return ch
+	}
 	if channelName != "" {
 		return channelName
 	}
@@ -36,7 +42,6 @@ func getDebugUsername() string {
 
 // Run starts the StreamTanks server with the specified configuration.
 func Run(cfg Config) error {
-	channelName = cfg.Channel
 	log.Printf("Starting StreamTanks %s (commit: %s, built: %s)", cfg.Version, cfg.Commit, cfg.Date)
 
 	if err := initDB("streamtanks.db"); err != nil {
@@ -47,6 +52,21 @@ func Run(cfg Config) error {
 	// Load leaderboard and settings from DB
 	loadLeaderboard()
 	loadSettings()
+
+	// If -channel CLI flag is provided, save it to SQLite and override loaded setting.
+	if cfg.Channel != "" {
+		clean := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(cfg.Channel, "#")))
+		gameState.mu.Lock()
+		gameState.Channel = clean
+		channelName = clean
+		gameState.mu.Unlock()
+		saveSetting("channel", clean)
+	}
+
+	gameState.mu.Lock()
+	effectiveChannel := gameState.Channel
+	gameState.mu.Unlock()
+	channelName = effectiveChannel
 
 	gameState.mu.Lock()
 	gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
@@ -78,8 +98,11 @@ func Run(cfg Config) error {
 		log.Printf("Debug mode enabled: spawned %s", localPlayer)
 	}
 
-	// Setup Twitch Client only if channel is provided
-	startTwitchBot(cfg.Channel)
+	// Setup Twitch Client
+	if effectiveChannel != "" {
+		log.Printf("Twitch channel: %s", effectiveChannel)
+	}
+	startTwitchBot(effectiveChannel)
 
 	// C&C Relay initialization
 	if cfg.CCServerURL == "off" {
@@ -96,8 +119,8 @@ func Run(cfg Config) error {
 		saveSetting("cc_url", cfg.CCServerURL)
 	}
 
-	if cfg.Channel != "" {
-		StartCCClientManager(cfg.Channel)
+	if effectiveChannel != "" {
+		StartCCClientManager(effectiveChannel)
 	}
 
 	// Setup WebSocket and HTTP server with no-cache headers for overlay assets

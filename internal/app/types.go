@@ -87,6 +87,7 @@ type GameState struct {
 	mu             sync.Mutex
 	Phase          string             `json:"phase"`
 	Players        map[string]*Player `json:"players"`
+	Channel        string             `json:"channel"`
 	InputDuration  int                `json:"inputDuration"` // in seconds
 	MoveDistance   int                `json:"moveDistance"`
 	Leaderboard    map[string]int     `json:"leaderboard"`

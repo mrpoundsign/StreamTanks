@@ -104,6 +104,11 @@ func loadSettings() {
 			var k, v string
 			if err := rows.Scan(&k, &v); err == nil {
 				switch k {
+				case "channel":
+					clean := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(v, "#")))
+					if clean != "" {
+						gameState.Channel = clean
+					}
 				case "prefix":
 					if v != "" {
 						gameState.Prefix = v
@@ -220,6 +225,9 @@ func loadSettings() {
 		gameState.ProtractorY = maxProtractorY
 	}
 	gameState.BotList = loadBotList()
+	if gameState.Channel != "" {
+		channelName = gameState.Channel
+	}
 }
 
 func getSetting(key string) string {

@@ -103,6 +103,7 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - `%right`: Moves the tank right across the terrain.
 
 ### Streamer / Mod Configuration Commands:
+- `%channel <name|off>`: Configures and persists the target Twitch channel (connects/reconnects Twitch IRC bot and C&C relay, or 'off' for local offline mode).
 - `%prefix <str>`: Sets the command prefix (supports multi-character prefixes).
 - `%idlemessage on|off`: Toggles visibility of the idle waiting message and leaderboard.
 - `%bouncywalls on|off`: Toggles bouncy screen walls (+10% bullet speed, +50% tank speed).

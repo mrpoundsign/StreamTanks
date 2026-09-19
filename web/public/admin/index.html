@@ -20,6 +20,20 @@
             </div>
 
             <div class="header-center">
+                <div id="channel-header-pill" class="channel-header-pill">
+                    <div id="channel-display" class="channel-display">
+                        <span class="channel-icon">&#128250;</span>
+                        <span class="channel-tag">Channel:</span>
+                        <span id="header-channel-name" class="channel-val unset">None (Local)</span>
+                        <button id="btn-edit-channel" class="btn btn-tiny btn-primary" type="button">Set</button>
+                    </div>
+                    <div id="channel-edit-form" class="channel-edit-form" style="display: none;">
+                        <span class="channel-icon">&#128250;</span>
+                        <input type="text" id="header-channel-input" placeholder="channel (or 'off')" />
+                        <button id="btn-save-channel" class="btn btn-tiny btn-primary" type="button">Save</button>
+                        <button id="btn-cancel-channel" class="btn btn-tiny btn-secondary" type="button">Cancel</button>
+                    </div>
+                </div>
                 <div id="phase-badge" class="phase-badge idle">IDLE</div>
                 <div id="connection-pill" class="connection-pill disconnected">
                     <span class="pill-dot"></span>
@@ -290,6 +304,6 @@
         </main>
     </div>
 
-    <script src="admin.js?v=16"></script>
+    <script src="admin.js?v=18"></script>
 </body>
 </html>

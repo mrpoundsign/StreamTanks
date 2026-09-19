@@ -24,6 +24,16 @@
     const btnResetTerrain = document.getElementById('btn-reset-terrain');
     const btnClearLb = document.getElementById('btn-clear-lb');
 
+    // Header Channel Pill Elements
+    const channelDisplay = document.getElementById('channel-display');
+    const channelEditForm = document.getElementById('channel-edit-form');
+    const headerChannelName = document.getElementById('header-channel-name');
+    const btnEditChannel = document.getElementById('btn-edit-channel');
+    const headerChannelInput = document.getElementById('header-channel-input');
+    const btnSaveChannel = document.getElementById('btn-save-channel');
+    const btnCancelChannel = document.getElementById('btn-cancel-channel');
+    let isEditingChannel = false;
+
     // Config Inputs
     const cfgPrefix = document.getElementById('cfg-prefix');
     const cfgCommandtime = document.getElementById('cfg-commandtime');
@@ -177,6 +187,28 @@
                 btn.classList.remove('active');
             }
         });
+
+        // Header Channel Pill Update
+        const currentChannel = state.channel || '';
+        if (headerChannelName && !isEditingChannel) {
+            if (currentChannel) {
+                headerChannelName.innerText = currentChannel;
+                headerChannelName.className = 'channel-val';
+                if (btnEditChannel) {
+                    btnEditChannel.innerText = 'Edit';
+                    btnEditChannel.className = 'btn btn-tiny btn-secondary';
+                    btnEditChannel.title = 'Change Twitch Channel';
+                }
+            } else {
+                headerChannelName.innerText = 'None (Local)';
+                headerChannelName.className = 'channel-val unset';
+                if (btnEditChannel) {
+                    btnEditChannel.innerText = 'Set';
+                    btnEditChannel.className = 'btn btn-tiny btn-primary';
+                    btnEditChannel.title = 'Set Twitch Channel';
+                }
+            }
+        }
 
         // Populate Form Controls (only if user is not actively focused on them)
         if (document.activeElement !== cfgPrefix) cfgPrefix.value = prefix;
@@ -409,7 +441,58 @@
         });
     }
 
+    // Channel Header Edit Handlers
+    function startEditChannel() {
+        isEditingChannel = true;
+        if (channelDisplay) channelDisplay.style.display = 'none';
+        if (channelEditForm) channelEditForm.style.display = 'flex';
+        if (headerChannelInput) {
+            headerChannelInput.value = stateRef?.channel || '';
+            headerChannelInput.focus();
+            headerChannelInput.select();
+        }
+    }
+
+    function cancelEditChannel() {
+        isEditingChannel = false;
+        if (channelEditForm) channelEditForm.style.display = 'none';
+        if (channelDisplay) channelDisplay.style.display = 'flex';
+    }
+
+    function saveChannel() {
+        let val = headerChannelInput ? headerChannelInput.value.trim() : '';
+        if (val.startsWith('%') || val.startsWith('!')) {
+            val = val.substring(1).trim();
+        }
+        if (val.toLowerCase().startsWith('channel ')) {
+            sendCommand(val);
+        } else {
+            sendCommand(`channel ${val || 'off'}`);
+        }
+        cancelEditChannel();
+    }
+
+    if (btnEditChannel) {
+        btnEditChannel.addEventListener('click', startEditChannel);
+    }
+    if (btnSaveChannel) {
+        btnSaveChannel.addEventListener('click', saveChannel);
+    }
+    if (btnCancelChannel) {
+        btnCancelChannel.addEventListener('click', cancelEditChannel);
+    }
+    if (headerChannelInput) {
+        headerChannelInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveChannel();
+            } else if (e.key === 'Escape') {
+                cancelEditChannel();
+            }
+        });
+    }
+
     // Event Listeners: Config Apply Buttons
+
     document.getElementById('btn-apply-prefix').addEventListener('click', () => {
         const val = cfgPrefix.value.trim();
         if (val) sendCommand(`prefix ${val}`);

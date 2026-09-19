@@ -69,6 +69,7 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 		stateCopy := &GameState{
 			Phase:          gameState.Phase,
 			Players:        playersCopy,
+			Channel:        gameState.Channel,
 			InputDuration:  gameState.InputDuration,
 			MoveDistance:   gameState.MoveDistance,
 			Leaderboard:    lbCopy,

@@ -69,6 +69,7 @@ export interface Player {
 export interface GameState {
   phase: GamePhase;
   players: Record<string, Player>;
+  channel?: string;
   inputDuration: number;
   moveDistance: number;
   leaderboard: Record<string, number>;
