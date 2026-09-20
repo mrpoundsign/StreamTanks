@@ -4,26 +4,47 @@ import { getTerrainSlopeAngle } from './terrain';
 const rocketImg = new Image();
 rocketImg.src = '/rocket.svg';
 
-export function drawTerrain(ctx: CanvasRenderingContext2D, terrain: number[]): void {
+function hexToRgba(hex: string, alpha: number): string {
+  let c = hex.replace(/^#/, '');
+  if (c.length === 3) {
+    c = c
+      .split('')
+      .map((x) => x + x)
+      .join('');
+  }
+  const num = parseInt(c, 16);
+  if (isNaN(num) || c.length !== 6) {
+    return `rgba(255, 0, 60, ${alpha})`;
+  }
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function drawTerrain(ctx: CanvasRenderingContext2D, terrain: number[], color: string = '#ff003c'): void {
   if (terrain.length === 0) return;
 
-  // Draw Terrain (Red Neon Line)
+  const strokeColor = color || '#ff003c';
+  const fillColor = hexToRgba(strokeColor, 0.02);
+
+  // Draw Terrain (Neon Line)
   ctx.beginPath();
   ctx.moveTo(0, terrain[0]);
   for (let x = 1; x < WIDTH; x++) {
     ctx.lineTo(x, terrain[x]);
   }
-  ctx.strokeStyle = '#ff003c';
+  ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 4;
   ctx.shadowBlur = 15;
-  ctx.shadowColor = '#ff003c';
+  ctx.shadowColor = strokeColor;
   ctx.stroke();
 
-  // Fill below terrain with subtle red tint
+  // Fill below terrain with subtle matching tint
   ctx.lineTo(WIDTH, HEIGHT);
   ctx.lineTo(0, HEIGHT);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(255, 0, 60, 0.02)';
+  ctx.fillStyle = fillColor;
   ctx.fill();
   ctx.shadowBlur = 0; // reset
 }

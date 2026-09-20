@@ -169,6 +169,24 @@
                             </div>
 
                             <div class="form-group span-2">
+                                <label>Terrain Color: <span id="terrain-color-val" class="highlight-val">#ff003c</span></label>
+                                <div class="color-picker-row">
+                                    <input type="color" id="cfg-terrain-color" value="#ff003c" title="Choose custom color" />
+                                    <div class="color-presets">
+                                        <button type="button" class="btn-swatch active" data-color="#ff003c" title="Red (Default)" style="background: #ff003c;"></button>
+                                        <button type="button" class="btn-swatch" data-color="#00ffcc" title="Cyan" style="background: #00ffcc;"></button>
+                                        <button type="button" class="btn-swatch" data-color="#00ff66" title="Green" style="background: #00ff66;"></button>
+                                        <button type="button" class="btn-swatch" data-color="#bf00ff" title="Purple" style="background: #bf00ff;"></button>
+                                        <button type="button" class="btn-swatch" data-color="#ff6600" title="Orange" style="background: #ff6600;"></button>
+                                        <button type="button" class="btn-swatch" data-color="#ffd700" title="Yellow" style="background: #ffd700;"></button>
+                                        <button type="button" class="btn-swatch" data-color="#ffffff" title="White" style="background: #ffffff;"></button>
+                                    </div>
+                                    <button id="btn-apply-terrain-color" class="btn btn-small">Apply Color</button>
+                                    <button id="btn-reset-terrain-color" class="btn btn-small btn-secondary">Reset</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group span-2">
                                 <label>HUD Position (Protractor Center): <span id="protractor-pos-val" class="highlight-val">X: 250, Y: 350</span></label>
                                 <div class="range-dual">
                                     <input type="range" id="cfg-protractor-x" min="100" max="1820" value="250" />

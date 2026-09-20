@@ -44,6 +44,7 @@ func resetGameStateForTest() {
 	gameState.BouncyWalls = false
 	gameState.TerrainMin = 20
 	gameState.TerrainMax = 75
+	gameState.TerrainColor = defaultTerrainColor
 	gameState.Terrain = generateTerrain(20, 75)
 	gameState.StartPerm = "broadcaster"
 	gameState.ConfigPerm = "broadcaster"
@@ -1026,6 +1027,159 @@ func TestTerrainCommand(t *testing.T) {
 	gameState.mu.Lock()
 	if gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
 		t.Errorf("expected reset to 20 and 75; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestTerrainColorConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	testDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test sqlite db: %v", err)
+	}
+	defer func() { _ = testDB.Close() }()
+
+	_, err = testDB.Exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create test settings table: %v", err)
+	}
+
+	oldDB := db
+	db = testDB
+	defer func() { db = oldDB }()
+
+	// Default value
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#ff003c" {
+		t.Fatalf("expected default TerrainColor=#ff003c, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	// Presets
+	presets := []struct {
+		cmd      string
+		expected string
+	}{
+		{"%terraincolor cyan", "#00ffcc"},
+		{"%terraincolor green", "#00ff66"},
+		{"%terraincolor purple", "#bf00ff"},
+		{"%terraincolor orange", "#ff6600"},
+		{"%terraincolor yellow", "#ffd700"},
+		{"%terraincolor white", "#ffffff"},
+		{"%terraincolor red", "#ff003c"},
+		{"%terraincolor default", "#ff003c"},
+		{"%terraincolor reset", "#ff003c"},
+	}
+
+	for _, tc := range presets {
+		processCommand("Admin", tc.cmd, nil)
+		gameState.mu.Lock()
+		if gameState.TerrainColor != tc.expected {
+			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TerrainColor)
+		}
+		gameState.mu.Unlock()
+	}
+
+	// Hex formats
+	hexTests := []struct {
+		cmd      string
+		expected string
+	}{
+		{"%terraincolor #bf00ff", "#bf00ff"},
+		{"%terraincolor 00ffcc", "#00ffcc"},
+		{"%terraincolor #AABBCC", "#aabbcc"},
+		{"%terraincolor #0fc", "#00ffcc"},
+		{"%terraincolor f00", "#ff0000"},
+	}
+
+	for _, tc := range hexTests {
+		processCommand("Admin", tc.cmd, nil)
+		gameState.mu.Lock()
+		if gameState.TerrainColor != tc.expected {
+			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TerrainColor)
+		}
+		gameState.mu.Unlock()
+	}
+
+	// Subcommand aliases: %terrain color <hex>, %terraincolour <preset>
+	processCommand("Admin", "%terrain color #334455", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#334455" {
+		t.Errorf("%%terrain color #334455: expected #334455, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Admin", "%terraincolour cyan", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#00ffcc" {
+		t.Errorf("%%terraincolour cyan: expected #00ffcc, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	// Invalid inputs should be rejected and retain current color
+	invalids := []string{
+		"%terraincolor",
+		"%terraincolor invalidcolor",
+		"%terraincolor #1234",
+		"%terraincolor #1234567",
+		"%terrain color",
+		"%terrain color not_a_hex",
+	}
+
+	for _, cmd := range invalids {
+		processCommand("Admin", cmd, nil)
+		gameState.mu.Lock()
+		if gameState.TerrainColor != "#00ffcc" {
+			t.Errorf("command %s: expected retained #00ffcc, got %s", cmd, gameState.TerrainColor)
+		}
+		gameState.mu.Unlock()
+	}
+
+	// Permissions check
+	nonAdmin := &twitch.User{Name: "RandomViewer"}
+	processCommand("RandomViewer", "%terraincolor #111111", nil, nonAdmin)
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#00ffcc" {
+		t.Errorf("expected viewer command to be ignored, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	modUser := &twitch.User{
+		Name:   "ModUser",
+		IsMod:  true,
+		Badges: map[string]int{"moderator": 1},
+	}
+	// By default configPerm is broadcaster, so mod is rejected
+	processCommand("ModUser", "%terraincolor #222222", nil, modUser)
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#00ffcc" {
+		t.Errorf("expected mod command to be rejected when configPerm=broadcaster, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	// Update configPerm to mod
+	processCommand("Admin", "%configperm mod", nil)
+	processCommand("ModUser", "%terraincolor #222222", nil, modUser)
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#222222" {
+		t.Errorf("expected mod command to succeed when configPerm=mod, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	// SQLite persistence check
+	processCommand("Admin", "%terraincolor #445566", nil)
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#ff003c" {
+		t.Fatalf("expected reset to default #ff003c, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#445566" {
+		t.Errorf("expected loaded TerrainColor=#445566 from SQLite, got %s", gameState.TerrainColor)
 	}
 	gameState.mu.Unlock()
 }

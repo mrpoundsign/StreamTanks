@@ -47,6 +47,12 @@
     const cfgTerrainMin = document.getElementById('cfg-terrain-min');
     const cfgTerrainMax = document.getElementById('cfg-terrain-max');
     const terrainRangeVal = document.getElementById('terrain-range-val');
+    const cfgTerrainColor = document.getElementById('cfg-terrain-color');
+    const terrainColorVal = document.getElementById('terrain-color-val');
+    const btnApplyTerrainColor = document.getElementById('btn-apply-terrain-color');
+    const btnResetTerrainColor = document.getElementById('btn-reset-terrain-color');
+    const colorSwatches = document.querySelectorAll('.btn-swatch');
+    let isColorDirty = false;
     const cfgProtractorX = document.getElementById('cfg-protractor-x');
     const cfgProtractorY = document.getElementById('cfg-protractor-y');
     const protractorPosVal = document.getElementById('protractor-pos-val');
@@ -231,6 +237,24 @@
             if (cfgProtractorY) {
                 cfgProtractorY.max = maxPy;
             }
+        }
+
+        const activeColor = state.terrainColor || '#ff003c';
+        if (!isColorDirty) {
+            if (cfgTerrainColor && document.activeElement !== cfgTerrainColor) {
+                cfgTerrainColor.value = activeColor;
+            }
+            if (terrainColorVal) {
+                terrainColorVal.innerText = activeColor;
+                terrainColorVal.style.color = activeColor;
+            }
+            colorSwatches.forEach(swatch => {
+                if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === activeColor.toLowerCase()) {
+                    swatch.classList.add('active');
+                } else {
+                    swatch.classList.remove('active');
+                }
+            });
         }
 
         if (!isProtractorDirty) {
@@ -560,6 +584,55 @@
         if (minVal > maxVal - 10) minVal = maxVal - 10;
         sendCommand(`terrain ${minVal} ${maxVal}`);
     });
+
+    if (cfgTerrainColor) {
+        cfgTerrainColor.addEventListener('input', () => {
+            isColorDirty = true;
+            const chosen = cfgTerrainColor.value;
+            if (terrainColorVal) {
+                terrainColorVal.innerText = chosen;
+                terrainColorVal.style.color = chosen;
+            }
+            colorSwatches.forEach(swatch => {
+                if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === chosen.toLowerCase()) {
+                    swatch.classList.add('active');
+                } else {
+                    swatch.classList.remove('active');
+                }
+            });
+        });
+    }
+
+    colorSwatches.forEach(swatch => {
+        swatch.addEventListener('click', () => {
+            const color = swatch.dataset.color;
+            if (cfgTerrainColor) cfgTerrainColor.value = color;
+            if (terrainColorVal) {
+                terrainColorVal.innerText = color;
+                terrainColorVal.style.color = color;
+            }
+            colorSwatches.forEach(s => s.classList.remove('active'));
+            swatch.classList.add('active');
+            isColorDirty = false;
+            sendCommand(`terraincolor ${color}`);
+        });
+    });
+
+    if (btnApplyTerrainColor) {
+        btnApplyTerrainColor.addEventListener('click', () => {
+            isColorDirty = false;
+            if (cfgTerrainColor) {
+                sendCommand(`terraincolor ${cfgTerrainColor.value}`);
+            }
+        });
+    }
+
+    if (btnResetTerrainColor) {
+        btnResetTerrainColor.addEventListener('click', () => {
+            isColorDirty = false;
+            sendCommand('terraincolor reset');
+        });
+    }
 
     // Real-time HUD position slider update
     function syncProtractorSliderLabel() {

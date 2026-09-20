@@ -83,6 +83,7 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 			Terrain:        terrainCopy,
 			TerrainMin:     gameState.TerrainMin,
 			TerrainMax:     gameState.TerrainMax,
+			TerrainColor:   gameState.TerrainColor,
 			RoundID:        gameState.RoundID,
 			StartPerm:      gameState.StartPerm,
 			ConfigPerm:     gameState.ConfigPerm,

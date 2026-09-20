@@ -385,6 +385,71 @@ select option {
     gap: 12px;
 }
 
+.color-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 38px;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="color"]:hover,
+input[type="color"]:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 8px var(--neon-cyan);
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.color-presets {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.btn-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-swatch:hover {
+    transform: scale(1.25);
+    border-color: #fff;
+    box-shadow: 0 0 10px currentColor;
+}
+
+.btn-swatch.active {
+    border-color: #fff;
+    transform: scale(1.2);
+    box-shadow: 0 0 8px #fff;
+}
+
 input[type="range"] {
     flex: 1;
     accent-color: var(--neon-cyan);

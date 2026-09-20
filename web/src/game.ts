@@ -610,6 +610,11 @@ function renderConfigModal(prefix: string): void {
       cmd: `<span class="config-cmd">${prefix}terrain <span class="cmd-param">&lt;min%&gt; &lt;max%&gt;</span></span>`,
     },
     {
+      label: 'Terrain Color',
+      value: `<span class="config-val" style="color: ${stateRef?.terrainColor ?? '#ff003c'}">${stateRef?.terrainColor ?? '#ff003c'}</span>`,
+      cmd: `<span class="config-cmd">${prefix}terraincolor <span class="cmd-param">&lt;hex|preset&gt;</span></span>`,
+    },
+    {
       label: 'Start Game Perm',
       value: `<span class="config-val badge-on">${stateRef?.startPerm ?? 'broadcaster'}</span>`,
       cmd: `<span class="config-cmd">${prefix}startperm <span class="cmd-param">&lt;role&gt;</span></span>`,
@@ -1034,7 +1039,7 @@ net.onMessage((msg: WSMessage) => {
 // Render Loop
 function draw(): void {
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
-  drawTerrain(ctx, terrain);
+  drawTerrain(ctx, terrain, stateRef?.terrainColor ?? '#ff003c');
   if (currentPhase === 'INPUT' || Date.now() < protractorPreviewUntil) {
     // If we are previewing in IDLE, make it slightly translucent
     const isPreview = currentPhase !== 'INPUT';

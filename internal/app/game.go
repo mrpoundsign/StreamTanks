@@ -22,6 +22,7 @@ var gameState = GameState{
 	IdleMessage:   true,
 	TerrainMin:    20,
 	TerrainMax:    75,
+	TerrainColor:  defaultTerrainColor,
 	StartPerm:     "broadcaster",
 	ConfigPerm:    "broadcaster",
 	MinPlayers:    5,

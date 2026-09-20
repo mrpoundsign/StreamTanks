@@ -162,6 +162,10 @@ func loadSettings() {
 					if _, err := fmt.Sscanf(v, "%d", &tMax); err == nil && tMax >= 20 && tMax <= 90 {
 						gameState.TerrainMax = tMax
 					}
+				case "terrain_color":
+					if col, ok := parseTerrainColor(v); ok {
+						gameState.TerrainColor = col
+					}
 				case "start_perm":
 					clean := strings.ToLower(v)
 					if clean == "broadcaster" || clean == "mod" || clean == "vip" || clean == "sub" || clean == "all" {
@@ -233,6 +237,9 @@ func loadSettings() {
 	}
 	if gameState.ProtractorY > maxProtractorY {
 		gameState.ProtractorY = maxProtractorY
+	}
+	if gameState.TerrainColor == "" {
+		gameState.TerrainColor = defaultTerrainColor
 	}
 	gameState.BotList = loadBotList()
 	if gameState.Channel != "" {

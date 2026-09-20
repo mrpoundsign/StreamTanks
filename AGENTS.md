@@ -111,6 +111,7 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - `%roundtime <seconds>`: Configures the input phase timer duration (e.g. `%roundtime 15`).
 - `%autoround <minutes>`: Configures automated round starts (`-1` for immediate, `> 0` for scheduled minutes, `0` or `off` to disable).
 - `%terrain <min%> <max%>`: Configures vertical screen height percentage bounds for terrain generation (e.g. `%terrain 30 80` or `%terrain reset`).
+- `%terraincolor <hex|preset>`: Configures neon terrain outline glow and ambient fill (`red`, `cyan`, `green`, `purple`, `orange`, `yellow`, `white`, or hex `#00ffcc`; `%terraincolor reset` for default).
 - `%startperm <broadcaster|mod|vip|sub|all>`: Configures required role for `%startgame` (default: `broadcaster`).
 - `%configperm <broadcaster|mod|vip|sub|all>`: Configures required role for settings commands (default: `broadcaster`).
 - `%perm <start|config> <role>`: Unified permission management command.

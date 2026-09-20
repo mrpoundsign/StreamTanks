@@ -81,6 +81,8 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		handleBouncyWallsCmd(user, parts)
 	case "terrain":
 		handleTerrainCmd(user, parts)
+	case "terraincolor", "terraincolour":
+		handleTerrainColorCmd(user, parts)
 	case "startperm":
 		handleStartPermCmd(user, parts)
 	case "configperm":
@@ -410,6 +412,14 @@ func handleTerrainCmd(user *twitch.User, parts []string) {
 	}
 	if len(parts) > 1 {
 		arg1 := strings.ToLower(parts[1])
+		if arg1 == "color" || arg1 == "colour" {
+			if len(parts) >= 3 {
+				handleTerrainColorCmd(user, []string{"terraincolor", parts[2]})
+				return
+			}
+			gameState.mu.Unlock()
+			return
+		}
 		switch {
 		case arg1 == "reroll" || arg1 == "roll":
 			if gameState.Phase == phaseIdle {
@@ -481,6 +491,76 @@ func handleTerrainCmd(user *twitch.User, parts []string) {
 		return
 	}
 	gameState.mu.Unlock()
+}
+
+var terrainColorPresets = map[string]string{
+	"default": defaultTerrainColor,
+	"reset":   defaultTerrainColor,
+	"red":     defaultTerrainColor,
+	"cyan":    "#00ffcc",
+	"green":   "#00ff66",
+	"purple":  "#bf00ff",
+	"orange":  "#ff6600",
+	"yellow":  "#ffd700",
+	"white":   "#ffffff",
+}
+
+func isHexDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+func parseTerrainColor(input string) (string, bool) {
+	raw := strings.ToLower(strings.TrimSpace(input))
+	if raw == "" {
+		return "", false
+	}
+	if hexVal, ok := terrainColorPresets[raw]; ok {
+		return hexVal, true
+	}
+
+	trimmed := strings.TrimPrefix(raw, "#")
+	if len(trimmed) == 3 {
+		for i := range 3 {
+			if !isHexDigit(trimmed[i]) {
+				return "", false
+			}
+		}
+		r, g, b := trimmed[0], trimmed[1], trimmed[2]
+		return fmt.Sprintf("#%c%c%c%c%c%c", r, r, g, g, b, b), true
+	} else if len(trimmed) == 6 {
+		for i := range 6 {
+			if !isHexDigit(trimmed[i]) {
+				return "", false
+			}
+		}
+		return "#" + trimmed, true
+	}
+
+	return "", false
+}
+
+func handleTerrainColorCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+
+	if len(parts) < 2 {
+		gameState.mu.Unlock()
+		return
+	}
+
+	color, valid := parseTerrainColor(parts[1])
+	if !valid {
+		gameState.mu.Unlock()
+		return
+	}
+
+	gameState.TerrainColor = color
+	gameState.mu.Unlock()
+
+	saveSetting("terrain_color", color)
+	broadcast(msgStateUpdate, &gameState)
 }
 
 func handleStartPermCmd(user *twitch.User, parts []string) {

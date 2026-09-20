@@ -33,6 +33,8 @@ const (
 	actionShield = "SHIELD"
 )
 
+const defaultTerrainColor = "#ff003c"
+
 // Player models an individual artillery tank in the game
 type Player struct {
 	Name            string  `json:"name"`
@@ -101,6 +103,7 @@ type GameState struct {
 	Terrain        []float64          `json:"terrain,omitempty"`
 	TerrainMin     int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
 	TerrainMax     int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)
+	TerrainColor   string             `json:"terrainColor"`
 	RoundID        int                `json:"roundId"`
 	StartPerm      string             `json:"startPerm"`  // broadcaster, mod, vip, sub, all
 	ConfigPerm     string             `json:"configPerm"` // broadcaster, mod, vip, sub, all
