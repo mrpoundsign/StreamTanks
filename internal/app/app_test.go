@@ -3479,6 +3479,154 @@ func TestAutoRoundTimer_EmptyLeaderboard(t *testing.T) {
 	}
 }
 
+func TestAutoRound_IdleJoinTriggersMatch(t *testing.T) {
+	resetGameStateForTest()
+	mock := useMockClock()
+
+	gameState.mu.Lock()
+	gameState.AutoRound = -1 // immediate (500ms)
+	gameState.mu.Unlock()
+
+	processCommand("Alice", "%join Kappa", nil)
+
+	if !isAutoRoundTimerRunning() {
+		t.Fatalf("expected auto-round timer to be running after Alice joins in IDLE")
+	}
+
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected phase to be phaseInput after 500ms immediate auto-round, got %s", gameState.Phase)
+	}
+	if p, exists := gameState.Players["Alice"]; !exists || !p.Joined {
+		t.Fatalf("expected Alice to be in active match as joined")
+	}
+}
+
+func TestAutoRound_IdleJoinScheduledTimer(t *testing.T) {
+	resetGameStateForTest()
+	mock := useMockClock()
+
+	gameState.mu.Lock()
+	gameState.AutoRound = 5 // 5 minutes
+	gameState.mu.Unlock()
+
+	processCommand("Alice", "%join Kappa", nil)
+
+	if !isAutoRoundTimerRunning() {
+		t.Fatalf("expected auto-round timer to be running after Alice joins in IDLE")
+	}
+
+	// Advance 4 minutes (not ready yet)
+	mock.Add(4 * time.Minute)
+	time.Sleep(10 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phase to remain phaseIdle at 4 minutes, got %s", gameState.Phase)
+	}
+	gameState.mu.Unlock()
+
+	// Bob joins at 4 minutes: timer should not reset back to 5m
+	processCommand("Bob", "%join LUL", nil)
+
+	// Advance 1 minute + 1 second (5m total from initial join)
+	mock.Add(1*time.Minute + 1*time.Second)
+	time.Sleep(10 * time.Millisecond)
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected phase to be phaseInput at 5 minutes mark, got %s", gameState.Phase)
+	}
+	if _, exists := gameState.Players["Alice"]; !exists {
+		t.Fatalf("expected Alice in match")
+	}
+	if _, exists := gameState.Players["Bob"]; !exists {
+		t.Fatalf("expected Bob in match")
+	}
+}
+
+func TestAutoRound_CommandUpdateWhileIdle(t *testing.T) {
+	resetGameStateForTest()
+	mock := useMockClock()
+
+	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
+
+	// Alice joins while AutoRound is 0 (off)
+	processCommand("Alice", "%join Kappa", nil)
+
+	if isAutoRoundTimerRunning() {
+		t.Fatalf("expected auto-round timer NOT to be running when AutoRound is 0")
+	}
+
+	// Broadcaster enables %autoround -1
+	processCommand("Streamer", "%autoround -1", nil, broadcaster)
+
+	if !isAutoRoundTimerRunning() {
+		t.Fatalf("expected auto-round timer to be running after setting %%autoround -1 while idle")
+	}
+
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected phase to be phaseInput after %%autoround -1 command update, got %s", gameState.Phase)
+	}
+}
+
+func TestAutoRound_EmptyLobbyReArmedOnJoin(t *testing.T) {
+	resetGameStateForTest()
+	mock := useMockClock()
+
+	gameState.mu.Lock()
+	gameState.AutoRound = -1
+	gameState.mu.Unlock()
+
+	// Initial trigger with 0 players and empty leaderboard
+	triggerAutoRound()
+
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	gameState.mu.Lock()
+	if gameState.Phase != phaseIdle {
+		gameState.mu.Unlock()
+		t.Fatalf("expected phaseIdle for empty lobby")
+	}
+	gameState.mu.Unlock()
+
+	if isAutoRoundTimerRunning() {
+		t.Fatalf("expected autoRoundTimer to be reset to nil after empty lobby check")
+	}
+
+	// Now Alice joins: should re-arm the timer
+	processCommand("Alice", "%join", nil)
+
+	if !isAutoRoundTimerRunning() {
+		t.Fatalf("expected autoRoundTimer to be re-armed after Alice joins")
+	}
+
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	gameState.mu.Lock()
+	defer gameState.mu.Unlock()
+
+	if gameState.Phase != phaseInput {
+		t.Fatalf("expected phaseInput after Alice triggered re-armed auto-round, got %s", gameState.Phase)
+	}
+}
+
 func TestDeathPenalty_HumanKillsHuman(t *testing.T) {
 	resetGameStateForTest()
 

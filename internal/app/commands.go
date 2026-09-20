@@ -367,6 +367,13 @@ func handleAutoRoundCmd(user *twitch.User, parts []string) {
 
 		if ar == 0 {
 			cancelAutoRoundTimer()
+		} else {
+			gameState.mu.Lock()
+			phase := gameState.Phase
+			gameState.mu.Unlock()
+			if phase == phaseIdle {
+				triggerAutoRound()
+			}
 		}
 		return
 	}
@@ -788,6 +795,9 @@ func handleJoinCmd(user *twitch.User, parts []string, username string, emotes []
 		if emoteChanged || wasLeaving {
 			broadcast(msgStateUpdate, &gameState)
 		}
+		if wasLeaving {
+			triggerAutoRoundOnJoin()
+		}
 		return
 	}
 
@@ -845,6 +855,7 @@ func handleJoinCmd(user *twitch.User, parts []string, username string, emotes []
 	}
 	gameState.mu.Unlock()
 	broadcast(msgStateUpdate, &gameState)
+	triggerAutoRoundOnJoin()
 }
 
 func handleLeaveCmd(username string) {

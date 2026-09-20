@@ -98,6 +98,15 @@ func Run(cfg Config) error {
 		log.Printf("Debug mode enabled: spawned %s", localPlayer)
 	}
 
+	// Trigger auto-round on startup if enabled
+	gameState.mu.Lock()
+	bootAR := gameState.AutoRound
+	bootPhase := gameState.Phase
+	gameState.mu.Unlock()
+	if bootPhase == phaseIdle && bootAR != 0 {
+		triggerAutoRound()
+	}
+
 	// Setup Twitch Client
 	if effectiveChannel != "" {
 		log.Printf("Twitch channel: %s", effectiveChannel)

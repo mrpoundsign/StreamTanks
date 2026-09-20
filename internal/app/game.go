@@ -172,6 +172,27 @@ func cancelAutoRoundTimer() {
 	}
 }
 
+func isAutoRoundTimerRunning() bool {
+	autoRoundTimerMu.Lock()
+	defer autoRoundTimerMu.Unlock()
+	return autoRoundTimer != nil
+}
+
+func triggerAutoRoundOnJoin() {
+	gameState.mu.Lock()
+	ar := gameState.AutoRound
+	phase := gameState.Phase
+	gameState.mu.Unlock()
+
+	if phase != phaseIdle || ar == 0 {
+		return
+	}
+
+	if !isAutoRoundTimerRunning() {
+		triggerAutoRound()
+	}
+}
+
 func getTopPlayerLocked() string {
 	var topUser string
 	maxScore := 0
@@ -217,12 +238,18 @@ func triggerAutoRound() {
 			topUser := getTopPlayerLocked()
 			if humanCount == 0 && topUser == "" {
 				gameState.mu.Unlock()
+				autoRoundTimerMu.Lock()
+				autoRoundTimer = nil
+				autoRoundTimerMu.Unlock()
 				return
 			}
 			gameState.mu.Unlock()
 			startInputPhase()
 		} else {
 			gameState.mu.Unlock()
+			autoRoundTimerMu.Lock()
+			autoRoundTimer = nil
+			autoRoundTimerMu.Unlock()
 		}
 	})
 	autoRoundTimerMu.Unlock()
