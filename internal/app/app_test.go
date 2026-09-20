@@ -67,6 +67,10 @@ func resetGameStateForTest() {
 	}
 	fastForwardScheduled = false
 	prevRoundHadCommands = false
+
+	playerEmotesMu.Lock()
+	playerEmotesCache = make(map[string]savedEmote)
+	playerEmotesMu.Unlock()
 }
 
 func TestProcessCommand_JoinAndFire(t *testing.T) {
@@ -3781,3 +3785,94 @@ func TestChannelConfigurationAndPersistence(t *testing.T) {
 		t.Fatalf("expected getDebugUsername() to fall back to 'Player1', got %q", getDebugUsername())
 	}
 }
+
+func TestPlayerEmotePersistence(t *testing.T) {
+	resetGameStateForTest()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test_emotes.db")
+	if err := initDB(dbPath); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer closeDB()
+
+	// 1. Join with explicit emote %join LUL
+	processCommand("emotetester", "%join LUL", nil, nil)
+	gameState.mu.Lock()
+	p, exists := gameState.Players["emotetester"]
+	if !exists {
+		gameState.mu.Unlock()
+		t.Fatalf("expected emotetester to exist")
+	}
+	if p.Emote != "LUL" || p.EmoteURL == "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected Emote 'LUL', got %q (%q)", p.Emote, p.EmoteURL)
+	}
+	expectedURL := p.EmoteURL
+	gameState.mu.Unlock()
+
+	// Verify saved in SQLite / cache
+	savedEmote, savedURL, ok := getPlayerEmote("emotetester")
+	if !ok || savedEmote != "LUL" || savedURL != expectedURL {
+		t.Fatalf("expected saved emote 'LUL' with url %q, got %q (%q)", expectedURL, savedEmote, savedURL)
+	}
+
+	// 2. Remove player from active match (simulating match ending / inactive player cull)
+	gameState.mu.Lock()
+	delete(gameState.Players, "emotetester")
+	gameState.mu.Unlock()
+
+	// 3. Re-spawn player via spawnNewPlayerLocked - should restore saved LUL emote, NOT a random emote
+	gameState.mu.Lock()
+	respawned := spawnNewPlayerLocked("emotetester", true)
+	if respawned.Emote != "LUL" || respawned.EmoteURL != expectedURL {
+		gameState.mu.Unlock()
+		t.Fatalf("expected respawned player to retain 'LUL', got %q (%q)", respawned.Emote, respawned.EmoteURL)
+	}
+	gameState.mu.Unlock()
+
+	// 4. Test rejoining with no arguments %join - retains saved emote
+	gameState.mu.Lock()
+	delete(gameState.Players, "emotetester")
+	gameState.mu.Unlock()
+
+	processCommand("emotetester", "%join", nil, nil)
+	gameState.mu.Lock()
+	p2, exists2 := gameState.Players["emotetester"]
+	if !exists2 || p2.Emote != "LUL" || p2.EmoteURL != expectedURL {
+		gameState.mu.Unlock()
+		t.Fatalf("expected %%join without args to restore 'LUL', got %q (%q)", p2.Emote, p2.EmoteURL)
+	}
+	gameState.mu.Unlock()
+
+	// 5. Test updating emote via %icon PogChamp
+	processCommand("emotetester", "%icon PogChamp", nil, nil)
+	gameState.mu.Lock()
+	p3 := gameState.Players["emotetester"]
+	if p3.Emote != "PogChamp" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected %%icon to update to 'PogChamp', got %q", p3.Emote)
+	}
+	newURL := p3.EmoteURL
+	gameState.mu.Unlock()
+
+	savedEmote2, savedURL2, ok2 := getPlayerEmote("emotetester")
+	if !ok2 || savedEmote2 != "PogChamp" || savedURL2 != newURL {
+		t.Fatalf("expected updated saved emote 'PogChamp', got %q", savedEmote2)
+	}
+
+	// 6. Test clearLeaderboard preserves player emote
+	broadcaster := &twitch.User{Name: "broadcaster", IsBroadcaster: true}
+	processCommand("broadcaster", "%clearleaderboard", nil, broadcaster)
+	savedEmote3, _, ok3 := getPlayerEmote("emotetester")
+	if !ok3 || savedEmote3 != "PogChamp" {
+		t.Fatalf("expected clearleaderboard to preserve emote, got %q", savedEmote3)
+	}
+
+	// 7. Test deleteplayer removes saved emote
+	processCommand("broadcaster", "%deleteplayer emotetester", nil, broadcaster)
+	_, _, ok4 := getPlayerEmote("emotetester")
+	if ok4 {
+		t.Fatalf("expected deleteplayer to remove saved emote")
+	}
+}
+

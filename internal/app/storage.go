@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync"
 
 	_ "modernc.org/sqlite"
 )
@@ -37,12 +38,21 @@ func initDB(dataSourceName string) error {
 		return err
 	}
 
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS player_emotes (username TEXT PRIMARY KEY, emote TEXT, emote_url TEXT)`)
+	if err != nil {
+		_ = db.Close()
+		return err
+	}
+
+	loadPlayerEmotes()
+
 	return nil
 }
 
 func closeDB() {
 	if db != nil {
 		_ = db.Close()
+		db = nil
 	}
 }
 
@@ -276,6 +286,7 @@ func deletePlayerDB(username string) {
 	if db == nil {
 		return
 	}
+	deletePlayerEmote(username)
 	_, err := db.Exec(`DELETE FROM leaderboard WHERE LOWER(username) = LOWER(?)`, username)
 	if err != nil {
 		log.Println("DB deletePlayer error:", err)
@@ -327,3 +338,91 @@ func removeBotFromList(username string) {
 		log.Println("DB removeBotFromList error:", err)
 	}
 }
+
+type savedEmote struct {
+	Emote    string
+	EmoteURL string
+}
+
+var (
+	playerEmotesMu    sync.RWMutex
+	playerEmotesCache = make(map[string]savedEmote)
+)
+
+func loadPlayerEmotes() {
+	if db == nil {
+		return
+	}
+	rows, err := db.Query(`SELECT username, emote, emote_url FROM player_emotes`)
+	if err != nil {
+		log.Println("DB loadPlayerEmotes error:", err)
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	playerEmotesMu.Lock()
+	defer playerEmotesMu.Unlock()
+	for rows.Next() {
+		var user, emote, emoteURL string
+		if err := rows.Scan(&user, &emote, &emoteURL); err == nil {
+			playerEmotesCache[strings.ToLower(user)] = savedEmote{
+				Emote:    emote,
+				EmoteURL: emoteURL,
+			}
+		}
+	}
+}
+
+func savePlayerEmote(username, emote, emoteURL string) {
+	if username == "" || emote == "" {
+		return
+	}
+	cleanUser := strings.ToLower(username)
+
+	playerEmotesMu.Lock()
+	playerEmotesCache[cleanUser] = savedEmote{
+		Emote:    emote,
+		EmoteURL: emoteURL,
+	}
+	playerEmotesMu.Unlock()
+
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`INSERT INTO player_emotes (username, emote, emote_url) VALUES (?, ?, ?)
+		ON CONFLICT(username) DO UPDATE SET emote = excluded.emote, emote_url = excluded.emote_url`,
+		cleanUser, emote, emoteURL)
+	if err != nil {
+		log.Println("DB savePlayerEmote error:", err)
+	}
+}
+
+func getPlayerEmote(username string) (string, string, bool) {
+	cleanUser := strings.ToLower(username)
+	playerEmotesMu.RLock()
+	se, ok := playerEmotesCache[cleanUser]
+	playerEmotesMu.RUnlock()
+	if ok && se.Emote != "" {
+		return se.Emote, se.EmoteURL, true
+	}
+	return "", "", false
+}
+
+func deletePlayerEmote(username string) {
+	if username == "" {
+		return
+	}
+	cleanUser := strings.ToLower(username)
+	playerEmotesMu.Lock()
+	delete(playerEmotesCache, cleanUser)
+	playerEmotesMu.Unlock()
+
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`DELETE FROM player_emotes WHERE LOWER(username) = ?`, cleanUser)
+	if err != nil {
+		log.Println("DB deletePlayerEmote error:", err)
+	}
+}
+

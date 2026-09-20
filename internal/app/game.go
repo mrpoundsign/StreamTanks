@@ -1154,8 +1154,17 @@ func spawnNewPlayerLocked(username string, joined bool) *Player {
 		delete(gameState.Players, botToReplaceKey)
 	}
 
-	randIdx := rand.IntN(len(defaultEmotes))
-	defEmote := defaultEmotes[randIdx]
+	emoteName := ""
+	emoteURL := ""
+	if savedEmote, savedURL, ok := getPlayerEmote(username); ok && savedEmote != "" {
+		emoteName = savedEmote
+		emoteURL = savedURL
+	} else {
+		randIdx := rand.IntN(len(defaultEmotes))
+		emoteName = defaultEmotes[randIdx].Name
+		emoteURL = defaultEmotes[randIdx].URL
+	}
+
 	lastRound := 0
 	if gameState.Phase != phaseIdle {
 		lastRound = gameState.RoundID
@@ -1163,8 +1172,8 @@ func spawnNewPlayerLocked(username string, joined bool) *Player {
 	p := &Player{
 		Name:            username,
 		IsBot:           false,
-		Emote:           defEmote.Name,
-		EmoteURL:        defEmote.URL,
+		Emote:           emoteName,
+		EmoteURL:        emoteURL,
 		LastAngle:       45,
 		LastPower:       50,
 		X:               spawnX,

@@ -93,7 +93,7 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		handleKickCmd(user, parts)
 	case "deleteplayer", "removeplayer":
 		handleDeletePlayerCmd(user, parts)
-	case "join":
+	case "join", "icon", "emote", "skin":
 		handleJoinCmd(user, parts, username, emotes)
 	case "leave":
 		handleLeaveCmd(username)
@@ -627,6 +627,7 @@ func handleJoinCmd(user *twitch.User, parts []string, username string, emotes []
 			if len(emotes) > 0 {
 				player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", emotes[0].ID)
 			} else {
+				player.EmoteURL = ""
 				for _, de := range defaultEmotes {
 					if strings.EqualFold(de.Name, parts[1]) {
 						player.EmoteURL = de.URL
@@ -635,6 +636,7 @@ func handleJoinCmd(user *twitch.User, parts []string, username string, emotes []
 				}
 			}
 			emoteChanged = true
+			savePlayerEmote(username, player.Emote, player.EmoteURL)
 		}
 		gameState.mu.Unlock()
 		if emoteChanged || wasLeaving {
@@ -675,12 +677,19 @@ func handleJoinCmd(user *twitch.User, parts []string, username string, emotes []
 		if len(emotes) > 0 {
 			player.EmoteURL = fmt.Sprintf("https://static-cdn.jtvnw.net/emoticons/v2/%s/default/dark/2.0", emotes[0].ID)
 		} else {
+			player.EmoteURL = ""
 			for _, de := range defaultEmotes {
 				if strings.EqualFold(de.Name, parts[1]) {
 					player.EmoteURL = de.URL
 					break
 				}
 			}
+		}
+		savePlayerEmote(username, player.Emote, player.EmoteURL)
+	} else {
+		if savedEmote, savedURL, ok := getPlayerEmote(username); ok && savedEmote != "" {
+			player.Emote = savedEmote
+			player.EmoteURL = savedURL
 		}
 	}
 	if player.EmoteURL == "" {
