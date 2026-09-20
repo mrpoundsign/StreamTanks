@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <!-- Rocket & Neon Glow Filter -->
+    <filter id="rocket-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Hull Gradient -->
+    <linearGradient id="hull-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#223049" />
+      <stop offset="50%" stop-color="#101728" />
+      <stop offset="100%" stop-color="#070a12" />
+    </linearGradient>
+
+    <!-- Fin Gradient -->
+    <linearGradient id="fin-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffcc" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0.6" />
+    </linearGradient>
+
+    <!-- Thruster Flame Gradient -->
+    <linearGradient id="flame-grad" x1="100%" y1="50%" x2="0%" y2="50%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#00ffcc" />
+      <stop offset="65%" stop-color="#ff007f" />
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Badge Background Gradient -->
+    <radialGradient id="badge-bg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#151b2a" />
+      <stop offset="60%" stop-color="#0a0d16" />
+      <stop offset="100%" stop-color="#04060a" />
+    </radialGradient>
+
+    <!-- Badge Border Gradient -->
+    <linearGradient id="badge-border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ffcc" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="rgba(255, 255, 255, 0.15)" />
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Cockpit Energy Core Gradient -->
+    <radialGradient id="cockpit-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00ffcc" stop-opacity="0.8" />
+      <stop offset="40%" stop-color="#0077aa" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#090d16" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background Cyberpunk Badge -->
+  <rect x="3" y="3" width="90" height="90" rx="22" ry="22" fill="url(#badge-bg)" stroke="url(#badge-border)" stroke-width="2" />
+  
+  <!-- Subtle Ambient Thruster Backlight -->
+  <circle cx="28" cy="68" r="20" fill="#ff007f" opacity="0.15" filter="url(#rocket-glow)" />
+  <circle cx="58" cy="38" r="22" fill="#00ffcc" opacity="0.12" filter="url(#rocket-glow)" />
+
+  <!-- Rocket Group Rotated 45° Flying Up-Right -->
+  <g transform="translate(48, 48) rotate(-45) translate(-36, -20)">
+    <!-- Thruster Flame Exhaust -->
+    <path d="M 2,16 L -16,20 L 2,24 Z" fill="url(#flame-grad)" filter="url(#rocket-glow)" />
+    <path d="M 2,18 L -10,20 L 2,22 Z" fill="#ffffff" opacity="0.85" />
+
+    <!-- Top Stabilizer Fin -->
+    <polygon points="12,14 20,2 30,10" fill="url(#fin-grad)" stroke="#00ffcc" stroke-width="0.8" stroke-linejoin="round" filter="url(#rocket-glow)" />
+
+    <!-- Bottom Stabilizer Fin -->
+    <polygon points="12,26 20,38 30,30" fill="url(#fin-grad)" stroke="#00ffcc" stroke-width="0.8" stroke-linejoin="round" filter="url(#rocket-glow)" />
+
+    <!-- Tail Wing Stabilizers -->
+    <polygon points="4,17 12,15 12,25 4,23" fill="#0f172a" stroke="#00ffcc" stroke-width="0.6" />
+
+    <!-- Rear Engine Exhaust Nozzle -->
+    <path d="M 8,15 L 2,13 L 2,27 L 8,25 Z" fill="#161f2e" stroke="#ff007f" stroke-width="0.8" />
+    <line x1="2" y1="15" x2="2" y2="25" stroke="#ff007f" stroke-width="0.8" />
+
+    <!-- Main Fuselage Body with Pod Wrapping Decal -->
+    <path d="M 8,14 L 20,14 C 24,4 48,4 52,14 C 62,14 72,17 80,20 C 72,23 62,26 52,26 C 48,36 24,36 20,26 L 8,26 Z" fill="url(#hull-grad)" stroke="#00ffcc" stroke-width="0.9" stroke-linejoin="round" />
+
+    <!-- Neon Hull Accent Stripes (Thin) -->
+    <path d="M 10,16 L 20,16" stroke="#00ffcc" stroke-width="0.6" opacity="0.8" />
+    <path d="M 10,24 L 20,24" stroke="#00ffcc" stroke-width="0.6" opacity="0.8" />
+    <path d="M 54,16 C 62,17 70,18.5 74,20 C 70,21.5 62,23 54,24" fill="none" stroke="#ff007f" stroke-width="0.6" opacity="0.85" />
+
+    <!-- Nosecone Tip Glowing Sensor -->
+    <circle cx="78" cy="20" r="1.5" fill="#00ffcc" filter="url(#rocket-glow)" />
+
+    <!-- Sticker Decal Cutout Cockpit (Centered at 36, 20) -->
+    <circle cx="36" cy="20" r="14" fill="url(#cockpit-glow)" stroke="#00ffcc" stroke-width="0.9" filter="url(#rocket-glow)" />
+    <circle cx="36" cy="20" r="13" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.7" />
+
+    <!-- Stylized Reticle Crosshair Inside Cockpit -->
+    <circle cx="36" cy="20" r="4" fill="#00ffcc" filter="url(#rocket-glow)" />
+    <line x1="36" y1="9" x2="36" y2="13" stroke="#00ffcc" stroke-width="0.8" />
+    <line x1="36" y1="27" x2="36" y2="31" stroke="#00ffcc" stroke-width="0.8" />
+    <line x1="25" y1="20" x2="29" y2="20" stroke="#00ffcc" stroke-width="0.8" />
+    <line x1="43" y1="20" x2="47" y2="20" stroke="#00ffcc" stroke-width="0.8" />
+  </g>
+</svg>

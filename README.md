@@ -18,23 +18,30 @@ Viewers join the battlefield directly through your Twitch chat, command custom n
 
 ## ⚡ Quick Setup for Streamers
 
-### 1. Download & Run
+### 1. Download & Launch
 Download the latest executable for your operating system from the **[Releases](https://github.com/mrpoundsign/StreamTanks/releases)** page.
 
-Run StreamTanks from your terminal or command prompt:
+Run StreamTanks (or double-click `StreamTanks.exe`):
 ```bash
 # Windows
-StreamTanks.exe -channel your_channel_name
+.\StreamTanks.exe
 
 # Linux / macOS
-./StreamTanks -channel your_channel_name
+./StreamTanks
 ```
 
 *(Optional flags)*:
 - `-addr :8102` — Customize the server port (default: `:8102`).
 - `-debug` — Run in local testing mode with an on-screen command bar and target practice bot (no Twitch connection required).
+- `-channel <name>` — Directly specify Twitch channel via CLI (optional alternative to the Admin Console).
 
-### 2. Add to OBS Studio
+### 2. Connect Your Channel (Recommended)
+1. Open the **Commander Admin Console** at `http://localhost:8102/admin` in your browser.
+2. In the top header, click **Set** next to **Channel: None (Local)**.
+3. Enter your Twitch channel name (e.g. `mrpoundsign`) and click **Save**. You are given the `%claim <CODE>` command in an authorization banner to link your channel.
+4. Type or paste `%claim <CODE>` into your Twitch chat as the broadcaster to authorize. StreamTanks permanently saves your channel and host credentials in SQLite!
+
+### 3. Add to OBS Studio
 1. In OBS Studio, add a new **Browser Source** to your scene.
 2. Configure the Browser Source:
    - **URL**: `http://localhost:8102`
@@ -46,6 +53,21 @@ StreamTanks.exe -channel your_channel_name
 
 ---
 
+## 🏆 Scoring & Leaderboard System
+
+Every match contributes to the persistent stream leaderboard stored in the embedded SQLite database:
+
+- 🏆 **Match Victory (+5 Points)**: The last surviving player standing wins the round and earns **+5 points**. If all human tanks die and AI bots survive, "AI" takes the win and no points are awarded.
+- 🎯 **Player Eliminations & 5% Bounty System**:
+  - Eliminating a human opponent awards **1 base point** PLUS the victim's **5% bounty penalty** (rounded down: `victimScore / 20`).
+  - *Example*: Destroying a rival who has 100 points deducts 5 points from their score and awards you **6 points** total (1 base + 5 bounty)! High-ranking players carry huge targets on their backs.
+- 🤖 **AI Bot Kills**: Awards **1 point** (customizable from 0 to 10 points via `%botpoints <N>`). Bots carry 0 score, so no bounty is transferred.
+- 🌋 **Crater Falls & Abyss Sinking**: Falling off the map or sinking into a deep crater destroys your tank and triggers the **5% point loss** penalty (bounty is lost to the abyss).
+- 🛡️ **Tactical Energy Shield (`%shield`)**: Deploy a one-time emergency shield per match to absorb direct hits and crater blasts, protecting your tank and leaderboard score.
+- 🛠️ **Moderation Commands**: Broadcasters can reset the entire leaderboard via `%clearleaderboard` or remove individual players via `%deleteplayer <user>`.
+
+---
+
 ## 💬 Chat Command Reference
 
 All commands default to the `%` prefix (customizable via `%prefix`).
@@ -54,16 +76,21 @@ All commands default to the `%` prefix (customizable via `%prefix`).
 | Command | Arguments | Description | Example |
 | :--- | :--- | :--- | :--- |
 | `%join` | `[emote]` | Join the battlefield. Optionally specify an emote name or custom channel emote. | `%join Kappa` |
-| `%startgame` | *none* | Starts a new artillery match from the waiting phase. | `%startgame` |
+| `%icon` | `<emote>` | Change/update your tank's emote icon. Preferences persist across games. | `%icon PogChamp` |
 | `%fire` | `<angle> <power>` | Locks in your shot angle (0° to 180°) and power (1 to 100). Defaults to last known values if omitted. | `%fire 60 75` |
 | `%left` | *none* | Moves your tank left across the hills. | `%left` |
 | `%right` | *none* | Moves your tank right across the hills. | `%right` |
+| `%shield` | *none* | Activates your tactical one-time energy shield for the current match. | `%shield` |
+| `%leave` | *none* | Leaves the active match or waiting lobby immediately. | `%leave` |
+| `%startgame` | *none* | Starts a new artillery match from the waiting phase. | `%startgame` |
 
 ### 🛠️ Streamer & Mod Settings Commands
 All settings automatically save to the local database and persist across restarts.
 
 | Command | Arguments | Description | Example |
 | :--- | :--- | :--- | :--- |
+| `%channel` | `<name\|off>` | Sets the target Twitch channel, or switches to offline mode with `off`. | `%channel mrpoundsign` |
+| `%claim` | `<code>` | Authorizes and links your local game host to your Twitch channel via one-time challenge code. | `%claim PU5HZX` |
 | `%config` | `[on\|off]` | Toggles the live settings modal right in the middle of the screen. | `%config` |
 | `%speed` | `<0.1 - 3.0>` | Adjusts physics and animation speed (default: `0.5x`). | `%speed 0.8` |
 | `%commandtime` | `<seconds>` | Configures the input phase countdown duration (5s to 120s, default: `20s`). | `%commandtime 15` |
@@ -101,4 +128,4 @@ Open `http://localhost:8102` in your browser. A floating debug command bar will 
 ---
 
 ## 📄 License
-StreamTanks is open source under the [MIT License](LICENSE).
+StreamTanks is open source under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
