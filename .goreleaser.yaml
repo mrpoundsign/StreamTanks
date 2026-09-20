@@ -27,24 +27,6 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
-  - id: st_cc_server
-    main: ./cmd/ccserver
-    binary: st_cc_server
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - windows
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
-
 archives:
   - id: streamtanks
     ids:
@@ -52,20 +34,6 @@ archives:
     formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    files:
-      - README.md
-      - LICENSE*
-
-  - id: st_cc_server
-    ids:
-      - st_cc_server
-    formats:
-      - tar.gz
-    name_template: "st_cc_server_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats:
