@@ -364,18 +364,19 @@ export function stepSimulation(state: SimulationState, dtScale: number): Simulat
     }
 
     // Terrain Collision
-    if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(state.terrain, proj.x)) {
+    const groundY = getTerrainHeight(state.terrain, proj.x);
+    if (!hit && proj.y >= 0 && proj.y >= groundY) {
       hit = true;
-      applyCrater(state.terrain, proj.x, proj.y, 50);
+      applyCrater(state.terrain, proj.x, groundY, 50);
       events.impacts.push({
         id: proj.id,
         x: proj.x,
-        y: proj.y,
+        y: groundY,
         radius: 50,
         owner: proj.owner,
         hitType: 'terrain',
       });
-      const blastKills = checkTankCollisions(state.players, proj.x, proj.y, 50, proj.owner);
+      const blastKills = checkTankCollisions(state.players, proj.x, groundY, 50, proj.owner);
       events.kills.push(...blastKills);
     }
 
@@ -489,11 +490,14 @@ export function runOverlaySimulation(
   const allKills: SimKill[] = [];
   const allImpacts: SimImpact[] = [];
   const appliedCraterIds = new Set<string>();
+  const serverDeadPlayers = new Set<string>();
 
   // Map server impacts by step
+  let maxServerImpactStep = 0;
   const impactsByStep = new Map<number, SimImpact[]>();
   for (const imp of serverImpacts) {
     const s = imp.step ?? 0;
+    if (s > maxServerImpactStep) maxServerImpactStep = s;
     const list = impactsByStep.get(s) || [];
     list.push(imp);
     impactsByStep.set(s, list);
@@ -504,19 +508,21 @@ export function runOverlaySimulation(
   while (step < maxSteps) {
     step++;
 
-    // 1. Step client physics (matching game.ts updatePhysics -> stepSimulation)
-    const events = stepSimulation(state, dtScale);
-    allKills.push(...events.kills);
-    allImpacts.push(...events.impacts);
-
-    // 2. Process simulation events (matching game.ts updatePhysics line 224-228)
-    for (const impact of events.impacts) {
-      if (impact.id) {
-        appliedCraterIds.add(impact.id);
+    // 1. Step client physics with a copy of terrain (matching game.ts updatePhysics -> stepSimulation)
+    const events = stepSimulation({ ...state, terrain: [...state.terrain] }, dtScale);
+    for (const k of events.kills) {
+      if (k.reason === 'abyss') {
+        serverDeadPlayers.add(k.victim);
+        if (!allKills.some((existing) => existing.victim === k.victim)) {
+          allKills.push(k);
+        }
+      } else if (k.reason === 'blast' && state.players[k.victim] && !serverDeadPlayers.has(k.victim)) {
+        // Reset predicted blast death so authoritative server craters determine blast kills
+        state.players[k.victim].isDead = false;
       }
     }
 
-    // 3. Process incoming WebSocket messages scheduled for this step (matching game.ts MsgTerrainCrater handler)
+    // 2. Process incoming WebSocket messages scheduled for this step (matching game.ts MsgTerrainCrater handler)
     const incomingCraters = impactsByStep.get(step);
     if (incomingCraters) {
       for (const crater of incomingCraters) {
@@ -549,13 +555,18 @@ export function runOverlaySimulation(
             step,
           });
           const blastKills = checkTankCollisions(state.players, crater.x, crater.y, crater.radius, projOwner);
-          allKills.push(...blastKills);
+          for (const k of blastKills) {
+            serverDeadPlayers.add(k.victim);
+            if (!allKills.some((existing) => existing.victim === k.victim)) {
+              allKills.push(k);
+            }
+          }
         }
       }
     }
 
-    // 4. Termination check: no projectiles and no moving tanks
-    if (state.projectiles.length === 0 && !events.anyMoving) {
+    // 3. Termination check: all server impacts received, no projectiles, and no moving tanks
+    if (step >= maxServerImpactStep && state.projectiles.length === 0 && !events.anyMoving) {
       let anyFalling = false;
       for (const name in state.players) {
         const p = state.players[name];

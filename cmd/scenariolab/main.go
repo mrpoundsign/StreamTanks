@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,7 @@ var (
 	runsFlag      = flag.Int("runs", 100, "Number of replay simulation runs to detect flakiness / measure failure rate")
 	untilFailFlag = flag.Bool("until-fail", false, "Run replay iterations until a failure/divergence is detected")
 	dirFlag       = flag.String("dir", "./lab-web/public", "Directory containing lab frontend assets")
+	fpsFlag       = flag.Int("fps", 0, "Client overlay FPS to simulate (0 = cycle across 144, 120, 60; >0 = fixed FPS)")
 )
 
 func main() {
@@ -52,10 +54,33 @@ func runReplayCLI(filePath string) {
 
 	_ = ensureSimulationBundle()
 
+	physicsSpeed := sc.Rules.PhysicsSpeed
+	if physicsSpeed <= 0 {
+		physicsSpeed = 0.5
+	}
+	serverDtScale := 1.0 * physicsSpeed
+
+	clientFps := 144
+	if *fpsFlag > 0 {
+		clientFps = *fpsFlag
+	}
+	clientDtScale := (60.0 / float64(clientFps)) * physicsSpeed
+
 	// Run Overlay Simulation (Headless Node) to get the client reference
-	serverRes := scenariolab.RunScenarioSimulation(sc, 1.0)
+	serverRes := scenariolab.RunScenarioSimulation(sc, serverDtScale)
+	scaledImpacts := make([]scenariolab.ImpactRecord, len(serverRes.Impacts))
+	for j, imp := range serverRes.Impacts {
+		scaledImpacts[j] = imp
+		scaledImpacts[j].Step = int(math.Round(float64(imp.Step) * float64(clientFps) / 60.0))
+	}
+
 	clientResults, err := runOverlaySimHeadless([]OverlaySimBatchItem{
-		{Scenario: sc, ServerImpacts: serverRes.Impacts},
+		{
+			Scenario:      sc,
+			ServerImpacts: scaledImpacts,
+			ClientFPS:     clientFps,
+			ClientDtScale: clientDtScale,
+		},
 	})
 	if err != nil {
 		log.Fatalf("Error running overlay simulation: %v", err)
@@ -97,7 +122,7 @@ func runReplayCLI(filePath string) {
 		found := false
 		maxScan := 10000
 		for scanRun := 1; scanRun <= maxScan; scanRun++ {
-			sRes := scenariolab.RunScenarioSimulation(sc, 1.0)
+			sRes := scenariolab.RunScenarioSimulation(sc, serverDtScale)
 			if scanRun == 1 {
 				baselineServerRes = sRes
 			}
@@ -126,7 +151,7 @@ func runReplayCLI(filePath string) {
 
 	for i := 1; i <= targetRuns; i++ {
 		totalRuns++
-		sRes := scenariolab.RunScenarioSimulation(sc, 1.0)
+		sRes := scenariolab.RunScenarioSimulation(sc, serverDtScale)
 		if i == 1 && baselineServerRes == nil {
 			baselineServerRes = sRes
 			fmt.Printf("Server (Run #1):   %d steps, %d impacts, %d kills, Winner: %s\n",
@@ -205,6 +230,11 @@ func runFuzzCLI(count int, outDir string) {
 	discrepancies := 0
 	startTime := time.Now()
 
+	fpsList := []int{144, 120, 60}
+	if *fpsFlag > 0 {
+		fpsList = []int{*fpsFlag}
+	}
+
 	for b := range totalBatches {
 		curBatchSize := batchSize
 		if (b+1)*batchSize > count {
@@ -219,10 +249,28 @@ func runFuzzCLI(count int, outDir string) {
 			seed := time.Now().UnixNano() + int64(b*batchSize+i)*7919
 			sc := scenariolab.GenerateRandomScenario(seed)
 			scenarios[i] = sc
-			serverResults[i] = scenariolab.RunScenarioSimulation(sc, 1.0)
+
+			physicsSpeed := sc.Rules.PhysicsSpeed
+			if physicsSpeed <= 0 {
+				physicsSpeed = 0.5
+			}
+			serverDtScale := 1.0 * physicsSpeed
+			serverResults[i] = scenariolab.RunScenarioSimulation(sc, serverDtScale)
+
+			clientFps := fpsList[(b*batchSize+i)%len(fpsList)]
+			clientDtScale := (60.0 / float64(clientFps)) * physicsSpeed
+
+			scaledImpacts := make([]scenariolab.ImpactRecord, len(serverResults[i].Impacts))
+			for j, imp := range serverResults[i].Impacts {
+				scaledImpacts[j] = imp
+				scaledImpacts[j].Step = int(math.Round(float64(imp.Step) * float64(clientFps) / 60.0))
+			}
+
 			items[i] = OverlaySimBatchItem{
 				Scenario:      sc,
-				ServerImpacts: serverResults[i].Impacts,
+				ServerImpacts: scaledImpacts,
+				ClientFPS:     clientFps,
+				ClientDtScale: clientDtScale,
 			}
 		}
 
@@ -267,6 +315,8 @@ func runFuzzCLI(count int, outDir string) {
 type OverlaySimBatchItem struct {
 	Scenario      *scenariolab.Scenario      `json:"scenario"`
 	ServerImpacts []scenariolab.ImpactRecord `json:"serverImpacts"`
+	ClientFPS     int                        `json:"clientFps"`
+	ClientDtScale float64                    `json:"clientDtScale"`
 }
 
 func ensureSimulationBundle() error {

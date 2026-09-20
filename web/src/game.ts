@@ -213,7 +213,7 @@ function updatePhysics(dtScale: number): void {
     const simState: SimulationState = {
       players,
       projectiles,
-      terrain,
+      terrain: [...terrain],
       bouncyWalls: !!stateRef?.bouncyWalls,
       terrainClimb: !!stateRef?.terrainClimb,
       moveDistance: stateRef?.moveDistance ?? 100,
@@ -229,9 +229,6 @@ function updatePhysics(dtScale: number): void {
     }
 
     for (const impact of events.impacts) {
-      if (impact.id) {
-        appliedCraterIds.add(impact.id);
-      }
       explosions.push({
         x: impact.x,
         y: impact.y,

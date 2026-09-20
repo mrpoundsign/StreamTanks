@@ -17,6 +17,13 @@ try {
     const sc = item.scenario || item;
     const serverImpacts = item.serverImpacts || [];
 
+    const clientFps = item.clientFps || 60;
+    const physicsSpeed = sc.rules?.physicsSpeed || 0.5;
+    const clientDtScale = item.clientDtScale !== undefined
+      ? item.clientDtScale
+      : ((60.0 / clientFps) * physicsSpeed);
+    const maxSteps = Math.ceil(2000 * (clientFps / 60));
+
     const state = {
       players: sc.players || {},
       projectiles: [],
@@ -24,13 +31,13 @@ try {
       bouncyWalls: !!sc.rules?.bouncyWalls,
       terrainClimb: !!sc.rules?.terrainClimb,
       moveDistance: sc.rules?.moveDistance || 100,
-      physicsSpeed: sc.rules?.physicsSpeed || 0.5,
+      physicsSpeed: physicsSpeed,
       roundId: 1,
     };
 
     const res = item.serverImpacts !== undefined
-      ? runOverlaySimulation(state, 1.0, serverImpacts)
-      : runFullSimulation(state, 1.0);
+      ? runOverlaySimulation(state, clientDtScale, serverImpacts, maxSteps)
+      : runFullSimulation(state, clientDtScale, maxSteps);
 
     results.push({
       scenarioId: sc.id,

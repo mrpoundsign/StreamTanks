@@ -355,21 +355,22 @@ func (e *Engine) UpdateProjectiles(dtScale float64, sink CollisionSink) {
 		}
 
 		// Terrain collision
-		if !hit && proj.Y >= 0 && proj.Y >= getTerrainHeight(e.Terrain, proj.X) {
+		groundY := getTerrainHeight(e.Terrain, proj.X)
+		if !hit && proj.Y >= 0 && proj.Y >= groundY {
 			hit = true
-			applyCrater(e.Terrain, proj.X, proj.Y, 50.0)
+			applyCrater(e.Terrain, proj.X, groundY, 50.0)
 			e.Explosions = append(e.Explosions, Explosion{
 				X:         proj.X,
-				Y:         proj.Y,
+				Y:         groundY,
 				Radius:    0,
 				MaxRadius: 50.0,
 				Alpha:     1.0,
 				IsSpark:   false,
 			})
 			if sink != nil {
-				sink.OnCrater(proj.X, proj.Y, 50.0, proj.ID)
+				sink.OnCrater(proj.X, groundY, 50.0, proj.ID)
 			}
-			e.CheckTankCollisions(proj.X, proj.Y, 50.0, proj.Owner, sink)
+			e.CheckTankCollisions(proj.X, groundY, 50.0, proj.Owner, sink)
 		}
 
 		// Direct tank collision

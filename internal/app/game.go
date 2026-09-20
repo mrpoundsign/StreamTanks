@@ -884,20 +884,8 @@ func updatePhysicsStep(dtScale float64) bool {
 func runPhysicsLoop(roundID int) {
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
-	lastTime := time.Now()
-
 	for {
 		<-ticker.C
-		now := time.Now()
-		rawDt := float64(now.Sub(lastTime).Milliseconds())
-		lastTime = now
-
-		if rawDt < 0 {
-			rawDt = 0
-		} else if rawDt > 100 {
-			rawDt = 100
-		}
-		baseDtScale := rawDt / (1000.0 / 60.0)
 
 		gameState.mu.Lock()
 		if gameState.Phase != phaseAction || gameState.RoundID != roundID {
@@ -905,7 +893,7 @@ func runPhysicsLoop(roundID int) {
 			return
 		}
 
-		dtScale := baseDtScale * gameState.PhysicsSpeed
+		dtScale := 1.0 * gameState.PhysicsSpeed
 
 		isDone := updatePhysicsStep(dtScale)
 
