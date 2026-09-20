@@ -21,6 +21,8 @@
     const idleStatusText = document.getElementById('idle-status-text');
     const btnToggleBotfill = document.getElementById('btn-toggle-botfill');
     const botfillStatusText = document.getElementById('botfill-status-text');
+    const btnToggleTerrainclimb = document.getElementById('btn-toggle-terrainclimb');
+    const terrainclimbStatusText = document.getElementById('terrainclimb-status-text');
     const btnResetTerrain = document.getElementById('btn-reset-terrain');
     const btnClearLb = document.getElementById('btn-clear-lb');
 
@@ -182,6 +184,10 @@
         const isBotFill = state.botFill !== false;
         botfillStatusText.innerText = isBotFill ? 'On' : 'Off';
         btnToggleBotfill.className = isBotFill ? 'btn btn-outline' : 'btn btn-secondary';
+
+        const isTerrainClimb = !!state.terrainClimb;
+        if (terrainclimbStatusText) terrainclimbStatusText.innerText = isTerrainClimb ? 'On' : 'Off';
+        if (btnToggleTerrainclimb) btnToggleTerrainclimb.className = isTerrainClimb ? 'btn btn-outline' : 'btn btn-secondary';
 
         // Auto Round Display & Preset Highlights
         const ar = state.autoRound !== undefined ? state.autoRound : 0;
@@ -457,6 +463,13 @@
         const nextVal = stateRef?.botFill ? 'off' : 'on';
         sendCommand(`botfill ${nextVal}`);
     });
+
+    if (btnToggleTerrainclimb) {
+        btnToggleTerrainclimb.addEventListener('click', () => {
+            const nextVal = stateRef?.terrainClimb ? 'off' : 'on';
+            sendCommand(`terrainclimb ${nextVal}`);
+        });
+    }
 
     btnResetTerrain.addEventListener('click', () => {
         sendCommand('terrain reroll');

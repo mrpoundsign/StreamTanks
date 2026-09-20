@@ -80,6 +80,7 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 			AutoRound:      gameState.AutoRound,
 			IdleMessage:    gameState.IdleMessage,
 			BouncyWalls:    gameState.BouncyWalls,
+			TerrainClimb:   gameState.TerrainClimb,
 			Terrain:        terrainCopy,
 			TerrainMin:     gameState.TerrainMin,
 			TerrainMax:     gameState.TerrainMax,

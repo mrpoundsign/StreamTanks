@@ -104,6 +104,7 @@ type GameState struct {
 	AutoRound      int                `json:"autoRound"` // -1: immediate, >0: minutes, 0: off
 	IdleMessage    bool               `json:"idleMessage"`
 	BouncyWalls    bool               `json:"bouncyWalls"`
+	TerrainClimb   bool               `json:"terrainClimb"`
 	Terrain        []float64          `json:"terrain,omitempty"`
 	TerrainMin     int                `json:"terrainMin"` // minimum screen height percentage (e.g. 25%)
 	TerrainMax     int                `json:"terrainMax"` // maximum screen height percentage (e.g. 80%)

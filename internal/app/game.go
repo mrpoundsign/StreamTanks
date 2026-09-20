@@ -20,6 +20,8 @@ var gameState = GameState{
 	Prefix:        "%",
 	PhysicsSpeed:  0.5,
 	IdleMessage:   true,
+	BouncyWalls:   false,
+	TerrainClimb:  false,
 	TerrainMin:    20,
 	TerrainMax:    75,
 	TerrainColor:  defaultTerrainColor,
@@ -762,6 +764,7 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 
 func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 	anyMoving := false
+	terrainClimb := gameState.TerrainClimb
 	for name, p := range gameState.Players {
 		if p.IsDead {
 			continue
@@ -773,42 +776,72 @@ func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 			currentSpeed := p.SpeedMultiplier * 2.0 * dtScale
 			switch p.ActionType {
 			case actionLeft:
-				p.X -= currentSpeed
-				if p.X <= 20 {
-					if bouncyWalls && !p.HasBounced {
-						p.X = 20
-						p.ActionType = actionRight
-						p.MoveTarget = p.X + float64(gameState.MoveDistance)
-						p.SpeedMultiplier = 1.5
-						p.HasBounced = true
-						createWallSpark(20, p.Y)
-					} else if p.MoveTarget != 0 && p.X <= p.MoveTarget || p.X <= 20 {
-						p.Moving = false
-						if p.X < 20 {
-							p.X = 20
-						}
+				nextX := p.X - currentSpeed
+				currIdx := int(math.Floor(p.X))
+				nextIdx := int(math.Floor(nextX))
+				blocked := false
+				if !terrainClimb && currIdx != nextIdx {
+					stepX := math.Abs(float64(currIdx - nextIdx))
+					rise := getTerrainHeight(gameState.Terrain, float64(currIdx)) - getTerrainHeight(gameState.Terrain, float64(nextIdx))
+					if rise > 0 && (rise/stepX) > 4.0 {
+						blocked = true
 					}
-				} else if p.MoveTarget != 0 && p.X <= p.MoveTarget {
+				}
+				if blocked {
 					p.Moving = false
+				} else {
+					p.X = nextX
+					if p.X <= 20 {
+						if bouncyWalls && !p.HasBounced {
+							p.X = 20
+							p.ActionType = actionRight
+							p.MoveTarget = p.X + float64(gameState.MoveDistance)
+							p.SpeedMultiplier = 1.5
+							p.HasBounced = true
+							createWallSpark(20, p.Y)
+						} else if (p.MoveTarget != 0 && p.X <= p.MoveTarget) || p.X <= 20 {
+							p.Moving = false
+							if p.X < 20 {
+								p.X = 20
+							}
+						}
+					} else if p.MoveTarget != 0 && p.X <= p.MoveTarget {
+						p.Moving = false
+					}
 				}
 			case actionRight:
-				p.X += currentSpeed
-				if p.X >= defaultTerrainWidth-20 {
-					if bouncyWalls && !p.HasBounced {
-						p.X = defaultTerrainWidth - 20
-						p.ActionType = actionLeft
-						p.MoveTarget = p.X - float64(gameState.MoveDistance)
-						p.SpeedMultiplier = 1.5
-						p.HasBounced = true
-						createWallSpark(defaultTerrainWidth-20, p.Y)
-					} else if p.MoveTarget != 0 && p.X >= p.MoveTarget || p.X >= defaultTerrainWidth-20 {
-						p.Moving = false
-						if p.X > defaultTerrainWidth-20 {
-							p.X = defaultTerrainWidth - 20
-						}
+				nextX := p.X + currentSpeed
+				currIdx := int(math.Floor(p.X))
+				nextIdx := int(math.Floor(nextX))
+				blocked := false
+				if !terrainClimb && currIdx != nextIdx {
+					stepX := math.Abs(float64(currIdx - nextIdx))
+					rise := getTerrainHeight(gameState.Terrain, float64(currIdx)) - getTerrainHeight(gameState.Terrain, float64(nextIdx))
+					if rise > 0 && (rise/stepX) > 4.0 {
+						blocked = true
 					}
-				} else if p.MoveTarget != 0 && p.X >= p.MoveTarget {
+				}
+				if blocked {
 					p.Moving = false
+				} else {
+					p.X = nextX
+					if p.X >= defaultTerrainWidth-20 {
+						if bouncyWalls && !p.HasBounced {
+							p.X = defaultTerrainWidth - 20
+							p.ActionType = actionLeft
+							p.MoveTarget = p.X - float64(gameState.MoveDistance)
+							p.SpeedMultiplier = 1.5
+							p.HasBounced = true
+							createWallSpark(defaultTerrainWidth-20, p.Y)
+						} else if (p.MoveTarget != 0 && p.X >= p.MoveTarget) || p.X >= defaultTerrainWidth-20 {
+							p.Moving = false
+							if p.X > defaultTerrainWidth-20 {
+								p.X = defaultTerrainWidth - 20
+							}
+						}
+					} else if p.MoveTarget != 0 && p.X >= p.MoveTarget {
+						p.Moving = false
+					}
 				}
 			}
 		}

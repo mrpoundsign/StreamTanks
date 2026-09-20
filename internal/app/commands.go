@@ -79,6 +79,8 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		handleIdleMessageCmd(user, parts)
 	case "bouncywalls", "bouncy":
 		handleBouncyWallsCmd(user, parts)
+	case "terrainclimb":
+		handleTerrainClimbCmd(user, parts)
 	case "terrain":
 		handleTerrainCmd(user, parts)
 	case "terraincolor", "terraincolour":
@@ -417,6 +419,29 @@ func handleBouncyWallsCmd(user *twitch.User, parts []string) {
 	broadcast(msgStateUpdate, &gameState)
 }
 
+func handleTerrainClimbCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+	var val bool
+	if len(parts) > 1 {
+		arg := strings.ToLower(parts[1])
+		val = parseBoolArg(arg)
+	} else {
+		val = !gameState.TerrainClimb
+	}
+
+	gameState.TerrainClimb = val
+	gameState.mu.Unlock()
+	dbVal := "0"
+	if val {
+		dbVal = "1"
+	}
+	saveSetting("terrain_climb", dbVal)
+	broadcast(msgStateUpdate, &gameState)
+}
+
 func handleTerrainCmd(user *twitch.User, parts []string) {
 	if !hasPermission(user, gameState.ConfigPerm) {
 		gameState.mu.Unlock()
@@ -424,6 +449,11 @@ func handleTerrainCmd(user *twitch.User, parts []string) {
 	}
 	if len(parts) > 1 {
 		arg1 := strings.ToLower(parts[1])
+		if arg1 == "climb" {
+			newParts := append([]string{"terrainclimb"}, parts[2:]...)
+			handleTerrainClimbCmd(user, newParts)
+			return
+		}
 		if arg1 == "color" || arg1 == "colour" {
 			if len(parts) >= 3 {
 				handleTerrainColorCmd(user, []string{"terraincolor", parts[2]})

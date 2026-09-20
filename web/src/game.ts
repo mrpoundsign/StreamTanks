@@ -221,6 +221,7 @@ function executeActions(): void {
 
 function updatePhysics(dtScale: number): void {
   const bouncyWalls = !!stateRef?.bouncyWalls;
+  const terrainClimb = !!stateRef?.terrainClimb;
 
   for (const name in players) {
     const p = players[name];
@@ -230,51 +231,97 @@ function updatePhysics(dtScale: number): void {
     if (currentPhase === PhaseAction && p.moving) {
       const currentSpeed = (p.speedMultiplier ?? 1.0) * 2.0 * dtScale;
       if (p.actionType === ActionLeft) {
-        p.x -= currentSpeed;
-        if (p.x <= 20) {
-          if (bouncyWalls && !p.hasBounced) {
-            p.x = 20;
-            p.actionType = ActionRight;
-            p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
-            p.speedMultiplier = 1.5; // +50% speed boost
-            p.hasBounced = true;
-            createWallSpark(20, p.y);
-          } else if ((p.moveTarget !== undefined && p.x <= p.moveTarget) || p.x <= 20) {
-            p.moving = false;
-            if (p.x < 20) p.x = 20;
+        const nextX = p.x - currentSpeed;
+        const currIdx = Math.floor(p.x);
+        const nextIdx = Math.floor(nextX);
+        let blocked = false;
+        if (!terrainClimb && currIdx !== nextIdx) {
+          const stepX = Math.abs(currIdx - nextIdx);
+          const rise = getTerrainHeight(terrain, currIdx) - getTerrainHeight(terrain, nextIdx);
+          if (rise > 0 && (rise / stepX) > 4.0) {
+            blocked = true;
           }
-        } else if (p.moveTarget !== undefined && p.x <= p.moveTarget) {
+        }
+        if (blocked) {
           p.moving = false;
+        } else {
+          p.x = nextX;
+          if (p.x <= 20) {
+            if (bouncyWalls && !p.hasBounced) {
+              p.x = 20;
+              p.actionType = ActionRight;
+              p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
+              p.speedMultiplier = 1.5; // +50% speed boost
+              p.hasBounced = true;
+              createWallSpark(20, p.y);
+            } else if ((p.moveTarget !== undefined && p.x <= p.moveTarget) || p.x <= 20) {
+              p.moving = false;
+              if (p.x < 20) p.x = 20;
+            }
+          } else if (p.moveTarget !== undefined && p.x <= p.moveTarget) {
+            p.moving = false;
+          }
         }
       } else if (p.actionType === ActionRight) {
-        p.x += currentSpeed;
-        if (p.x >= WIDTH - 20) {
-          if (bouncyWalls && !p.hasBounced) {
-            p.x = WIDTH - 20;
-            p.actionType = ActionLeft;
-            p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
-            p.speedMultiplier = 1.5; // +50% speed boost
-            p.hasBounced = true;
-            createWallSpark(WIDTH - 20, p.y);
-          } else if ((p.moveTarget !== undefined && p.x >= p.moveTarget) || p.x >= WIDTH - 20) {
-            p.moving = false;
-            if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+        const nextX = p.x + currentSpeed;
+        const currIdx = Math.floor(p.x);
+        const nextIdx = Math.floor(nextX);
+        let blocked = false;
+        if (!terrainClimb && currIdx !== nextIdx) {
+          const stepX = Math.abs(currIdx - nextIdx);
+          const rise = getTerrainHeight(terrain, currIdx) - getTerrainHeight(terrain, nextIdx);
+          if (rise > 0 && (rise / stepX) > 4.0) {
+            blocked = true;
           }
-        } else if (p.moveTarget !== undefined && p.x >= p.moveTarget) {
+        }
+        if (blocked) {
           p.moving = false;
+        } else {
+          p.x = nextX;
+          if (p.x >= WIDTH - 20) {
+            if (bouncyWalls && !p.hasBounced) {
+              p.x = WIDTH - 20;
+              p.actionType = ActionLeft;
+              p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
+              p.speedMultiplier = 1.5; // +50% speed boost
+              p.hasBounced = true;
+              createWallSpark(WIDTH - 20, p.y);
+            } else if ((p.moveTarget !== undefined && p.x >= p.moveTarget) || p.x >= WIDTH - 20) {
+              p.moving = false;
+              if (p.x > WIDTH - 20) p.x = WIDTH - 20;
+            }
+          } else if (p.moveTarget !== undefined && p.x >= p.moveTarget) {
+            p.moving = false;
+          }
         }
       }
     }
 
     // Roaming in IDLE
     if (currentPhase === PhaseIdle) {
-      p.x += (p.dx ?? 1.5) * dtScale;
-      if (p.x < 50) {
-        p.x = 50;
-        p.dx = Math.abs(p.dx ?? 1.5);
-      } else if (p.x > WIDTH - 50) {
-        p.x = WIDTH - 50;
-        p.dx = -Math.abs(p.dx ?? 1.5);
+      const roamDx = (p.dx ?? 1.5) * dtScale;
+      const nextX = p.x + roamDx;
+      const currIdx = Math.floor(p.x);
+      const nextIdx = Math.floor(nextX);
+      let blocked = false;
+      if (!terrainClimb && currIdx !== nextIdx) {
+        const stepX = Math.abs(currIdx - nextIdx);
+        const rise = getTerrainHeight(terrain, currIdx) - getTerrainHeight(terrain, nextIdx);
+        if (rise > 0 && (rise / stepX) > 4.0) {
+          blocked = true;
+        }
+      }
+      if (blocked) {
+        p.dx = roamDx > 0 ? -Math.abs(p.dx ?? 1.5) : Math.abs(p.dx ?? 1.5);
+      } else {
+        p.x = nextX;
+        if (p.x < 50) {
+          p.x = 50;
+          p.dx = Math.abs(p.dx ?? 1.5);
+        } else if (p.x > WIDTH - 50) {
+          p.x = WIDTH - 50;
+          p.dx = -Math.abs(p.dx ?? 1.5);
+        }
       }
     }
 
@@ -573,6 +620,11 @@ function renderConfigModal(prefix: string): void {
     ? `<span class="config-val badge-on">On (+10% bullet, +50% tank)</span>`
     : `<span class="config-val badge-off">Off</span>`;
 
+  const terrainClimbVal = !!stateRef?.terrainClimb;
+  const terrainClimbDisplay = terrainClimbVal
+    ? `<span class="config-val badge-on">On (Steep Slopes Allowed)</span>`
+    : `<span class="config-val badge-off">Off (Steep Slopes Blocked)</span>`;
+
   const rows = [
     {
       label: 'Command Prefix',
@@ -603,6 +655,11 @@ function renderConfigModal(prefix: string): void {
       label: 'Bouncy Walls',
       value: bouncyDisplay,
       cmd: `<span class="config-cmd">${prefix}bouncywalls <span class="cmd-param">&lt;on|off&gt;</span></span>`,
+    },
+    {
+      label: 'Terrain Climb',
+      value: terrainClimbDisplay,
+      cmd: `<span class="config-cmd">${prefix}terrainclimb <span class="cmd-param">&lt;on|off&gt;</span></span>`,
     },
     {
       label: 'Terrain Bounds',

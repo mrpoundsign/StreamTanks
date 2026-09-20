@@ -98,6 +98,7 @@ All settings automatically save to the local database and persist across restart
 | `%idlemessage` | `on\|off` | Shows or hides the idle waiting HUD and leaderboard when waiting between matches. | `%idlemessage off` |
 | `%bouncywalls` | `[on\|off]` | Enables bouncy screen walls with a +10% speed boost for bullets and +50% speed boost for tanks. | `%bouncywalls on` |
 | `%terrain` | `<min%> <max%>` | Sets vertical screen height percentage bounds for terrain generation (`%terrain reset` to restore default 20% - 75%). | `%terrain 30 80` |
+| `%terrainclimb` | `[on\|off]` | Toggles whether tanks can scale steep cliffs and crater walls (default: `off` / blocked). | `%terrainclimb on` |
 | `%terraincolor` | `<hex\|preset>` | Customizes terrain outline glow and ambient fill (`red`, `cyan`, `green`, `purple`, `orange`, `yellow`, `white`, or hex `#00ffcc`; `%terraincolor reset` for default). | `%terraincolor cyan` |
 | `%tankcolor` | `<hex\|preset>` | Customizes tank tread outline glow (`red`, `cyan`, `green`, `purple`, `orange`, `yellow`, `white`, or hex `#00ffcc`; `%tankcolor reset` for default). | `%tankcolor purple` |
 | `%clearleaderboard` | _none_ | Clears all player wins from SQLite database and live overlay leaderboard. | `%clearleaderboard` |

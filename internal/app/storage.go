@@ -152,6 +152,13 @@ func loadSettings() {
 					case "1", "true", "on":
 						gameState.BouncyWalls = true
 					}
+				case "terrain_climb":
+					switch v {
+					case "0", "false", "off":
+						gameState.TerrainClimb = false
+					case "1", "true", "on":
+						gameState.TerrainClimb = true
+					}
 				case "terrain_min":
 					var tMin int
 					if _, err := fmt.Sscanf(v, "%d", &tMin); err == nil && tMin >= 10 && tMin <= 80 {

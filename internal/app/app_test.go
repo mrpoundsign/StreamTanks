@@ -42,6 +42,7 @@ func resetGameStateForTest() {
 	gameState.AutoRound = 0
 	gameState.IdleMessage = true
 	gameState.BouncyWalls = false
+	gameState.TerrainClimb = false
 	gameState.TerrainMin = 20
 	gameState.TerrainMax = 75
 	gameState.TerrainColor = defaultTerrainColor
@@ -4183,4 +4184,238 @@ func TestPlayerEmotePersistence(t *testing.T) {
 		t.Fatalf("expected deleteplayer to remove saved emote")
 	}
 }
+
+func TestTerrainClimbConfiguration(t *testing.T) {
+	testDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test sqlite db: %v", err)
+	}
+	defer func() { _ = testDB.Close() }()
+
+	_, err = testDB.Exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create settings table: %v", err)
+	}
+	oldDB := db
+	db = testDB
+	defer func() { db = oldDB }()
+
+	resetGameStateForTest()
+
+	broadcaster := &twitch.User{Name: "streamer", IsBroadcaster: true}
+	viewer := &twitch.User{Name: "regular_viewer"}
+
+	// 1. Default value is false
+	gameState.mu.Lock()
+	if gameState.TerrainClimb {
+		t.Errorf("expected default TerrainClimb to be false")
+	}
+	gameState.mu.Unlock()
+
+	// 2. Viewer cannot change %terrainclimb
+	processCommand("regular_viewer", "%terrainclimb on", nil, viewer)
+	gameState.mu.Lock()
+	if gameState.TerrainClimb {
+		t.Errorf("expected viewer to not be able to enable %%terrainclimb")
+	}
+	gameState.mu.Unlock()
+
+	// 3. Broadcaster turns %terrainclimb on
+	processCommand("streamer", "%terrainclimb on", nil, broadcaster)
+	gameState.mu.Lock()
+	if !gameState.TerrainClimb {
+		t.Errorf("expected TerrainClimb to be true after %%terrainclimb on")
+	}
+	gameState.mu.Unlock()
+	if getSetting("terrain_climb") != "1" {
+		t.Errorf("expected terrain_climb setting '1', got %q", getSetting("terrain_climb"))
+	}
+
+	// 4. Broadcaster turns %terrainclimb off
+	processCommand("streamer", "%terrainclimb off", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.TerrainClimb {
+		t.Errorf("expected TerrainClimb to be false after %%terrainclimb off")
+	}
+	gameState.mu.Unlock()
+	if getSetting("terrain_climb") != "0" {
+		t.Errorf("expected terrain_climb setting '0', got %q", getSetting("terrain_climb"))
+	}
+
+	// 5. Broadcaster toggles via %terrainclimb (no args)
+	processCommand("streamer", "%terrainclimb", nil, broadcaster)
+	gameState.mu.Lock()
+	if !gameState.TerrainClimb {
+		t.Errorf("expected TerrainClimb to toggle to true")
+	}
+	gameState.mu.Unlock()
+
+	// 6. Subcommand %terrain climb off / on
+	processCommand("streamer", "%terrain climb off", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.TerrainClimb {
+		t.Errorf("expected TerrainClimb to be false after %%terrain climb off")
+	}
+	gameState.mu.Unlock()
+
+	processCommand("streamer", "%terrain climb on", nil, broadcaster)
+	gameState.mu.Lock()
+	if !gameState.TerrainClimb {
+		t.Errorf("expected TerrainClimb to be true after %%terrain climb on")
+	}
+	gameState.mu.Unlock()
+
+	// 7. Verify loadSettings restores terrain_climb
+	saveSetting("terrain_climb", "0")
+	gameState.mu.Lock()
+	gameState.TerrainClimb = true
+	gameState.mu.Unlock()
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.TerrainClimb {
+		t.Errorf("expected loadSettings to restore TerrainClimb=false from DB")
+	}
+	gameState.mu.Unlock()
+}
+
+func TestTerrainClimbPhysics(t *testing.T) {
+	resetGameStateForTest()
+
+	// Create custom terrain with a steep cliff at x=400:
+	// From x=0 to x=395: height is 500 (lower on screen)
+	// From x=400 to x=1919: height is 350 (150px higher on screen, sheer cliff rise)
+	customTerrain := make([]float64, defaultTerrainWidth)
+	for i := range customTerrain {
+		if i >= 400 {
+			customTerrain[i] = 350.0
+		} else {
+			customTerrain[i] = 500.0
+		}
+	}
+
+	gameState.mu.Lock()
+	gameState.Terrain = customTerrain
+	gameState.Phase = phaseAction
+	gameState.Players["Climber"] = &Player{
+		Name:            "Climber",
+		X:               399.0,
+		Y:               500.0,
+		ActionType:      actionRight,
+		Moving:          true,
+		MoveTarget:      450.0,
+		SpeedMultiplier: 1.0,
+	}
+	gameState.TerrainClimb = false
+	gameState.mu.Unlock()
+
+	// 1. With TerrainClimb=false, moving right into steep cliff at x=400:
+	// Tank must stop and not advance into the wall
+	gameState.mu.Lock()
+	updateTankMovements(1.0, false)
+	p := gameState.Players["Climber"]
+	if p.Moving {
+		t.Errorf("expected tank to stop at base of steep wall when TerrainClimb=false")
+	}
+	if p.X > 399.0 {
+		t.Errorf("expected tank to not advance up the cliff, got X=%f", p.X)
+	}
+	gameState.mu.Unlock()
+
+	// 2. With TerrainClimb=true, tank can scale the cliff
+	gameState.mu.Lock()
+	gameState.TerrainClimb = true
+	p.X = 399.0
+	p.Moving = true
+	updateTankMovements(1.0, false)
+	if !p.Moving {
+		t.Errorf("expected tank to continue moving when TerrainClimb=true")
+	}
+	if p.X <= 399.0 {
+		t.Errorf("expected tank to advance right when TerrainClimb=true, got X=%f", p.X)
+	}
+	gameState.mu.Unlock()
+
+	// 3. Downward movement into a crater/drop is never blocked, even with TerrainClimb=false
+	gameState.mu.Lock()
+	gameState.TerrainClimb = false
+	// Place tank at top of cliff x=400, height=350, moving left toward lower ground (height=500, drop)
+	gameState.Players["Dropper"] = &Player{
+		Name:            "Dropper",
+		X:               400.0,
+		Y:               350.0,
+		ActionType:      actionLeft,
+		Moving:          true,
+		MoveTarget:      350.0,
+		SpeedMultiplier: 1.0,
+	}
+	updateTankMovements(1.0, false)
+	pDrop := gameState.Players["Dropper"]
+	if !pDrop.Moving {
+		t.Errorf("expected downward movement over cliff to not be blocked")
+	}
+	if pDrop.X >= 400.0 {
+		t.Errorf("expected tank to move left downhill, got X=%f", pDrop.X)
+	}
+	gameState.mu.Unlock()
+
+	// 4. Normal generated hill slope (slope 2.0 <= 4.0) CAN be climbed when TerrainClimb=false
+	gameState.mu.Lock()
+	hillTerrain := make([]float64, defaultTerrainWidth)
+	for i := range hillTerrain {
+		// Slope of 2.0 per pixel
+		hillTerrain[i] = 500.0 - float64(i)*2.0
+	}
+	gameState.Terrain = hillTerrain
+	gameState.TerrainClimb = false
+	gameState.Players["HillClimber"] = &Player{
+		Name:            "HillClimber",
+		X:               100.0,
+		Y:               300.0,
+		ActionType:      actionRight,
+		Moving:          true,
+		MoveTarget:      150.0,
+		SpeedMultiplier: 1.0,
+	}
+	updateTankMovements(0.5, false) // test with realistic dtScale = 0.5
+	pHill := gameState.Players["HillClimber"]
+	if !pHill.Moving {
+		t.Errorf("expected tank to be able to climb normal generated hill (slope <= 2.0)")
+	}
+	if pHill.X <= 100.0 {
+		t.Errorf("expected tank to advance uphill on normal generated hill, got X=%f", pHill.X)
+	}
+	gameState.mu.Unlock()
+
+	// 5. Steep crater edge (slope 10.0 > 4.0) is blocked when TerrainClimb=false
+	gameState.mu.Lock()
+	craterTerrain := make([]float64, defaultTerrainWidth)
+	for i := range craterTerrain {
+		if i >= 200 {
+			craterTerrain[i] = 400.0 - float64(i-200)*10.0 // 10.0 slope (crater rim)
+		} else {
+			craterTerrain[i] = 400.0
+		}
+	}
+	gameState.Terrain = craterTerrain
+	gameState.TerrainClimb = false
+	gameState.Players["CraterClimber"] = &Player{
+		Name:            "CraterClimber",
+		X:               200.0,
+		Y:               400.0,
+		ActionType:      actionRight,
+		Moving:          true,
+		MoveTarget:      250.0,
+		SpeedMultiplier: 1.0,
+	}
+	updateTankMovements(0.5, false)
+	pCrater := gameState.Players["CraterClimber"]
+	if pCrater.Moving {
+		t.Errorf("expected tank to be blocked at steep crater rim (slope 10.0 > 4.0)")
+	}
+	if pCrater.X > 200.0 {
+		t.Errorf("expected tank not to climb steep crater rim, got X=%f", pCrater.X)
+	}
+	gameState.mu.Unlock()
+}
+
 

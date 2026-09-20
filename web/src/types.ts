@@ -80,6 +80,7 @@ export interface GameState {
   autoRound: number;
   idleMessage: boolean;
   bouncyWalls: boolean;
+  terrainClimb?: boolean;
   terrain?: number[];
   terrainMin?: number;
   terrainMax?: number;
