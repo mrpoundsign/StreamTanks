@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap",
-    "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap",
+    "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap && npm run build:sim && npm run build:lab",
     "build:sim": "esbuild web/src/simulation.ts --bundle --format=esm --outfile=web/dist/simulation.mjs",
     "build:lab": "esbuild lab-web/src/lab.ts --bundle --outfile=lab-web/public/lab.js --sourcemap",
     "build:all": "npm run build && npm run build:sim && npm run build:lab",

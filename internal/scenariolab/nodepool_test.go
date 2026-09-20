@@ -24,9 +24,22 @@ func findHeadlessScript() string {
 }
 
 func TestNodeWorkerPool_LifecycleAndParallelRun(t *testing.T) {
+	_ = EnsureSimulationBundle()
 	scriptPath := findHeadlessScript()
 	if _, err := os.Stat(scriptPath); err != nil {
 		t.Skipf("headless_sim.mjs not found at %s, skipping", scriptPath)
+	}
+
+	distCandidates := []string{"../../web/dist/simulation.mjs", "./web/dist/simulation.mjs"}
+	distFound := false
+	for _, d := range distCandidates {
+		if _, err := os.Stat(d); err == nil {
+			distFound = true
+			break
+		}
+	}
+	if !distFound {
+		t.Skip("web/dist/simulation.mjs not found, skipping headless worker pool test")
 	}
 
 	pool, err := NewNodeWorkerPool(2, scriptPath)

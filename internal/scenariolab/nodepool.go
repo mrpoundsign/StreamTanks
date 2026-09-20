@@ -7,10 +7,44 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
 )
+
+// EnsureSimulationBundle verifies that web/dist/simulation.mjs exists and is up to date with simulation.ts.
+func EnsureSimulationBundle() error {
+	candidates := []string{
+		"./web/dist/simulation.mjs",
+		"../../web/dist/simulation.mjs",
+	}
+	srcCandidates := []string{
+		"./web/src/simulation.ts",
+		"../../web/src/simulation.ts",
+	}
+	var distFile, srcFile string
+	for i, c := range srcCandidates {
+		if _, err := os.Stat(c); err == nil {
+			srcFile = c
+			distFile = candidates[i]
+			break
+		}
+	}
+	if srcFile == "" {
+		return nil
+	}
+
+	distStat, distErr := os.Stat(distFile)
+	srcStat, srcErr := os.Stat(srcFile)
+	if distErr == nil && srcErr == nil && distStat.ModTime().After(srcStat.ModTime()) {
+		return nil
+	}
+
+	_ = os.MkdirAll(filepath.Dir(distFile), 0o755)
+	cmd := exec.Command("npx", "esbuild", srcFile, "--bundle", "--format=esm", "--outfile="+distFile)
+	return cmd.Run()
+}
 
 // OverlaySimBatchItem represents a scenario item sent to the headless simulation worker.
 type OverlaySimBatchItem struct {
@@ -168,6 +202,8 @@ func NewNodeWorkerPool(size int, scriptPath string) (*NodeWorkerPool, error) {
 	if size <= 0 {
 		size = 1
 	}
+
+	_ = EnsureSimulationBundle()
 
 	pool := &NodeWorkerPool{
 		script:    scriptPath,
