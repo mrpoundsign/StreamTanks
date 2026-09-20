@@ -77,7 +77,14 @@
                         <div class="card-title">
                             <span class="card-icon">&#128193;</span> Scenario Library
                         </div>
-                        <span id="scenario-count-badge" class="count-badge">0</span>
+                        <div class="library-header-controls">
+                            <select id="select-scenario-sort" class="select-tiny" title="Sort Scenarios">
+                                <option value="diff">Sort: Pixel Diff</option>
+                                <option value="name">Sort: Name</option>
+                                <option value="source">Sort: Source</option>
+                            </select>
+                            <span id="scenario-count-badge" class="count-badge">0</span>
+                        </div>
                     </div>
                     <div class="card-body scrollable-body">
                         <div id="scenario-list" class="scenario-list">

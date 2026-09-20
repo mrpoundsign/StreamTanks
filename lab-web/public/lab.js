@@ -267,18 +267,19 @@
           }
         }
       }
-      if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(state.terrain, proj.x)) {
+      const groundY = getTerrainHeight(state.terrain, proj.x);
+      if (!hit && proj.y >= 0 && proj.y >= groundY) {
         hit = true;
-        applyCrater(state.terrain, proj.x, proj.y, 50);
+        applyCrater(state.terrain, proj.x, groundY, 50);
         events.impacts.push({
           id: proj.id,
           x: proj.x,
-          y: proj.y,
+          y: groundY,
           radius: 50,
           owner: proj.owner,
           hitType: "terrain"
         });
-        const blastKills = checkTankCollisions(state.players, proj.x, proj.y, 50, proj.owner);
+        const blastKills = checkTankCollisions(state.players, proj.x, groundY, 50, proj.owner);
         events.kills.push(...blastKills);
       }
       if (!hit) {
@@ -358,6 +359,7 @@
   var diffStatusText = document.getElementById("diff-status-text");
   var scenarioListEl = document.getElementById("scenario-list");
   var scenarioCountBadge = document.getElementById("scenario-count-badge");
+  var selectScenarioSort = document.getElementById("select-scenario-sort");
   var btnRefresh = document.getElementById("btn-refresh-scenarios");
   var btnRunFuzz = document.getElementById("btn-run-fuzz");
   var fuzzProgressContainer = document.getElementById("fuzz-progress-container");
@@ -390,6 +392,7 @@
   var playTimer = null;
   var playbackSpeed = 0.5;
   var fuzzBatchSize = 100;
+  var loadedScenarios = [];
   batchButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       batchButtons.forEach((b) => b.classList.remove("active"));
@@ -404,6 +407,11 @@
   }
   function setupEventListeners() {
     btnRefresh.addEventListener("click", loadScenarioLibrary);
+    if (selectScenarioSort) {
+      selectScenarioSort.addEventListener("change", () => {
+        applyScenarioSorting();
+      });
+    }
     btnRunFuzz.addEventListener("click", runFuzzSuite);
     btnPlayPause.addEventListener("click", togglePlayPause);
     btnRewind.addEventListener("click", () => seekFrame(0));
@@ -436,12 +444,48 @@
   }
   async function loadScenarioLibrary() {
     try {
-      const res = await fetch("/api/scenarios/list");
+      const sortMode = selectScenarioSort ? selectScenarioSort.value : "diff";
+      const res = await fetch(`/api/scenarios/list?sort=${encodeURIComponent(sortMode)}`);
       const data = await res.json();
-      renderScenarioList(data.scenarios || []);
+      loadedScenarios = data.scenarios || [];
+      applyScenarioSorting();
     } catch (err) {
       scenarioListEl.innerHTML = `<div class="empty-text">Failed to load scenarios: ${String(err)}</div>`;
     }
+  }
+  function applyScenarioSorting() {
+    const sortMode = selectScenarioSort ? selectScenarioSort.value : "diff";
+    const sorted = [...loadedScenarios];
+    if (sortMode === "name") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortMode === "source") {
+      sorted.sort((a, b) => {
+        if (a.source !== b.source) return a.source.localeCompare(b.source);
+        return a.name.localeCompare(b.name);
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const diffA = a.maxPixelDiff ?? 0;
+        const diffB = b.maxPixelDiff ?? 0;
+        if (diffA !== diffB) return diffB - diffA;
+        if (a.source !== b.source) return a.source === "saved" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    renderScenarioList(sorted);
+  }
+  function renderDiffBadge(sc) {
+    const diff = sc.maxPixelDiff ?? 0;
+    if (sc.source === "builtin") {
+      return `<span class="diff-badge clean" title="Built-in Scenario (0px diff)">0px</span>`;
+    }
+    if (sc.hasDiscrepancy || diff >= 1) {
+      return `<span class="diff-badge severe" title="Max Pixel Diff: ${diff.toFixed(1)}px (Terrain: ${(sc.maxTerrainDiff || 0).toFixed(1)}px, Pos: ${(sc.maxPositionDiff || 0).toFixed(1)}px)">\u0394 ${diff.toFixed(1)}px</span>`;
+    }
+    if (diff > 0) {
+      return `<span class="diff-badge minor" title="Max Pixel Diff: ${diff.toFixed(2)}px">\u0394 ${diff.toFixed(2)}px</span>`;
+    }
+    return `<span class="diff-badge clean" title="Zero Discrepancy">\u2713 0px</span>`;
   }
   function renderScenarioList(scenarios) {
     scenarioCountBadge.textContent = String(scenarios.length);
@@ -449,14 +493,18 @@
       scenarioListEl.innerHTML = '<div class="empty-text">No scenarios found. Run fuzz suite to generate test cases.</div>';
       return;
     }
+    const activeId = currentScenario?.id;
     scenarioListEl.innerHTML = scenarios.map(
       (sc) => `
-        <div class="scenario-item ${sc.source} ${sc.source === "saved" ? "mismatch" : ""}" data-id="${sc.id}">
+        <div class="scenario-item ${sc.source} ${sc.source === "saved" && (sc.hasDiscrepancy || (sc.maxPixelDiff ?? 0) > 0) ? "mismatch" : ""} ${sc.id === activeId ? "active" : ""}" data-id="${sc.id}">
             <div class="scenario-item-header">
                 <span class="scenario-name" title="${escapeHtml(sc.name)}">${escapeHtml(sc.name)}</span>
-                <span class="scenario-source-tag ${sc.source}">${sc.source.toUpperCase()}</span>
+                <div class="scenario-item-tags">
+                    ${renderDiffBadge(sc)}
+                    <span class="scenario-source-tag ${sc.source}">${sc.source.toUpperCase()}</span>
+                </div>
             </div>
-            <div class="scenario-desc">${escapeHtml(sc.description || sc.filename || sc.id)}</div>
+            <div class="scenario-desc" title="${escapeHtml(sc.summary || sc.description || sc.filename || sc.id)}">${escapeHtml(sc.summary || sc.description || sc.filename || sc.id)}</div>
         </div>
       `
     ).join("");

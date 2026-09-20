@@ -297,26 +297,33 @@ func SaveScenario(dir string, s *Scenario, diff *DiffReport) (string, error) {
 
 // LoadScenario reads a scenario JSON file from disk.
 func LoadScenario(filePath string) (*Scenario, error) {
+	sc, _, err := LoadScenarioWithDiff(filePath)
+	return sc, err
+}
+
+// LoadScenarioWithDiff reads a scenario JSON file and its associated diffReport (if present).
+func LoadScenarioWithDiff(filePath string) (*Scenario, *DiffReport, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		for _, b := range getBuiltInScenarios() {
 			if b.ID == filePath {
-				return b, nil
+				return b, nil, nil
 			}
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	var wrapper struct {
-		Scenario *Scenario `json:"scenario"`
+		Scenario   *Scenario   `json:"scenario"`
+		DiffReport *DiffReport `json:"diffReport"`
 	}
 	if err := json.Unmarshal(data, &wrapper); err == nil && wrapper.Scenario != nil {
-		return wrapper.Scenario, nil
+		return wrapper.Scenario, wrapper.DiffReport, nil
 	}
 
 	var s Scenario
 	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &s, nil
+	return &s, nil, nil
 }

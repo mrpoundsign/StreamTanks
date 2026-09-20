@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -31,56 +33,50 @@ func NewScenarioLabServer(scenariosDir string, publicLabDir string) *ScenarioLab
 	}
 
 	// REST API Routes
+	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/scenarios/list", s.handleListScenarios)
+	mux.HandleFunc("/api/scenarios/load", s.handleLoadScenario)
 	mux.HandleFunc("/api/scenarios/generate", s.handleGenerateScenarios)
 	mux.HandleFunc("/api/scenarios/run", s.handleRunScenario)
 	mux.HandleFunc("/api/scenarios/save", s.handleSaveScenario)
-	mux.HandleFunc("/api/scenarios/load", s.handleLoadScenario)
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Static Lab UI Asset Serving
-	var fs http.FileSystem
-	if fi, err := os.Stat(publicLabDir); err == nil && fi.IsDir() {
-		fs = http.Dir(publicLabDir)
-	} else {
-		// Fallback to searching standard project paths
-		for _, candidate := range []string{"./lab-web/public", "../lab-web/public", "../../lab-web/public"} {
-			if fi, err := os.Stat(candidate); err == nil && fi.IsDir() {
-				fs = http.Dir(candidate)
-				break
-			}
-		}
-	}
-
-	if fs != nil {
-		fileHandler := http.FileServer(fs)
+	// Static asset server for lab UI
+	if publicLabDir != "" {
+		fileHandler := http.FileServer(http.Dir(publicLabDir))
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			w.Header().Set("Pragma", "no-cache")
 			w.Header().Set("Expires", "0")
 			fileHandler.ServeHTTP(w, r)
 		})
-	} else {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("StreamTanks Scenario Lab UI assets not found. Build lab frontend with 'npm run build:lab'."))
-		})
 	}
 
 	return s
+}
+
+func (s *ScenarioLabServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (s *ScenarioLabServer) handleListScenarios(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	type ScenarioItem struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		Description string `json:"description,omitempty"`
-		Source      string `json:"source"` // "builtin" or "saved"
-		Filename    string `json:"filename,omitempty"`
+		ID               string  `json:"id"`
+		Name             string  `json:"name"`
+		Description      string  `json:"description,omitempty"`
+		Source           string  `json:"source"` // "builtin" or "saved"
+		Filename         string  `json:"filename,omitempty"`
+		MaxTerrainDiff   float64 `json:"maxTerrainDiff"`
+		MaxPositionDiff  float64 `json:"maxPositionDiff"`
+		MaxPixelDiff     float64 `json:"maxPixelDiff"`
+		TerrainDiffCount int     `json:"terrainDiffCount"`
+		HasDiscrepancy   bool    `json:"hasDiscrepancy"`
+		Summary          string  `json:"summary,omitempty"`
 	}
 
 	var items []ScenarioItem
@@ -98,18 +94,64 @@ func (s *ScenarioLabServer) handleListScenarios(w http.ResponseWriter, r *http.R
 		for _, f := range files {
 			if strings.HasSuffix(f.Name(), ".json") {
 				path := filepath.Join(s.ScenariosDir, f.Name())
-				sc, err := LoadScenario(path)
+				sc, diff, err := LoadScenarioWithDiff(path)
 				if err == nil && sc != nil {
+					maxTerrain := 0.0
+					maxPos := 0.0
+					diffCount := 0
+					hasDisc := false
+					summary := ""
+					if diff != nil {
+						maxTerrain = diff.MaxTerrainDiff
+						maxPos = diff.MaxPositionDiff
+						diffCount = diff.TerrainDiffCount
+						hasDisc = diff.HasDiscrepancy
+						summary = diff.Summary
+					}
+					maxPixel := math.Max(maxTerrain, maxPos)
 					items = append(items, ScenarioItem{
-						ID:          sc.ID,
-						Name:        sc.Name,
-						Description: sc.Description,
-						Source:      "saved",
-						Filename:    f.Name(),
+						ID:               sc.ID,
+						Name:             sc.Name,
+						Description:      sc.Description,
+						Source:           "saved",
+						Filename:         f.Name(),
+						MaxTerrainDiff:   maxTerrain,
+						MaxPositionDiff:  maxPos,
+						MaxPixelDiff:     maxPixel,
+						TerrainDiffCount: diffCount,
+						HasDiscrepancy:   hasDisc,
+						Summary:          summary,
 					})
 				}
 			}
 		}
+	}
+
+	sortMode := r.URL.Query().Get("sort")
+	if sortMode == "name" {
+		sort.SliceStable(items, func(i, j int) bool {
+			return items[i].Name < items[j].Name
+		})
+	} else if sortMode == "source" {
+		sort.SliceStable(items, func(i, j int) bool {
+			if items[i].Source != items[j].Source {
+				return items[i].Source < items[j].Source
+			}
+			return items[i].Name < items[j].Name
+		})
+	} else {
+		// Default: sort by MaxPixelDiff descending (highest pixel diff first)
+		sort.SliceStable(items, func(i, j int) bool {
+			diffI := items[i].MaxPixelDiff
+			diffJ := items[j].MaxPixelDiff
+			if diffI != diffJ {
+				return diffI > diffJ
+			}
+			if items[i].Source != items[j].Source {
+				return items[i].Source == "saved"
+			}
+			return items[i].Name < items[j].Name
+		})
 	}
 
 	_ = json.NewEncoder(w).Encode(map[string]any{

@@ -203,6 +203,40 @@ body {
     min-height: 0;
 }
 
+.library-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.select-tiny {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    color: var(--neon-cyan);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.select-tiny:hover, .select-tiny:focus {
+    border-color: var(--neon-cyan);
+    background: rgba(0, 255, 204, 0.08);
+}
+
+.count-badge {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
 .btn-group-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -309,6 +343,43 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.scenario-item-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.diff-badge {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
+.diff-badge.severe {
+    background: rgba(255, 0, 60, 0.2);
+    border: 1px solid var(--neon-red);
+    color: var(--neon-red);
+    box-shadow: 0 0 6px rgba(255, 0, 60, 0.3);
+}
+
+.diff-badge.minor {
+    background: rgba(255, 183, 3, 0.2);
+    border: 1px solid var(--neon-yellow);
+    color: var(--neon-yellow);
+}
+
+.diff-badge.clean {
+    background: rgba(0, 255, 204, 0.1);
+    border: 1px solid rgba(0, 255, 204, 0.3);
+    color: var(--neon-cyan);
 }
 
 .scenario-source-tag {

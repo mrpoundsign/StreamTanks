@@ -55,6 +55,20 @@ interface FrameSnapshot {
   kills: SimKill[];
 }
 
+interface ScenarioListItem {
+  id: string;
+  name: string;
+  description?: string;
+  source: string;
+  filename?: string;
+  maxTerrainDiff?: number;
+  maxPositionDiff?: number;
+  maxPixelDiff?: number;
+  terrainDiffCount?: number;
+  hasDiscrepancy?: boolean;
+  summary?: string;
+}
+
 // DOM References
 const canvas = document.getElementById('replayCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -63,6 +77,7 @@ const diffStatusPill = document.getElementById('diff-status-pill') as HTMLElemen
 const diffStatusText = document.getElementById('diff-status-text') as HTMLElement;
 const scenarioListEl = document.getElementById('scenario-list') as HTMLElement;
 const scenarioCountBadge = document.getElementById('scenario-count-badge') as HTMLElement;
+const selectScenarioSort = document.getElementById('select-scenario-sort') as HTMLSelectElement | null;
 const btnRefresh = document.getElementById('btn-refresh-scenarios') as HTMLButtonElement;
 
 const btnRunFuzz = document.getElementById('btn-run-fuzz') as HTMLButtonElement;
@@ -100,6 +115,7 @@ let isPlaying = false;
 let playTimer: number | null = null;
 let playbackSpeed = 0.5;
 let fuzzBatchSize = 100;
+let loadedScenarios: ScenarioListItem[] = [];
 
 // Batch Button Selectors
 batchButtons.forEach((btn) => {
@@ -120,6 +136,11 @@ async function init(): Promise<void> {
 
 function setupEventListeners(): void {
   btnRefresh.addEventListener('click', loadScenarioLibrary);
+  if (selectScenarioSort) {
+    selectScenarioSort.addEventListener('change', () => {
+      applyScenarioSorting();
+    });
+  }
   btnRunFuzz.addEventListener('click', runFuzzSuite);
 
   btnPlayPause.addEventListener('click', togglePlayPause);
@@ -159,30 +180,74 @@ function setupEventListeners(): void {
 
 async function loadScenarioLibrary(): Promise<void> {
   try {
-    const res = await fetch('/api/scenarios/list');
+    const sortMode = selectScenarioSort ? selectScenarioSort.value : 'diff';
+    const res = await fetch(`/api/scenarios/list?sort=${encodeURIComponent(sortMode)}`);
     const data = await res.json();
-    renderScenarioList(data.scenarios || []);
+    loadedScenarios = (data.scenarios || []) as ScenarioListItem[];
+    applyScenarioSorting();
   } catch (err) {
     scenarioListEl.innerHTML = `<div class="empty-text">Failed to load scenarios: ${String(err)}</div>`;
   }
 }
 
-function renderScenarioList(scenarios: { id: string; name: string; description?: string; source: string; filename?: string }[]): void {
+function applyScenarioSorting(): void {
+  const sortMode = selectScenarioSort ? selectScenarioSort.value : 'diff';
+  const sorted = [...loadedScenarios];
+  if (sortMode === 'name') {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortMode === 'source') {
+    sorted.sort((a, b) => {
+      if (a.source !== b.source) return a.source.localeCompare(b.source);
+      return a.name.localeCompare(b.name);
+    });
+  } else {
+    // Default: Sort by MaxPixelDiff descending
+    sorted.sort((a, b) => {
+      const diffA = a.maxPixelDiff ?? 0;
+      const diffB = b.maxPixelDiff ?? 0;
+      if (diffA !== diffB) return diffB - diffA;
+      if (a.source !== b.source) return a.source === 'saved' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }
+  renderScenarioList(sorted);
+}
+
+function renderDiffBadge(sc: ScenarioListItem): string {
+  const diff = sc.maxPixelDiff ?? 0;
+  if (sc.source === 'builtin') {
+    return `<span class="diff-badge clean" title="Built-in Scenario (0px diff)">0px</span>`;
+  }
+  if (sc.hasDiscrepancy || diff >= 1.0) {
+    return `<span class="diff-badge severe" title="Max Pixel Diff: ${diff.toFixed(1)}px (Terrain: ${(sc.maxTerrainDiff || 0).toFixed(1)}px, Pos: ${(sc.maxPositionDiff || 0).toFixed(1)}px)">Δ ${diff.toFixed(1)}px</span>`;
+  }
+  if (diff > 0) {
+    return `<span class="diff-badge minor" title="Max Pixel Diff: ${diff.toFixed(2)}px">Δ ${diff.toFixed(2)}px</span>`;
+  }
+  return `<span class="diff-badge clean" title="Zero Discrepancy">✓ 0px</span>`;
+}
+
+function renderScenarioList(scenarios: ScenarioListItem[]): void {
   scenarioCountBadge.textContent = String(scenarios.length);
   if (scenarios.length === 0) {
     scenarioListEl.innerHTML = '<div class="empty-text">No scenarios found. Run fuzz suite to generate test cases.</div>';
     return;
   }
 
+  const activeId = currentScenario?.id;
+
   scenarioListEl.innerHTML = scenarios
     .map(
       (sc) => `
-        <div class="scenario-item ${sc.source} ${sc.source === 'saved' ? 'mismatch' : ''}" data-id="${sc.id}">
+        <div class="scenario-item ${sc.source} ${sc.source === 'saved' && (sc.hasDiscrepancy || (sc.maxPixelDiff ?? 0) > 0) ? 'mismatch' : ''} ${sc.id === activeId ? 'active' : ''}" data-id="${sc.id}">
             <div class="scenario-item-header">
                 <span class="scenario-name" title="${escapeHtml(sc.name)}">${escapeHtml(sc.name)}</span>
-                <span class="scenario-source-tag ${sc.source}">${sc.source.toUpperCase()}</span>
+                <div class="scenario-item-tags">
+                    ${renderDiffBadge(sc)}
+                    <span class="scenario-source-tag ${sc.source}">${sc.source.toUpperCase()}</span>
+                </div>
             </div>
-            <div class="scenario-desc">${escapeHtml(sc.description || sc.filename || sc.id)}</div>
+            <div class="scenario-desc" title="${escapeHtml(sc.summary || sc.description || sc.filename || sc.id)}">${escapeHtml(sc.summary || sc.description || sc.filename || sc.id)}</div>
         </div>
       `
     )

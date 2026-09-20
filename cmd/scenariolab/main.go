@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"time"
 
 	"streamtanks/internal/scenariolab"
@@ -25,6 +27,7 @@ var (
 	untilFailFlag = flag.Bool("until-fail", false, "Run replay iterations until a failure/divergence is detected")
 	dirFlag       = flag.String("dir", "./lab-web/public", "Directory containing lab frontend assets")
 	fpsFlag       = flag.Int("fps", 0, "Client overlay FPS to simulate (0 = cycle across 144, 120, 60; >0 = fixed FPS)")
+	workersFlag   = flag.Int("workers", 1, "Number of parallel worker processes for headless simulation (default: 1)")
 )
 
 func main() {
@@ -210,9 +213,17 @@ func runReplayCLI(filePath string) {
 func runFuzzCLI(count int, outDir string) {
 	_ = os.MkdirAll(outDir, 0o755)
 
+	numWorkers := *workersFlag
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+	if numWorkers <= 0 {
+		numWorkers = 1
+	}
+
 	fmt.Printf("\n==================================================\n")
 	fmt.Printf(" STREAMTANKS DIFFERENTIAL SCENARIO FUZZER\n")
-	fmt.Printf(" Iterations: %d | Output Directory: %s\n", count, outDir)
+	fmt.Printf(" Iterations: %d | Workers: %d | Output Directory: %s\n", count, numWorkers, outDir)
 	fmt.Printf("==================================================\n\n")
 
 	_ = ensureSimulationBundle()
@@ -245,36 +256,50 @@ func runFuzzCLI(count int, outDir string) {
 		serverResults := make([]*scenariolab.SimulationResult, curBatchSize)
 		items := make([]OverlaySimBatchItem, curBatchSize)
 
-		for i := range curBatchSize {
-			seed := time.Now().UnixNano() + int64(b*batchSize+i)*7919
-			sc := scenariolab.GenerateRandomScenario(seed)
-			scenarios[i] = sc
-
-			physicsSpeed := sc.Rules.PhysicsSpeed
-			if physicsSpeed <= 0 {
-				physicsSpeed = 0.5
+		var genWg sync.WaitGroup
+		chunkSize := (curBatchSize + numWorkers - 1) / numWorkers
+		for w := range numWorkers {
+			start := w * chunkSize
+			if start >= curBatchSize {
+				break
 			}
-			serverDtScale := 1.0 * physicsSpeed
-			serverResults[i] = scenariolab.RunScenarioSimulation(sc, serverDtScale)
+			end := min(start+chunkSize, curBatchSize)
+			genWg.Add(1)
+			go func(start, end int) {
+				defer genWg.Done()
+				for i := start; i < end; i++ {
+					seed := time.Now().UnixNano() + int64(b*batchSize+i)*7919
+					sc := scenariolab.GenerateRandomScenario(seed)
+					scenarios[i] = sc
 
-			clientFps := fpsList[(b*batchSize+i)%len(fpsList)]
-			clientDtScale := (60.0 / float64(clientFps)) * physicsSpeed
+					physicsSpeed := sc.Rules.PhysicsSpeed
+					if physicsSpeed <= 0 {
+						physicsSpeed = 0.5
+					}
+					serverDtScale := 1.0 * physicsSpeed
+					serverResults[i] = scenariolab.RunScenarioSimulation(sc, serverDtScale)
 
-			scaledImpacts := make([]scenariolab.ImpactRecord, len(serverResults[i].Impacts))
-			for j, imp := range serverResults[i].Impacts {
-				scaledImpacts[j] = imp
-				scaledImpacts[j].Step = int(math.Round(float64(imp.Step) * float64(clientFps) / 60.0))
-			}
+					clientFps := fpsList[(b*batchSize+i)%len(fpsList)]
+					clientDtScale := (60.0 / float64(clientFps)) * physicsSpeed
 
-			items[i] = OverlaySimBatchItem{
-				Scenario:      sc,
-				ServerImpacts: scaledImpacts,
-				ClientFPS:     clientFps,
-				ClientDtScale: clientDtScale,
-			}
+					scaledImpacts := make([]scenariolab.ImpactRecord, len(serverResults[i].Impacts))
+					for j, imp := range serverResults[i].Impacts {
+						scaledImpacts[j] = imp
+						scaledImpacts[j].Step = int(math.Round(float64(imp.Step) * float64(clientFps) / 60.0))
+					}
+
+					items[i] = OverlaySimBatchItem{
+						Scenario:      sc,
+						ServerImpacts: scaledImpacts,
+						ClientFPS:     clientFps,
+						ClientDtScale: clientDtScale,
+					}
+				}
+			}(start, end)
 		}
+		genWg.Wait()
 
-		clientResults, err := runOverlaySimHeadless(items)
+		clientResults, err := runOverlaySimHeadlessParallel(items, numWorkers)
 		if err != nil {
 			log.Fatalf("Error running overlay headless simulation batch: %v", err)
 		}
@@ -354,12 +379,12 @@ func runOverlaySimHeadless(items []OverlaySimBatchItem) ([]scenariolab.Simulatio
 	}
 
 	type clientItem struct {
-		ScenarioID   string                                `json:"scenarioId"`
-		Kills        []scenariolab.KillRecord              `json:"kills"`
-		Impacts      []scenariolab.ImpactRecord            `json:"impacts"`
-		FinalTerrain []float64                             `json:"finalTerrain"`
+		ScenarioID   string                                  `json:"scenarioId"`
+		Kills        []scenariolab.KillRecord                `json:"kills"`
+		Impacts      []scenariolab.ImpactRecord              `json:"impacts"`
+		FinalTerrain []float64                               `json:"finalTerrain"`
 		FinalPlayers map[string]scenariolab.FinalPlayerState `json:"finalPlayers"`
-		TotalSteps   int                                   `json:"totalSteps"`
+		TotalSteps   int                                     `json:"totalSteps"`
 	}
 
 	var rawItems []clientItem
@@ -376,6 +401,51 @@ func runOverlaySimHeadless(items []OverlaySimBatchItem) ([]scenariolab.Simulatio
 			FinalPlayers: item.FinalPlayers,
 			TotalSteps:   item.TotalSteps,
 		}
+	}
+	return results, nil
+}
+
+func runOverlaySimHeadlessParallel(items []OverlaySimBatchItem, numWorkers int) ([]scenariolab.SimulationResult, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	if numWorkers <= 1 || len(items) == 1 {
+		return runOverlaySimHeadless(items)
+	}
+
+	results := make([]scenariolab.SimulationResult, len(items))
+	chunkSize := (len(items) + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	var errMu sync.Mutex
+	var firstErr error
+
+	for w := range numWorkers {
+		start := w * chunkSize
+		if start >= len(items) {
+			break
+		}
+		end := min(start+chunkSize, len(items))
+
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			subResults, err := runOverlaySimHeadless(items[start:end])
+			if err != nil {
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				errMu.Unlock()
+				return
+			}
+			copy(results[start:end], subResults)
+		}(start, end)
+	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
 	}
 	return results, nil
 }
