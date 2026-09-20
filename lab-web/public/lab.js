@@ -662,7 +662,7 @@
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    if (currentServerResult) {
+    if (currentServerResult && Array.isArray(currentServerResult.impacts)) {
       for (const sImp of currentServerResult.impacts) {
         ctx.beginPath();
         ctx.arc(sImp.x, sImp.y, sImp.radius, 0, Math.PI * 2);
@@ -721,8 +721,8 @@
         if (d > maxPosDiff) maxPosDiff = d;
       }
     }
-    const serverKills = new Set(serverRes.kills.map((k) => k.victim));
-    const clientKills = new Set(finalSnap.kills.map((k) => k.victim));
+    const serverKills = new Set((serverRes.kills || []).map((k) => k.victim));
+    const clientKills = new Set((finalSnap.kills || []).map((k) => k.victim));
     const killMismatches = [];
     for (const v of serverKills) {
       if (!clientKills.has(v)) killMismatches.push(`Missed: Server killed ${v}`);
@@ -752,7 +752,7 @@
     metricPosDiff.textContent = `${maxPosDiff.toFixed(1)}px`;
     metricKillMismatch.textContent = String(killMismatches.length);
     metricSteps.textContent = String(finalSnap.step);
-    if (serverRes.kills.length === 0 && finalSnap.kills.length === 0) {
+    if ((serverRes.kills || []).length === 0 && (finalSnap.kills || []).length === 0) {
       killsComparisonBody.innerHTML = '<div class="empty-text">No casualties in this round</div>';
     } else {
       const allVictims = /* @__PURE__ */ new Set([...serverKills, ...clientKills]);
@@ -822,8 +822,8 @@
             roundId: 1
           };
           const clientRes = runFullSimulation(state, 1);
-          const serverKills = new Set(item.serverResult.kills.map((k) => k.victim));
-          const clientKills = new Set(clientRes.kills.map((k) => k.victim));
+          const serverKills = new Set((item.serverResult.kills || []).map((k) => k.victim));
+          const clientKills = new Set((clientRes.kills || []).map((k) => k.victim));
           let hasMismatch = false;
           for (const v of serverKills) if (!clientKills.has(v)) hasMismatch = true;
           for (const v of clientKills) if (!serverKills.has(v)) hasMismatch = true;

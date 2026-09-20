@@ -438,7 +438,7 @@ function renderCanvasFrame(): void {
   }
 
   // Server impacts (Cyan ghost rings)
-  if (currentServerResult) {
+  if (currentServerResult && Array.isArray(currentServerResult.impacts)) {
     for (const sImp of currentServerResult.impacts) {
       ctx.beginPath();
       ctx.arc(sImp.x, sImp.y, sImp.radius, 0, Math.PI * 2);
@@ -514,8 +514,8 @@ function updateInspector(_sc: Scenario, serverRes: ServerSimulationResult | null
   }
 
   // Compare kills
-  const serverKills = new Set(serverRes.kills.map((k) => k.victim));
-  const clientKills = new Set(finalSnap.kills.map((k) => k.victim));
+  const serverKills = new Set((serverRes.kills || []).map((k) => k.victim));
+  const clientKills = new Set((finalSnap.kills || []).map((k) => k.victim));
   const killMismatches: string[] = [];
   for (const v of serverKills) {
     if (!clientKills.has(v)) killMismatches.push(`Missed: Server killed ${v}`);
@@ -551,7 +551,7 @@ function updateInspector(_sc: Scenario, serverRes: ServerSimulationResult | null
   metricSteps.textContent = String(finalSnap.step);
 
   // Kills Breakdown
-  if (serverRes.kills.length === 0 && finalSnap.kills.length === 0) {
+  if ((serverRes.kills || []).length === 0 && (finalSnap.kills || []).length === 0) {
     killsComparisonBody.innerHTML = '<div class="empty-text">No casualties in this round</div>';
   } else {
     const allVictims = new Set([...serverKills, ...clientKills]);
@@ -634,8 +634,8 @@ async function runFuzzSuite(): Promise<void> {
         const clientRes = runFullSimulation(state, 1.0);
 
         // Check for mismatch
-        const serverKills = new Set(item.serverResult.kills.map((k) => k.victim));
-        const clientKills = new Set(clientRes.kills.map((k) => k.victim));
+        const serverKills = new Set((item.serverResult.kills || []).map((k) => k.victim));
+        const clientKills = new Set((clientRes.kills || []).map((k) => k.victim));
         let hasMismatch = false;
 
         for (const v of serverKills) if (!clientKills.has(v)) hasMismatch = true;

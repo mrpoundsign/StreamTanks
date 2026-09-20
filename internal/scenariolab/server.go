@@ -36,6 +36,9 @@ func NewScenarioLabServer(scenariosDir string, publicLabDir string) *ScenarioLab
 	mux.HandleFunc("/api/scenarios/run", s.handleRunScenario)
 	mux.HandleFunc("/api/scenarios/save", s.handleSaveScenario)
 	mux.HandleFunc("/api/scenarios/load", s.handleLoadScenario)
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// Static Lab UI Asset Serving
 	var fs http.FileSystem

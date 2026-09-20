@@ -110,7 +110,10 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 		}
 	}
 
-	sink := &memoryEventSink{}
+	sink := &memoryEventSink{
+		impacts: make([]ImpactRecord, 0),
+		kills:   make([]KillRecord, 0),
+	}
 	step := 0
 	maxSteps := 2000
 
@@ -142,9 +145,18 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 		winner = "NONE"
 	}
 
+	kills := sink.kills
+	if kills == nil {
+		kills = make([]KillRecord, 0)
+	}
+	impacts := sink.impacts
+	if impacts == nil {
+		impacts = make([]ImpactRecord, 0)
+	}
+
 	return &SimulationResult{
-		Kills:        sink.kills,
-		Impacts:      sink.impacts,
+		Kills:        kills,
+		Impacts:      impacts,
 		FinalTerrain: engine.Terrain,
 		FinalPlayers: finalPlayers,
 		Winner:       winner,
