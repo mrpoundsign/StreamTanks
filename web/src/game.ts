@@ -20,12 +20,9 @@ import {
   MsgChatCommand,
   MsgTerrainCrater,
   CraterPayload,
-  ActionFire,
-  ActionLeft,
-  ActionRight,
-  ActionShield,
 } from './types';
 import { createDefaultTerrain, getTerrainHeight, applyCrater } from './terrain';
+import { SimulationState, executeActions as simExecuteActions, stepSimulation } from './simulation';
 import { NetworkManager } from './network';
 import {
   drawTerrain,
@@ -145,160 +142,43 @@ function createWallSpark(cx: number, cy: number): void {
   explosions.push({ x: cx, y: cy, radius: 0, maxRadius: 30, alpha: 1, isSpark: true });
 }
 
-function checkTankCollisions(cx: number, cy: number, radius: number, owner: string): void {
-  for (const name in players) {
-    if (name === owner) continue; // No self-damage
-    const p = players[name];
-    if (p.isDead || p.isShielded) continue;
-    const dist = Math.hypot(p.x - cx, p.y - cy);
-    if (dist < radius + 20) {
-      p.isDead = true;
-      const imgEl = document.getElementById('emote-' + name);
-      if (imgEl) imgEl.style.display = 'none';
-    }
-  }
-}
-
-function destroyTerrain(cx: number, cy: number, radius: number, shotId?: string): void {
-  if (shotId) {
-    if (appliedCraterIds.has(shotId)) {
-      return;
-    }
-    appliedCraterIds.add(shotId);
-  }
-  applyCrater(terrain, cx, cy, radius);
-  explosions.push({ x: cx, y: cy, radius: 0, maxRadius: radius, alpha: 1 });
-}
+let lastExecutedRoundId = -1;
 
 function executeActions(): void {
-  projectiles = [];
+  const currentRoundId = stateRef?.roundId ?? 0;
+  if (lastExecutedRoundId === currentRoundId && currentPhase === PhaseAction) {
+    return;
+  }
+  lastExecutedRoundId = currentRoundId;
+  const simState: SimulationState = {
+    players,
+    projectiles,
+    terrain,
+    bouncyWalls: !!stateRef?.bouncyWalls,
+    terrainClimb: !!stateRef?.terrainClimb,
+    moveDistance: stateRef?.moveDistance ?? 100,
+    physicsSpeed: stateRef?.physicsSpeed ?? 0.5,
+    roundId: stateRef?.roundId ?? 0,
+  };
+  simExecuteActions(simState);
+  projectiles = simState.projectiles;
   trailParticles = [];
   for (const name in players) {
     const p = players[name];
-    if (p.isDead) continue;
-
-    if (p.actionType === ActionFire) {
-      const rad = ((p.angle ?? 45) * Math.PI) / 180;
-      const powerClamped = Math.min(Math.max(p.power ?? 50, 1), 100);
-      const powerScaled = powerClamped / 5;
-      const vx = Math.cos(rad) * powerScaled;
-      const vy = -Math.sin(rad) * powerScaled;
-      const shotId = `${stateRef?.roundId ?? 0}_${name}`;
-
-      const muzzleDist = 25;
-      const spawnX = p.x + Math.cos(rad) * muzzleDist;
-      const spawnY = p.y - 10 - Math.sin(rad) * muzzleDist;
-
-      if (p.emoteUrl) {
-        preloadEmote(p.emoteUrl);
-      }
-
-      projectiles.push({
-        id: shotId,
-        x: spawnX,
-        y: spawnY,
-        vx,
-        vy,
-        owner: name,
-        emoteUrl: p.emoteUrl,
-      });
-    } else if (p.actionType === ActionLeft) {
-      p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
-      p.moving = true;
-      p.speedMultiplier = 1.0;
-      p.hasBounced = false;
-    } else if (p.actionType === ActionRight) {
-      p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
-      p.moving = true;
-      p.speedMultiplier = 1.0;
-      p.hasBounced = false;
-    } else if (p.actionType === ActionShield) {
-      // Hunkers down defensively with active shield
-      p.moving = false;
+    if (p.emoteUrl) {
+      preloadEmote(p.emoteUrl);
     }
   }
 }
 
 function updatePhysics(dtScale: number): void {
-  const bouncyWalls = !!stateRef?.bouncyWalls;
   const terrainClimb = !!stateRef?.terrainClimb;
 
-  for (const name in players) {
-    const p = players[name];
-    if (p.isDead) continue;
-
-    // Execute Action Movement
-    if (currentPhase === PhaseAction && p.moving) {
-      const currentSpeed = (p.speedMultiplier ?? 1.0) * 2.0 * dtScale;
-      if (p.actionType === ActionLeft) {
-        const nextX = p.x - currentSpeed;
-        const currIdx = Math.floor(p.x);
-        const nextIdx = Math.floor(nextX);
-        let blocked = false;
-        if (!terrainClimb && currIdx !== nextIdx) {
-          const stepX = Math.abs(currIdx - nextIdx);
-          const rise = getTerrainHeight(terrain, currIdx) - getTerrainHeight(terrain, nextIdx);
-          if (rise > 0 && (rise / stepX) > 4.0) {
-            blocked = true;
-          }
-        }
-        if (blocked) {
-          p.moving = false;
-        } else {
-          p.x = nextX;
-          if (p.x <= 20) {
-            if (bouncyWalls && !p.hasBounced) {
-              p.x = 20;
-              p.actionType = ActionRight;
-              p.moveTarget = p.x + (stateRef?.moveDistance ?? 100);
-              p.speedMultiplier = 1.5; // +50% speed boost
-              p.hasBounced = true;
-              createWallSpark(20, p.y);
-            } else if ((p.moveTarget !== undefined && p.x <= p.moveTarget) || p.x <= 20) {
-              p.moving = false;
-              if (p.x < 20) p.x = 20;
-            }
-          } else if (p.moveTarget !== undefined && p.x <= p.moveTarget) {
-            p.moving = false;
-          }
-        }
-      } else if (p.actionType === ActionRight) {
-        const nextX = p.x + currentSpeed;
-        const currIdx = Math.floor(p.x);
-        const nextIdx = Math.floor(nextX);
-        let blocked = false;
-        if (!terrainClimb && currIdx !== nextIdx) {
-          const stepX = Math.abs(currIdx - nextIdx);
-          const rise = getTerrainHeight(terrain, currIdx) - getTerrainHeight(terrain, nextIdx);
-          if (rise > 0 && (rise / stepX) > 4.0) {
-            blocked = true;
-          }
-        }
-        if (blocked) {
-          p.moving = false;
-        } else {
-          p.x = nextX;
-          if (p.x >= WIDTH - 20) {
-            if (bouncyWalls && !p.hasBounced) {
-              p.x = WIDTH - 20;
-              p.actionType = ActionLeft;
-              p.moveTarget = p.x - (stateRef?.moveDistance ?? 100);
-              p.speedMultiplier = 1.5; // +50% speed boost
-              p.hasBounced = true;
-              createWallSpark(WIDTH - 20, p.y);
-            } else if ((p.moveTarget !== undefined && p.x >= p.moveTarget) || p.x >= WIDTH - 20) {
-              p.moving = false;
-              if (p.x > WIDTH - 20) p.x = WIDTH - 20;
-            }
-          } else if (p.moveTarget !== undefined && p.x >= p.moveTarget) {
-            p.moving = false;
-          }
-        }
-      }
-    }
-
-    // Roaming in IDLE
-    if (currentPhase === PhaseIdle) {
+  // 1. Roaming in IDLE (pure visual ambient movement before game start)
+  if (currentPhase === PhaseIdle) {
+    for (const name in players) {
+      const p = players[name];
+      if (p.isDead) continue;
       const roamDx = (p.dx ?? 1.5) * dtScale;
       const nextX = p.x + roamDx;
       const currIdx = Math.floor(p.x);
@@ -323,163 +203,86 @@ function updatePhysics(dtScale: number): void {
           p.dx = -Math.abs(p.dx ?? 1.5);
         }
       }
-    }
-
-    // Boundary clamping
-    if (p.x < 20) p.x = 20;
-    if (p.x > WIDTH - 20) p.x = WIDTH - 20;
-
-    // Falling / Ground snapping
-    const floorY = getTerrainHeight(terrain, p.x);
-    if (p.y < floorY) {
-      p.y += 5.0 * dtScale;
-      if (p.y > floorY) p.y = floorY;
-    } else {
-      p.y = floorY;
-    }
-
-    // Fall off bottom of screen
-    if (p.y >= HEIGHT) {
-      p.isDead = true;
-      const imgEl = document.getElementById('emote-' + name);
-      if (imgEl) imgEl.style.display = 'none';
+      // Snap to terrain in IDLE
+      p.y = getTerrainHeight(terrain, p.x);
     }
   }
 
-  // Projectile logic
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    const proj = projectiles[i];
-    proj.x += proj.vx * dtScale;
-    proj.vy += 0.2 * dtScale; // Matching server gravity 0.2
-    proj.y += proj.vy * dtScale;
+  // 2. Pure Newtonian simulation step
+  if (currentPhase !== PhaseCelebration) {
+    const simState: SimulationState = {
+      players,
+      projectiles,
+      terrain: [...terrain],
+      bouncyWalls: !!stateRef?.bouncyWalls,
+      terrainClimb: !!stateRef?.terrainClimb,
+      moveDistance: stateRef?.moveDistance ?? 100,
+      physicsSpeed: stateRef?.physicsSpeed ?? 0.5,
+      roundId: stateRef?.roundId ?? 0,
+    };
 
-    // Record trail history for smooth contrail ribbon
-    proj.trail = proj.trail || [];
-    proj.trail.push({ x: proj.x, y: proj.y });
-    if (proj.trail.length > 20) {
-      proj.trail.shift();
+    const events = stepSimulation(simState, dtScale);
+
+    // Process simulation events
+    for (const spark of events.wallSparks) {
+      createWallSpark(spark.x, spark.y);
     }
 
-    // Spawn thruster exhaust smoke and sparks from rear nozzle
-    const heading = Math.atan2(proj.vy, proj.vx);
-    const nozzleDist = 34;
-    const nozzleX = proj.x - Math.cos(heading) * nozzleDist;
-    const nozzleY = proj.y - Math.sin(heading) * nozzleDist;
-
-    for (let k = 0; k < 2; k++) {
-      const spreadAngle = heading + Math.PI + (Math.random() - 0.5) * 0.6;
-      const speed = 0.5 + Math.random() * 1.5;
-      const isSmoke = Math.random() > 0.45;
-      trailParticles.push({
-        x: nozzleX + (Math.random() - 0.5) * 3,
-        y: nozzleY + (Math.random() - 0.5) * 3,
-        vx: Math.cos(spreadAngle) * speed,
-        vy: Math.sin(spreadAngle) * speed,
-        radius: isSmoke ? 2.5 : 1.2,
-        maxRadius: isSmoke ? 8 + Math.random() * 4 : 2.2,
-        alpha: 0.75,
-        decay: isSmoke ? 0.035 : 0.065,
-        color: isSmoke ? 'rgba(0, 255, 204, ALPHA)' : 'rgba(255, 120, 50, ALPHA)',
+    for (const impact of events.impacts) {
+      explosions.push({
+        x: impact.x,
+        y: impact.y,
+        radius: 0,
+        maxRadius: impact.radius,
+        alpha: 1,
       });
     }
 
-    let hit = false;
-
-    if (proj.y < 0) {
-      if (bouncyWalls) {
-        proj.y = 0;
-        proj.vy = Math.abs(proj.vy) * 1.1; // +10% speed boost downward
-        proj.vx *= 1.1;
-        proj.bounces = (proj.bounces ?? 0) + 1;
-        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), 0);
-        if (proj.bounces > 15) hit = true;
-      }
-    } else if (proj.y > HEIGHT) {
-      if (bouncyWalls) {
-        proj.y = HEIGHT;
-        proj.vy = -Math.abs(proj.vy) * 1.1; // +10% speed boost upward
-        proj.vx *= 1.1;
-        proj.bounces = (proj.bounces ?? 0) + 1;
-        createWallSpark(Math.max(0, Math.min(WIDTH, proj.x)), HEIGHT);
-        if (proj.bounces > 15) hit = true;
-      } else {
-        hit = true;
-      }
+    for (const kill of events.kills) {
+      const imgEl = document.getElementById('emote-' + kill.victim);
+      if (imgEl) imgEl.style.display = 'none';
     }
 
-    // Side walls bounce
-    if (!hit) {
-      if (proj.x < 0) {
-        if (bouncyWalls) {
-          proj.x = 0;
-          proj.vx = Math.abs(proj.vx) * 1.1;
-          proj.vy *= 1.1;
-          proj.bounces = (proj.bounces ?? 0) + 1;
-          createWallSpark(0, Math.max(0, Math.min(HEIGHT, proj.y)));
-          if (proj.bounces > 15) hit = true;
-        } else {
-          hit = true;
-        }
-      } else if (proj.x > WIDTH) {
-        if (bouncyWalls) {
-          proj.x = WIDTH;
-          proj.vx = -Math.abs(proj.vx) * 1.1;
-          proj.vy *= 1.1;
-          proj.bounces = (proj.bounces ?? 0) + 1;
-          createWallSpark(WIDTH, Math.max(0, Math.min(HEIGHT, proj.y)));
-          if (proj.bounces > 15) hit = true;
-        } else {
-          hit = true;
-        }
+    // Spawn thruster exhaust smoke and sparks for active projectiles
+    for (const proj of projectiles) {
+      const heading = Math.atan2(proj.vy, proj.vx);
+      const nozzleDist = 34;
+      const nozzleX = proj.x - Math.cos(heading) * nozzleDist;
+      const nozzleY = proj.y - Math.sin(heading) * nozzleDist;
+
+      for (let k = 0; k < 2; k++) {
+        const spreadAngle = heading + Math.PI + (Math.random() - 0.5) * 0.6;
+        const speed = 0.5 + Math.random() * 1.5;
+        const isSmoke = Math.random() > 0.45;
+        trailParticles.push({
+          x: nozzleX + (Math.random() - 0.5) * 3,
+          y: nozzleY + (Math.random() - 0.5) * 3,
+          vx: Math.cos(spreadAngle) * speed,
+          vy: Math.sin(spreadAngle) * speed,
+          radius: isSmoke ? 2.5 : 1.2,
+          maxRadius: isSmoke ? 8 + Math.random() * 4 : 2.2,
+          alpha: 0.75,
+          decay: isSmoke ? 0.035 : 0.065,
+          color: isSmoke ? 'rgba(0, 255, 204, ALPHA)' : 'rgba(255, 120, 50, ALPHA)',
+        });
       }
     }
+  } else {
+    // PhaseCelebration confetti/fireworks
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const proj = projectiles[i];
+      proj.x += proj.vx * dtScale;
+      proj.vy += 0.2 * dtScale;
+      proj.y += proj.vy * dtScale;
 
-    // Active shield collision: completely absorbs projectile before terrain impact
-    if (!hit) {
-      for (const name in players) {
-        if (name === proj.owner) continue;
-        const p = players[name];
-        if (p.isDead || !p.isShielded) continue;
-        if (Math.hypot(p.x - proj.x, p.y - proj.y) < 45 && proj.y <= p.y + 5) {
-          hit = true;
-          createWallSpark(proj.x, proj.y);
-          break;
-        }
-      }
-    }
-
-    // Terrain collision
-    if (!hit && proj.y >= 0 && proj.y >= getTerrainHeight(terrain, proj.x)) {
-      hit = true;
-      if (currentPhase === PhaseCelebration) {
+      if (proj.y >= getTerrainHeight(terrain, proj.x) || proj.y > HEIGHT) {
         explosions.push({ x: proj.x, y: proj.y, radius: 0, maxRadius: 50, alpha: 1 });
-      } else {
-        destroyTerrain(proj.x, proj.y, 50, proj.id);
-        checkTankCollisions(proj.x, proj.y, 50, proj.owner);
+        projectiles.splice(i, 1);
       }
-    }
-
-    // Direct tank collision
-    if (!hit) {
-      for (const name in players) {
-        if (name === proj.owner) continue;
-        const p = players[name];
-        if (p.isDead || p.isShielded) continue;
-        if (Math.hypot(p.x - proj.x, p.y - proj.y) < 20) {
-          hit = true;
-          destroyTerrain(proj.x, proj.y, 50, proj.id);
-          checkTankCollisions(proj.x, proj.y, 50, proj.owner);
-          break;
-        }
-      }
-    }
-
-    if (hit) {
-      projectiles.splice(i, 1);
     }
   }
 
-  // Update explosions
+  // 3. Visual explosions animation
   for (let i = explosions.length - 1; i >= 0; i--) {
     const exp = explosions[i];
     exp.radius += 2.0 * dtScale;
@@ -489,7 +292,7 @@ function updatePhysics(dtScale: number): void {
     }
   }
 
-  // Update trail particles
+  // 4. Visual trail particles animation
   for (let i = trailParticles.length - 1; i >= 0; i--) {
     const tp = trailParticles[i];
     tp.x += tp.vx * dtScale;
@@ -501,7 +304,7 @@ function updatePhysics(dtScale: number): void {
     }
   }
 
-  // Celebration random emote bombs
+  // 5. Celebration spawner
   if (currentPhase === PhaseCelebration) {
     const elapsed = celebrationStartTime > 0 ? performance.now() - celebrationStartTime : 0;
     if (celebrationWinner && celebrationWinner !== 'AI' && elapsed < 3500 && Math.random() < 0.2) {
@@ -1086,6 +889,10 @@ net.onMessage((msg: WSMessage) => {
       }
       if (crater.id) {
         appliedCraterIds.add(crater.id);
+        const pIdx = projectiles.findIndex((p) => p.id === crater.id);
+        if (pIdx !== -1) {
+          projectiles.splice(pIdx, 1);
+        }
       }
       applyCrater(terrain, crater.x, crater.y, crater.radius);
       const hasExplosion = explosions.some(

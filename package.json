@@ -1,16 +1,21 @@
 {
   "name": "streamtanks",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "Interactive Twitch chat artillery game and OBS browser overlay",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap",
     "build:prod": "tsc --noEmit && esbuild web/src/game.ts --bundle --outfile=web/public/game.js --minify --sourcemap && esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap",
+    "build:sim": "esbuild web/src/simulation.ts --bundle --format=esm --outfile=web/dist/simulation.mjs",
+    "build:lab": "esbuild lab-web/src/lab.ts --bundle --outfile=lab-web/public/lab.js --sourcemap",
+    "build:all": "npm run build && npm run build:sim && npm run build:lab",
     "package:ext": "npm run build && powershell -Command \"Compress-Archive -Path ext-web/public/* -DestinationPath extension.zip -Force\"",
     "watch": "esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap --watch & esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "fuzz": "go run ./cmd/scenariolab -fuzz 1000",
+    "lab": "go run ./cmd/scenariolab -addr :8105"
   },
   "devDependencies": {
     "@types/twitch-ext": "^1.24.9",

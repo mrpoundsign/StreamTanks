@@ -47,7 +47,7 @@ export function applyCrater(terrain: number[], cx: number, cy: number, radius: n
     const circleBottomY = cy + dy;
 
     if (terrain[x] < circleBottomY) {
-      terrain[x] = circleBottomY;
+      terrain[x] = Math.round(circleBottomY * 10) / 10;
     }
   }
 }
