@@ -3734,7 +3734,7 @@ func TestDeathPenalty_FallingIntoAbyss(t *testing.T) {
 		Y:      float64(defaultTerrainHeight),
 	}
 
-	updateTankMovements(1.0, false)
+	_, _ = updateTankMovements(1.0, false)
 
 	// Bob has 60 points: loss = 60 / 20 = 3 points
 	// Bob new score: 60 - 3 = 57
@@ -4489,7 +4489,7 @@ func TestTerrainClimbPhysics(t *testing.T) {
 	// 1. With TerrainClimb=false, moving right into steep cliff at x=400:
 	// Tank must stop and not advance into the wall
 	gameState.mu.Lock()
-	updateTankMovements(1.0, false)
+	_, _ = updateTankMovements(1.0, false)
 	p := gameState.Players["Climber"]
 	if p.Moving {
 		t.Errorf("expected tank to stop at base of steep wall when TerrainClimb=false")
@@ -4504,7 +4504,7 @@ func TestTerrainClimbPhysics(t *testing.T) {
 	gameState.TerrainClimb = true
 	p.X = 399.0
 	p.Moving = true
-	updateTankMovements(1.0, false)
+	_, _ = updateTankMovements(1.0, false)
 	if !p.Moving {
 		t.Errorf("expected tank to continue moving when TerrainClimb=true")
 	}
@@ -4526,7 +4526,7 @@ func TestTerrainClimbPhysics(t *testing.T) {
 		MoveTarget:      350.0,
 		SpeedMultiplier: 1.0,
 	}
-	updateTankMovements(1.0, false)
+	_, _ = updateTankMovements(1.0, false)
 	pDrop := gameState.Players["Dropper"]
 	if !pDrop.Moving {
 		t.Errorf("expected downward movement over cliff to not be blocked")
@@ -4554,7 +4554,7 @@ func TestTerrainClimbPhysics(t *testing.T) {
 		MoveTarget:      150.0,
 		SpeedMultiplier: 1.0,
 	}
-	updateTankMovements(0.5, false) // test with realistic dtScale = 0.5
+	_, _ = updateTankMovements(0.5, false) // test with realistic dtScale = 0.5
 	pHill := gameState.Players["HillClimber"]
 	if !pHill.Moving {
 		t.Errorf("expected tank to be able to climb normal generated hill (slope <= 2.0)")
@@ -4585,7 +4585,7 @@ func TestTerrainClimbPhysics(t *testing.T) {
 		MoveTarget:      250.0,
 		SpeedMultiplier: 1.0,
 	}
-	updateTankMovements(0.5, false)
+	_, _ = updateTankMovements(0.5, false)
 	pCrater := gameState.Players["CraterClimber"]
 	if pCrater.Moving {
 		t.Errorf("expected tank to be blocked at steep crater rim (slope 10.0 > 4.0)")
@@ -4596,4 +4596,51 @@ func TestTerrainClimbPhysics(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
+func TestFallingPlayerExtendsActionPhase(t *testing.T) {
+	resetGameStateForTest()
 
+	gameState.mu.Lock()
+	gameState.Phase = phaseAction
+	gameState.Projectiles = nil
+	gameState.Explosions = nil
+	gameState.Terrain = make([]float64, defaultTerrainWidth)
+	for i := range gameState.Terrain {
+		gameState.Terrain[i] = 500.0
+	}
+
+	// Player is 100 units above the ground (floorY = 500)
+	gameState.Players["FallingTank"] = &Player{
+		Name:   "FallingTank",
+		Joined: true,
+		IsDead: false,
+		X:      300.0,
+		Y:      400.0,
+	}
+	gameState.mu.Unlock()
+
+	// 1. First step: player falls from 400 to 405 (dtScale = 1.0, speed = 5.0).
+	// Since 405 < 500, tank is still falling, phaseAction should NOT finish.
+	gameState.mu.Lock()
+	finished := updatePhysicsStep(1.0)
+	p := gameState.Players["FallingTank"]
+	if finished {
+		t.Errorf("expected updatePhysicsStep to return false while tank is falling")
+	}
+	if p.Y != 405.0 {
+		t.Errorf("expected tank Y to be 405.0, got %f", p.Y)
+	}
+	gameState.mu.Unlock()
+
+	// 2. Advance player to just 2 units above the ground
+	gameState.mu.Lock()
+	p.Y = 498.0
+	// Stepping 1.0 will move player by 5.0 -> would overshoot to 503, but snaps to 500.0
+	finished = updatePhysicsStep(1.0)
+	if !finished {
+		t.Errorf("expected updatePhysicsStep to return true once tank lands on terrain")
+	}
+	if p.Y != 500.0 {
+		t.Errorf("expected tank Y to snap to 500.0, got %f", p.Y)
+	}
+	gameState.mu.Unlock()
+}
