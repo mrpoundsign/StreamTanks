@@ -56,7 +56,7 @@
 
         <!-- Main Dashboard Content Grid -->
         <main class="admin-grid">
-            <!-- Left Column: Settings, Configuration & C&C Relay -->
+            <!-- Left Column: Settings, Configuration & Twitch Extension -->
             <div class="admin-col left-col">
                 <section class="card config-card">
                     <div class="card-header">
@@ -229,13 +229,13 @@
                     </div>
                 </section>
 
-                <!-- C&C Relay & Extension Card -->
+                <!-- Twitch Extension Card -->
                 <section class="card cc-card">
                     <div class="card-header">
                         <div class="card-title">
-                            <span class="card-icon">&#128225;</span> Twitch Extension & C&C Relay
+                            <span class="card-icon">&#128225;</span> Twitch Extension Integration
                         </div>
-                        <span id="cc-status-badge" class="card-badge cc-badge disconnected">DISCONNECTED</span>
+                        <span id="cc-status-badge" class="card-badge cc-badge disconnected">DISABLED</span>
                     </div>
                     <div class="card-body">
                         <!-- In-Chat Claim Alert Banner (dynamic) -->
@@ -255,26 +255,16 @@
                             </div>
                         </div>
 
-                        <div class="form-grid">
-                            <div class="form-group span-2">
-                                <label for="cfg-cc-url">C&C Server WebSocket URL</label>
-                                <div class="input-with-action">
-                                    <input type="text" id="cfg-cc-url" placeholder="wss://st-cc.poundsigndesign.com" />
-                                    <button id="btn-apply-cc-url" class="btn btn-small">Set</button>
-                                </div>
-                            </div>
-
-                            <div class="form-group span-2 toggle-row">
-                                <button id="btn-toggle-cc" class="btn btn-secondary">
-                                    C&C Relay: <span id="cc-status-text">Disabled</span>
-                                </button>
-                                <button id="btn-reconnect-cc" class="btn btn-secondary">
-                                    Reconnect
-                                </button>
-                                <button id="btn-reset-cc-key" class="btn btn-danger" title="Clear saved token and request a new authorization code in chat">
-                                    Reset Key
-                                </button>
-                            </div>
+                        <div class="toggle-row">
+                            <button id="btn-toggle-cc" class="btn btn-secondary">
+                                Twitch Extension: <span id="cc-status-text">Disabled</span>
+                            </button>
+                            <button id="btn-reconnect-cc" class="btn btn-secondary">
+                                Reconnect
+                            </button>
+                            <button id="btn-reset-cc-key" class="btn btn-danger" title="Clear saved token and request a new authorization code in chat">
+                                Reset Key
+                            </button>
                         </div>
                     </div>
                 </section>

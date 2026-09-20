@@ -223,7 +223,7 @@ func loadSettings() {
 		}
 	}
 	if gameState.CCServerURL == "" {
-		gameState.CCServerURL = "wss://st-cc.poundsigndesign.com"
+		gameState.CCServerURL = defaultCCServerURL
 	}
 	if gameState.CCStatus == "" {
 		gameState.CCStatus = "disconnected"

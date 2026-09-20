@@ -64,13 +64,11 @@
     const cfgProtractorY = document.getElementById('cfg-protractor-y');
     const protractorPosVal = document.getElementById('protractor-pos-val');
 
-    // C&C Relay Elements
+    // Twitch Extension Elements
     const ccStatusBadge = document.getElementById('cc-status-badge');
     const ccClaimBanner = document.getElementById('cc-claim-banner');
     const ccClaimCode = document.getElementById('cc-claim-code');
     const btnCopyClaim = document.getElementById('btn-copy-claim');
-    const cfgCcUrl = document.getElementById('cfg-cc-url');
-    const btnApplyCcUrl = document.getElementById('btn-apply-cc-url');
     const btnToggleCc = document.getElementById('btn-toggle-cc');
     const ccStatusText = document.getElementById('cc-status-text');
     const btnReconnectCc = document.getElementById('btn-reconnect-cc');
@@ -292,11 +290,10 @@
             if (protractorPosVal) protractorPosVal.innerText = `X: ${px}, Y: ${py}`;
         }
 
-        // C&C Relay UI Sync
+        // Twitch Extension Integration UI Sync
         const isCcEnabled = !!state.ccEnabled;
         const ccStatus = state.ccStatus || 'disconnected';
         const claimCode = state.claimCode || '';
-        const ccUrl = state.ccServerUrl || 'wss://st-cc.poundsigndesign.com';
 
         if (ccStatusText) {
             ccStatusText.innerText = isCcEnabled ? 'Enabled' : 'Disabled';
@@ -304,20 +301,22 @@
         if (btnToggleCc) {
             btnToggleCc.className = isCcEnabled ? 'btn btn-outline' : 'btn btn-secondary';
         }
-        if (cfgCcUrl && document.activeElement !== cfgCcUrl) {
-            cfgCcUrl.value = ccUrl;
-        }
 
         if (ccStatusBadge) {
-            ccStatusBadge.className = `card-badge cc-badge ${ccStatus}`;
-            if (ccStatus === 'connected') {
-                ccStatusBadge.innerText = 'CONNECTED';
-            } else if (ccStatus === 'connecting') {
-                ccStatusBadge.innerText = 'CONNECTING';
-            } else if (ccStatus === 'pending_claim') {
-                ccStatusBadge.innerText = 'PENDING CLAIM';
+            if (!isCcEnabled) {
+                ccStatusBadge.className = 'card-badge cc-badge disconnected';
+                ccStatusBadge.innerText = 'DISABLED';
             } else {
-                ccStatusBadge.innerText = 'DISCONNECTED';
+                ccStatusBadge.className = `card-badge cc-badge ${ccStatus}`;
+                if (ccStatus === 'connected') {
+                    ccStatusBadge.innerText = 'CONNECTED';
+                } else if (ccStatus === 'connecting') {
+                    ccStatusBadge.innerText = 'CONNECTING';
+                } else if (ccStatus === 'pending_claim') {
+                    ccStatusBadge.innerText = 'PENDING CLAIM';
+                } else {
+                    ccStatusBadge.innerText = 'DISCONNECTED';
+                }
             }
         }
 
@@ -748,7 +747,7 @@
         });
     }
 
-    // Event Listeners: C&C Relay
+    // Event Listeners: Twitch Extension
     if (btnToggleCc) {
         btnToggleCc.addEventListener('click', () => {
             const nextVal = stateRef?.ccEnabled ? 'off' : 'on';
@@ -764,17 +763,8 @@
 
     if (btnResetCcKey) {
         btnResetCcKey.addEventListener('click', () => {
-            if (confirm('Reset C&C authentication key? This will revoke the existing token and require a new %claim code in Twitch chat.')) {
+            if (confirm('Reset Twitch Extension authorization key? This will revoke the existing token and require a new %claim code in Twitch chat.')) {
                 sendCommand('cc reset');
-            }
-        });
-    }
-
-    if (btnApplyCcUrl && cfgCcUrl) {
-        btnApplyCcUrl.addEventListener('click', () => {
-            const url = cfgCcUrl.value.trim();
-            if (url) {
-                sendCommand(`cc url ${url}`);
             }
         });
     }

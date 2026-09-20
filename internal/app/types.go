@@ -34,8 +34,9 @@ const (
 )
 
 const (
-	defaultTerrainColor = "#ff003c"
-	defaultTankColor    = "#ff003c"
+	defaultTerrainColor  = "#ff003c"
+	defaultTankColor     = "#ff003c"
+	defaultCCServerURL   = "wss://st-cc.poundsigndesign.com"
 )
 
 // Player models an individual artillery tank in the game

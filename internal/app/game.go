@@ -32,6 +32,7 @@ var gameState = GameState{
 	BotList:       defaultBotList,
 	ProtractorX:   250,
 	ProtractorY:   270,
+	CCServerURL:   defaultCCServerURL,
 }
 
 func hasPermission(user *twitch.User, requiredRole string) bool {

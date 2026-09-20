@@ -152,7 +152,7 @@ func StartCCClientManager(channel string) {
 	}
 
 	if baseURL == "" {
-		baseURL = "wss://st-cc.poundsigndesign.com"
+		baseURL = defaultCCServerURL
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
