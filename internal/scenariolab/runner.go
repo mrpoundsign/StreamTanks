@@ -282,6 +282,11 @@ func SaveScenario(dir string, s *Scenario, diff *DiffReport) (string, error) {
 func LoadScenario(filePath string) (*Scenario, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
+		for _, b := range getBuiltInScenarios() {
+			if b.ID == filePath {
+				return b, nil
+			}
+		}
 		return nil, err
 	}
 

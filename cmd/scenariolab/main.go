@@ -15,11 +15,14 @@ import (
 )
 
 var (
-	addrFlag   = flag.String("addr", ":8105", "HTTP listen address for visual Scenario Lab UI")
-	fuzzFlag   = flag.Int("fuzz", 0, "Run N randomized scenarios in terminal differential fuzzing mode (0 to run web server)")
-	outFlag    = flag.String("out", "scenarios", "Directory to save mismatch scenario JSON files")
-	replayFlag = flag.String("replay", "", "Path to a scenario JSON file to run and inspect in terminal")
-	dirFlag    = flag.String("dir", "./lab-web/public", "Directory containing lab frontend assets")
+	addrFlag      = flag.String("addr", ":8105", "HTTP listen address for visual Scenario Lab UI")
+	fuzzFlag      = flag.Int("fuzz", 0, "Run N randomized scenarios in terminal differential fuzzing mode (0 to run web server)")
+	batchFlag     = flag.Int("batch", 500, "Batch size of scenarios per headless simulation chunk")
+	outFlag       = flag.String("out", "scenarios", "Directory to save mismatch scenario JSON files")
+	replayFlag    = flag.String("replay", "", "Path to a scenario JSON file to run and inspect in terminal")
+	runsFlag      = flag.Int("runs", 100, "Number of replay simulation runs to detect flakiness / measure failure rate")
+	untilFailFlag = flag.Bool("until-fail", false, "Run replay iterations until a failure/divergence is detected")
+	dirFlag       = flag.String("dir", "./lab-web/public", "Directory containing lab frontend assets")
 )
 
 func main() {
@@ -47,35 +50,133 @@ func runReplayCLI(filePath string) {
 		log.Fatalf("Failed to load scenario %q: %v", filePath, err)
 	}
 
-	fmt.Printf("\n>>> Running Replay for Scenario: %s (ID: %s)\n", sc.Name, sc.ID)
-	serverRes := scenariolab.RunScenarioSimulation(sc, 1.0)
-	fmt.Printf("Server Result: %d steps, %d impacts, %d kills, Winner: %s\n",
-		serverRes.TotalSteps, len(serverRes.Impacts), len(serverRes.Kills), serverRes.Winner)
-	for _, k := range serverRes.Kills {
-		fmt.Printf("  - Kill: %s destroyed %s at (%.1f, %.1f) via %s\n", k.Killer, k.Victim, k.X, k.Y, k.Reason)
-	}
+	_ = ensureSimulationBundle()
 
-	// Run Overlay Simulation
+	// Run Overlay Simulation (Headless Node) to get the client reference
 	clientResults, err := runOverlaySimHeadless([]*scenariolab.Scenario{sc})
 	if err != nil {
-		log.Printf("Warning: Could not run overlay simulation: %v", err)
-		return
+		log.Fatalf("Error running overlay simulation: %v", err)
 	}
-	if len(clientResults) > 0 {
-		diff := scenariolab.CompareSimulationResults(serverRes, &clientResults[0])
-		fmt.Printf("\n>>> Comparison Summary: %s\n", diff.Summary)
+	if len(clientResults) == 0 {
+		log.Fatalf("Overlay simulation returned 0 results")
+	}
+	clientRes := &clientResults[0]
+
+	targetRuns := *runsFlag
+	if targetRuns <= 0 {
+		targetRuns = 100
+	}
+
+	fmt.Printf("\n======================================================================\n")
+	fmt.Printf(" STREAMTANKS SCENARIO REPLAY & DETERMINISM AUDIT\n")
+	fmt.Printf(" File:      %s\n", filePath)
+	fmt.Printf(" Scenario:  %s (ID: %s)\n", sc.Name, sc.ID)
+	if *untilFailFlag {
+		fmt.Printf(" Mode:      Scan until failure (then sample %d runs)\n", targetRuns)
+	} else {
+		fmt.Printf(" Mode:      Audit across %d iterations\n", targetRuns)
+	}
+	fmt.Printf("======================================================================\n\n")
+
+	fmt.Printf("Client (Overlay): %d steps, %d impacts, %d kills, Winner: %s\n",
+		clientRes.TotalSteps, len(clientRes.Impacts), len(clientRes.Kills), clientRes.Winner)
+
+	var firstMismatch *scenariolab.DiffReport
+	var firstMismatchRun int
+	var baselineServerRes *scenariolab.SimulationResult
+
+	divergedRuns := 0
+	internalDivergedRuns := 0
+	totalRuns := 0
+
+	if *untilFailFlag {
+		fmt.Print("Scanning for divergence... ")
+		found := false
+		maxScan := 10000
+		for scanRun := 1; scanRun <= maxScan; scanRun++ {
+			sRes := scenariolab.RunScenarioSimulation(sc, 1.0)
+			if scanRun == 1 {
+				baselineServerRes = sRes
+			}
+			diff := scenariolab.CompareSimulationResults(sRes, clientRes)
+			internalDiff := scenariolab.CompareSimulationResults(sRes, baselineServerRes)
+
+			if diff.HasDiscrepancy || internalDiff.HasDiscrepancy {
+				found = true
+				firstMismatchRun = scanRun
+				if diff.HasDiscrepancy {
+					firstMismatch = diff
+				} else {
+					firstMismatch = internalDiff
+				}
+				fmt.Printf("FOUND on run #%d!\nSampling %d runs to calculate failure rate...\n\n", scanRun, targetRuns)
+				break
+			}
+		}
+		if !found {
+			fmt.Printf("No divergence detected after %d iterations.\n", maxScan)
+			fmt.Printf("\n>>> Replay Audit Summary: PERFECT MATCH: 100.0%% Deterministic (0/%d failures)\n", maxScan)
+			fmt.Printf("======================================================================\n")
+			return
+		}
+	}
+
+	for i := 1; i <= targetRuns; i++ {
+		totalRuns++
+		sRes := scenariolab.RunScenarioSimulation(sc, 1.0)
+		if i == 1 && baselineServerRes == nil {
+			baselineServerRes = sRes
+			fmt.Printf("Server (Run #1):   %d steps, %d impacts, %d kills, Winner: %s\n",
+				sRes.TotalSteps, len(sRes.Impacts), len(sRes.Kills), sRes.Winner)
+		}
+
+		diff := scenariolab.CompareSimulationResults(sRes, clientRes)
+		internalDiff := scenariolab.CompareSimulationResults(sRes, baselineServerRes)
+
 		if diff.HasDiscrepancy {
-			for _, m := range diff.KillMismatches {
-				fmt.Printf("  [MISMATCH] %s\n", m)
+			divergedRuns++
+			if firstMismatch == nil {
+				firstMismatch = diff
+				firstMismatchRun = i
 			}
-			if diff.TerrainDiffCount > 0 {
-				fmt.Printf("  [TERRAIN DIFF] %d columns differed (max: %.1fpx)\n", diff.TerrainDiffCount, diff.MaxTerrainDiff)
-			}
-			if diff.MaxPositionDiff > 1.0 {
-				fmt.Printf("  [POSITION DIFF] Max tank position delta: %.1fpx\n", diff.MaxPositionDiff)
+		}
+		if internalDiff.HasDiscrepancy {
+			internalDivergedRuns++
+			if firstMismatch == nil {
+				firstMismatch = internalDiff
+				firstMismatchRun = i
 			}
 		}
 	}
+
+	failureRate := float64(divergedRuns) / float64(totalRuns) * 100.0
+	internalRate := float64(internalDivergedRuns) / float64(totalRuns) * 100.0
+
+	fmt.Printf("\n>>> Replay Audit Summary (%d runs):\n", totalRuns)
+	if divergedRuns > 0 || internalDivergedRuns > 0 {
+		fmt.Printf("  [NON-DETERMINISM / FLAKINESS DETECTED]\n")
+		fmt.Printf("  - Parity Failure Rate:      %.1f%% (%d/%d runs diverged from overlay)\n", failureRate, divergedRuns, totalRuns)
+		fmt.Printf("  - Internal Non-Determinism: %.1f%% (%d/%d runs diverged from Run #1)\n", internalRate, internalDivergedRuns, totalRuns)
+		if firstMismatch != nil {
+			fmt.Printf("\n>>> First Divergence Details (Observed on Run #%d):\n", firstMismatchRun)
+			fmt.Printf("  Summary: %s\n", firstMismatch.Summary)
+			for _, m := range firstMismatch.KillMismatches {
+				fmt.Printf("  [MISMATCH] %s\n", m)
+			}
+			if firstMismatch.TerrainDiffCount > 0 {
+				fmt.Printf("  [TERRAIN DIFF] %d columns differed (max: %.1fpx)\n", firstMismatch.TerrainDiffCount, firstMismatch.MaxTerrainDiff)
+			}
+			if firstMismatch.MaxPositionDiff > 1.0 {
+				fmt.Printf("  [POSITION DIFF] Max tank position delta: %.1fpx\n", firstMismatch.MaxPositionDiff)
+			}
+		}
+	} else {
+		fmt.Printf("  [PERFECT MATCH: 100.0%% DETERMINISTIC]\n")
+		fmt.Printf("  - Parity Failure Rate:      0.0%% (0/%d runs diverged from overlay)\n", totalRuns)
+		fmt.Printf("  - Internal Non-Determinism: 0.0%% (0/%d runs diverged from Run #1)\n", totalRuns)
+		fmt.Printf("  - Status: All %d runs produced identical bit-for-bit results matching overlay.\n", totalRuns)
+	}
+	fmt.Printf("======================================================================\n")
 }
 
 func runFuzzCLI(count int, outDir string) {
@@ -88,7 +189,13 @@ func runFuzzCLI(count int, outDir string) {
 
 	_ = ensureSimulationBundle()
 
-	batchSize := 50
+	batchSize := *batchFlag
+	if batchSize <= 0 {
+		batchSize = 500
+	}
+	if batchSize > count {
+		batchSize = count
+	}
 	totalBatches := (count + batchSize - 1) / batchSize
 
 	passed := 0
@@ -121,9 +228,11 @@ func runFuzzCLI(count int, outDir string) {
 			if diff.HasDiscrepancy {
 				discrepancies++
 				savedPath, saveErr := scenariolab.SaveScenario(outDir, scenarios[i], diff)
-				if saveErr == nil {
-					fmt.Printf("[MISMATCH #%d] Scenario %s -> %s (Saved: %s)\n",
+				if saveErr == nil && discrepancies <= 20 {
+					fmt.Printf("\n[MISMATCH #%d] Scenario %s -> %s (Saved: %s)\n",
 						discrepancies, scenarios[i].ID, diff.Summary, filepath.Base(savedPath))
+				} else if discrepancies == 21 {
+					fmt.Printf("\n[MISMATCH] Additional mismatches will be saved to %s without flooding terminal...\n", outDir)
 				}
 			} else {
 				passed++
@@ -148,7 +257,10 @@ func runFuzzCLI(count int, outDir string) {
 
 func ensureSimulationBundle() error {
 	distFile := "./web/dist/simulation.mjs"
-	if _, err := os.Stat(distFile); err == nil {
+	srcFile := "./web/src/simulation.ts"
+	distStat, distErr := os.Stat(distFile)
+	srcStat, srcErr := os.Stat(srcFile)
+	if distErr == nil && srcErr == nil && distStat.ModTime().After(srcStat.ModTime()) {
 		return nil
 	}
 	_ = os.MkdirAll("./web/dist", 0o755)
