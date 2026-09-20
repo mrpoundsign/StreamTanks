@@ -1865,3 +1865,203 @@ a:hover {
   .command-toolbar { flex-direction: column; align-items: stretch; }
   .search-box input { width: 100%; }
 }
+
+/* ==========================================================================
+   Audience Portal Navigation Cards (Hub) & Subpages
+   ========================================================================== */
+.portal-section {
+  padding: 40px 0 60px;
+}
+
+.portal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.portal-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  transition: all var(--transition-smooth);
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.portal-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: transparent;
+  transition: background var(--transition-smooth);
+}
+
+.portal-card.portal-streamer::before {
+  background: linear-gradient(90deg, var(--color-magenta), var(--color-purple));
+}
+
+.portal-card.portal-player::before {
+  background: linear-gradient(90deg, var(--color-cyan), var(--color-lime));
+}
+
+.portal-card:hover {
+  transform: translateY(-6px);
+  background: var(--bg-card-hover);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.portal-card.portal-streamer:hover {
+  border-color: rgba(255, 0, 85, 0.5);
+  box-shadow: 0 16px 40px rgba(255, 0, 85, 0.2);
+}
+
+.portal-card.portal-player:hover {
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: 0 16px 40px rgba(0, 240, 255, 0.2);
+}
+
+.portal-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.portal-icon {
+  font-size: 2.8rem;
+  line-height: 1;
+}
+
+.portal-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.portal-desc {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  flex-grow: 1;
+}
+
+.portal-features-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portal-features-list li {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portal-features-list li span.bullet {
+  color: var(--color-cyan);
+  font-weight: bold;
+}
+
+.portal-card.portal-streamer .portal-features-list li span.bullet {
+  color: var(--color-magenta);
+}
+
+.portal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 1rem;
+  transition: all var(--transition-fast);
+}
+
+.portal-card.portal-streamer .portal-btn {
+  background: linear-gradient(135deg, var(--color-magenta), var(--color-purple));
+  color: #fff;
+}
+
+.portal-card.portal-player .portal-btn {
+  background: linear-gradient(135deg, var(--color-cyan), #0077ff);
+  color: #07080c;
+}
+
+.portal-card:hover .portal-btn {
+  filter: brightness(1.15);
+}
+
+.page-hero {
+  padding: 60px 0 40px;
+  text-align: center;
+  position: relative;
+}
+
+.page-hero .hero-eyebrow {
+  justify-content: center;
+}
+
+.subpage-toc {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.toc-link {
+  background: rgba(15, 19, 30, 0.85);
+  border: 1px solid var(--border-glass);
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.toc-link:hover {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--color-cyan);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.nav-link.nav-portal-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-glass);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+
+.nav-link.nav-portal-pill:hover,
+.nav-link.nav-portal-pill.active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--color-cyan);
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .portal-grid {
+    grid-template-columns: 1fr;
+  }
+}

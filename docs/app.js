@@ -170,16 +170,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 6. Active Nav Link Tracking on Scroll
-  const navLinks = document.querySelectorAll('.nav-link');
+  // 6. Active Nav Link Tracking on Scroll (for in-page anchor hash links)
+  const navHashLinks = document.querySelectorAll('.nav-link[href^="#"], .subpage-toc a[href^="#"]');
   const sections = document.querySelectorAll('section[id]');
 
-  if (window.IntersectionObserver && sections.length > 0) {
+  if (window.IntersectionObserver && sections.length > 0 && navHashLinks.length > 0) {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           const id = entry.target.getAttribute('id');
-          navLinks.forEach(link => {
+          navHashLinks.forEach(link => {
             if (link.getAttribute('href') === `#${id}`) {
               link.classList.add('active');
             } else {

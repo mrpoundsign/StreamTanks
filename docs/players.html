@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player &amp; Viewer Guide — StreamTanks</title>
+  <meta name="description" content="Complete guide for Twitch chat viewers playing StreamTanks. Learn chat commands, aiming angles and power, scoring and 5% bounty stealing, custom emote tanks, and the Twitch video overlay extension.">
+  <meta name="keywords" content="StreamTanks player guide, Twitch chat commands, artillery game aiming guide, Twitch chat game, custom emote tanks, stream leaderboard">
+
+  <!-- Open Graph / Social Meta -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Player &amp; Viewer Guide — StreamTanks">
+  <meta property="og:description" content="Join the battlefield directly from Twitch chat or video overlay. Aim angles, blast destructible craters, and steal leaderboard bounties!">
+  <meta property="og:image" content="./screenshots/rockets_firing_pure_overlay.png">
+  <meta property="og:url" content="https://mrpoundsign.github.io/StreamTanks/players.html">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow-orb glow-orb-1" aria-hidden="true"></div>
+  <div class="glow-orb glow-orb-2" aria-hidden="true"></div>
+  <div class="glow-orb glow-orb-3" aria-hidden="true"></div>
+
+  <!-- Navigation Header -->
+  <header class="site-header" id="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="brand-logo" aria-label="StreamTanks Home">
+        <img src="favicon.svg" alt="StreamTanks Rocket Logo" class="brand-rocket-icon" width="32" height="32">
+        <span class="logo-text">Stream<span class="neon-highlight">Tanks</span></span>
+        <span class="badge badge-version">v0.2.2</span>
+      </a>
+
+      <nav class="nav-menu" id="navMenu">
+        <a href="index.html" class="nav-link">Overview</a>
+        <a href="streamers.html" class="nav-link nav-portal-pill">Streamer Guide</a>
+        <a href="players.html" class="nav-link nav-portal-pill active">Player Guide</a>
+        <a href="#how-to-play" class="nav-link">How to Play</a>
+        <a href="#aiming" class="nav-link">Aiming &amp; Physics</a>
+        <a href="#commands" class="nav-link">Commands</a>
+        <a href="#scoring" class="nav-link">Scoring</a>
+        <a href="#extension" class="nav-link">Extension</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="https://github.com/mrpoundsign/StreamTanks" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm github-btn">
+          <svg class="github-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page Hero Header -->
+  <section class="page-hero">
+    <div class="container">
+      <div class="hero-eyebrow">
+        <span class="pulse-dot"></span>
+        <span>PLAYER &amp; VIEWER FIELD MANUAL</span>
+      </div>
+      <h1 class="hero-title">
+        Command Your Tank from <br><span class="gradient-text">Twitch Chat &amp; Extension</span>
+      </h1>
+      <p class="hero-subtitle">
+        Zero install, zero friction. Deploy custom emote tanks, lock in trajectory angles, blast permanent craters into the terrain, steal leaderboard bounties from high-ranking rivals, and become the stream champion!
+      </p>
+
+      <div class="subpage-toc">
+        <a href="#how-to-play" class="toc-link">🎮 1. How to Play</a>
+        <a href="#aiming" class="toc-link">🎯 2. Aiming &amp; Physics</a>
+        <a href="#commands" class="toc-link">💬 3. Chat Commands</a>
+        <a href="#scoring" class="toc-link">🏆 4. Scoring &amp; Bounties</a>
+        <a href="#shields" class="toc-link">🛡️ 5. Tactical Shield</a>
+        <a href="#emotes" class="toc-link">🎨 6. Custom Emote Tanks</a>
+        <a href="#extension" class="toc-link">📱 7. Twitch Extension</a>
+        <a href="#faq" class="toc-link">💡 8. Pro-Tips &amp; FAQ</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- How to Play in 3 Steps -->
+  <section class="section setup-section" id="how-to-play">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">GAME LOOP BASICS</span>
+        <h2 class="section-title">How to Play in <span class="gradient-text">3 Simple Steps</span></h2>
+        <p class="section-desc">You don't need to download or install any external software. As long as you're in the streamer's Twitch chat, you can jump into the battle immediately!</p>
+      </div>
+
+      <div class="setup-steps-wrapper">
+        <!-- Step 1: Join -->
+        <div class="setup-step">
+          <div class="step-badge">1</div>
+          <div class="step-card">
+            <h3 class="step-title">Join the Battlefield</h3>
+            <p class="step-description">
+              When the stream overlay shows <strong>WAITING FOR PLAYERS</strong>, type <code class="code-inline">%join</code> in Twitch chat. You can also specify any channel emote to crown your tank!
+            </p>
+            <div class="code-snippet-box">
+              <div class="snippet-header">
+                <span class="snippet-lang">Twitch Chat</span>
+                <button class="copy-btn" data-copy="%join Kappa">Copy</button>
+              </div>
+              <pre><code># Join with default icon:
+%join
+
+# Join with a custom channel emote:
+%join Kappa</code></pre>
+            </div>
+            <p class="step-description text-muted" style="margin-top: 10px;">
+              Your tank will parachute onto the battlefield crowned with your chosen emote and glowing neon treads.
+            </p>
+          </div>
+        </div>
+
+        <!-- Step 2: Aim & Position -->
+        <div class="setup-step">
+          <div class="step-badge">2</div>
+          <div class="step-card">
+            <h3 class="step-title">Aim &amp; Position (Input Phase)</h3>
+            <p class="step-description">
+              Once the match begins, a countdown timer starts (default: 20s). This is your window to dial in your angle and power, or move to high ground:
+            </p>
+            <ul class="sub-list" style="margin-bottom: 14px;">
+              <li><strong>Aim &amp; Fire:</strong> Type <code class="code-inline">%fire &lt;angle&gt; &lt;power&gt;</code> (e.g. <code class="code-inline">%fire 45 60</code>). A visual aiming protractor appears above your tank on stream showing your aim!</li>
+              <li><strong>Move Left or Right:</strong> Type <code class="code-inline">%left</code> or <code class="code-inline">%right</code> to maneuver across hills and get out of dangerous craters.</li>
+              <li><strong>Emergency Shield:</strong> Type <code class="code-inline">%shield</code> to activate your one-time protective energy barrier.</li>
+            </ul>
+            <div class="code-snippet-box">
+              <div class="snippet-header">
+                <span class="snippet-lang">Twitch Chat</span>
+                <button class="copy-btn" data-copy="%fire 55 70">Copy</button>
+              </div>
+              <pre><code>%fire 55 70
+%left</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Action & Victory -->
+        <div class="setup-step">
+          <div class="step-badge">3</div>
+          <div class="step-card">
+            <h3 class="step-title">Simultaneous Barrage &amp; Victory!</h3>
+            <p class="step-description">
+              When the timer hits zero, the <strong>ACTION PHASE</strong> begins! All artillery shells fire simultaneously into the sky:
+            </p>
+            <ul class="sub-list" style="margin-bottom: 14px;">
+              <li>Shells arc with real ballistic gravity and explode on impact, carving spherical craters into the neon hills.</li>
+              <li>Tanks hit by explosions or falling into deep crater chasms are eliminated.</li>
+              <li>The last surviving commander wins <strong>+5 bonus victory points</strong> and is celebrated on the persistent stream leaderboard with an epic emote shower!</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Aiming Mechanics & Physics -->
+  <section class="section" id="aiming">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">BALLISTICS &amp; DEFORMATION</span>
+        <h2 class="section-title">Aiming Protractors &amp; <span class="gradient-text">Physics Engine</span></h2>
+        <p class="section-desc">Mastering angles and projectile physics is the key to dominating the stream leaderboard.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📐</div>
+          <h3 class="feature-title">The 0° to 180° Protractor</h3>
+          <p class="feature-text">
+            Angles are measured from right to left:
+            <br>• <strong>0°:</strong> Flat shot aimed straight to the right.
+            <br>• <strong>45°:</strong> Classic 45-degree arcing trajectory to the right.
+            <br>• <strong>90°:</strong> Straight up into the sky (watch out for wind &amp; falling shells!).
+            <br>• <strong>135°:</strong> Classic 45-degree arcing trajectory to the left.
+            <br>• <strong>180°:</strong> Flat shot aimed straight to the left.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎚️</div>
+          <h3 class="feature-title">Shot Power (1% to 100%)</h3>
+          <p class="feature-text">
+            Power controls muzzle velocity and trajectory reach:
+            <br>• <strong>Low Power (10–30%):</strong> Short-range lobbing, ideal for nearby tanks tucked in adjacent craters.
+            <br>• <strong>Mid Power (40–70%):</strong> Standard cross-map artillery strikes.
+            <br>• <strong>High Power (80–100%):</strong> Extreme long-distance bombardments and high-altitude sky drops.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💥</div>
+          <h3 class="feature-title">Destructible Craters &amp; Gravity</h3>
+          <p class="feature-text">
+            Missed shells aren't wasted—they permanently carve out large craters in the neon ground. Tanks caught on steep crater edges slide toward the bottom, reshaping the entire battlefield round after round!
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🧱</div>
+          <h3 class="feature-title">Bouncy Screen Walls</h3>
+          <p class="feature-text">
+            If the streamer enables <code>%bouncywalls</code>, the left and right screen borders act as kinetic bounce pads. Shells reflect with a +10% velocity boost, allowing incredible bank shots off the screen edge!
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🧗</div>
+          <h3 class="feature-title">Terrain Climbing &amp; Cliffs</h3>
+          <p class="feature-text">
+            By default, tanks cannot scale steep crater cliffs. Use <code>%left</code> and <code>%right</code> to climb gentle slopes. If the streamer enables <code>%terrainclimb on</code>, tanks can scale steep crater walls.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3 class="feature-title">Memory Aiming</h3>
+          <p class="feature-text">
+            If you like your current aim, typing just <code class="code-inline">%fire</code> without numbers will repeat your previous angle and power. Great for rapid adjustments after seeing where your last shot landed!
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Viewer Chat Commands Codex -->
+  <section class="section commands-section" id="commands">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">VIEWER COMMAND CODEX</span>
+        <h2 class="section-title">Twitch Chat <span class="gradient-text">Command Reference</span></h2>
+        <p class="section-desc">Type these commands directly in the streamer's Twitch chat. Click any copy button to copy straight to your clipboard!</p>
+      </div>
+
+      <!-- Controls & Filter Toolbar -->
+      <div class="command-toolbar">
+        <div class="filter-tabs" id="commandFilters">
+          <button class="filter-btn active" data-filter="all">All Commands</button>
+          <button class="filter-btn" data-filter="combat">🎯 Aim &amp; Combat</button>
+          <button class="filter-btn" data-filter="move">🏃 Movement &amp; Joining</button>
+          <button class="filter-btn" data-filter="custom">🎨 Customization</button>
+        </div>
+        <div class="search-box">
+          <input type="text" id="commandSearch" placeholder="Search viewer commands (e.g. fire, icon, join)..." aria-label="Search chat commands">
+        </div>
+      </div>
+
+      <!-- Command Table -->
+      <div class="table-container">
+        <table class="command-table" id="commandTable">
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Arguments</th>
+              <th>Description</th>
+              <th>Example</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-category="move">
+              <td><code class="cmd-name">%join</code></td>
+              <td><span class="arg-pill">[emote]</span></td>
+              <td>Joins the active battlefield during the waiting phase. Optionally provide any Twitch channel emote name.</td>
+              <td><code>%join PogChamp</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%join PogChamp">Copy</button></td>
+            </tr>
+            <tr data-category="combat">
+              <td><code class="cmd-name">%fire</code></td>
+              <td><span class="arg-pill">&lt;angle&gt; &lt;power&gt;</span></td>
+              <td>Locks in cannon angle (0° to 180°) and shot power (1 to 100). Omitting values uses last known aim.</td>
+              <td><code>%fire 45 60</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%fire 45 60">Copy</button></td>
+            </tr>
+            <tr data-category="move">
+              <td><code class="cmd-name">%left</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td>Maneuvers your tank to the left across the neon terrain hills.</td>
+              <td><code>%left</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%left">Copy</button></td>
+            </tr>
+            <tr data-category="move">
+              <td><code class="cmd-name">%right</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td>Maneuvers your tank to the right across the neon terrain hills.</td>
+              <td><code>%right</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%right">Copy</button></td>
+            </tr>
+            <tr data-category="custom">
+              <td><code class="cmd-name">%icon</code></td>
+              <td><span class="arg-pill">&lt;emote&gt;</span></td>
+              <td>Changes your tank's emote icon. Preferences save permanently in the stream database. (Aliases: <code>%emote</code>, <code>%skin</code>).</td>
+              <td><code>%icon Kappa</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%icon Kappa">Copy</button></td>
+            </tr>
+            <tr data-category="combat">
+              <td><code class="cmd-name">%shield</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td>Activates your tactical one-time energy shield for the current match to absorb crater blasts and direct hits.</td>
+              <td><code>%shield</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%shield">Copy</button></td>
+            </tr>
+            <tr data-category="move">
+              <td><code class="cmd-name">%leave</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td>Leaves the active match or waiting lobby immediately, despawning your tank.</td>
+              <td><code>%leave</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%leave">Copy</button></td>
+            </tr>
+            <tr data-category="combat">
+              <td><code class="cmd-name">%startgame</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td>Starts an artillery match from the IDLE waiting phase (available to all if streamer sets <code>%perm start all</code>).</td>
+              <td><code>%startgame</code></td>
+              <td><button class="btn-copy-cmd" data-cmd="%startgame">Copy</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Battlefield Scoring & Bounties Section -->
+  <section class="section scoring-section" id="scoring">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">LEADERBOARD MECHANICS</span>
+        <h2 class="section-title">Battlefield <span class="gradient-text">Scoring &amp; 5% Bounties</span></h2>
+        <p class="section-desc">
+          Every artillery match is a high-stakes battle for the stream leaderboard. Earn points for eliminations, claim huge bounties from high-ranking rivals, and survive for the victory bonus!
+        </p>
+      </div>
+
+      <div class="scoring-grid">
+        <!-- Card 1: Match Victory -->
+        <div class="scoring-card highlight-cyan">
+          <div class="scoring-badge-row">
+            <span class="scoring-points-badge badge-cyan">+5 PTS</span>
+            <span class="scoring-category">ROUND OUTCOME</span>
+          </div>
+          <div class="scoring-icon">🏆</div>
+          <h3 class="scoring-title">Match Victory</h3>
+          <p class="scoring-desc">
+            The last surviving commander standing claims the ultimate round victory! Victory bonus points are awarded immediately and permanently saved to the leaderboard.
+          </p>
+          <div class="scoring-meta">
+            <div class="scoring-meta-item">
+              <span class="meta-label">Condition</span>
+              <span class="meta-val">Last human tank alive</span>
+            </div>
+            <div class="scoring-meta-item">
+              <span class="meta-label">AI Survivor</span>
+              <span class="meta-val text-muted">0 pts (AI wins round)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Player Kills & 5% Bounty -->
+        <div class="scoring-card highlight-magenta">
+          <div class="scoring-badge-row">
+            <span class="scoring-points-badge badge-magenta">1 PT + BOUNTY</span>
+            <span class="scoring-category">PLAYER COMBAT</span>
+          </div>
+          <div class="scoring-icon">🎯</div>
+          <h3 class="scoring-title">Direct Kills &amp; 5% Bounty</h3>
+          <p class="scoring-desc">
+            Destroying an opponent tank earns <strong>1 base point</strong> PLUS the victim's <strong>5% bounty penalty</strong>! Top leaderboard commanders carry huge targets on their backs.
+          </p>
+          <div class="scoring-formula-box">
+            <div class="formula-line">
+              <span class="formula-label">Victim Loss:</span>
+              <code>Victim Score / 20 (5% rounded down)</code>
+            </div>
+            <div class="formula-line">
+              <span class="formula-label">Killer Gain:</span>
+              <code>1 Base Point + Victim Bounty</code>
+            </div>
+            <div class="formula-example">
+              💡 <em>Example:</em> Destroying a rival with 100 points deducts 5 points from them and awards you <strong>6 points</strong> (1 base + 5 bounty)!
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: AI Bot Kills -->
+        <div class="scoring-card highlight-yellow">
+          <div class="scoring-badge-row">
+            <span class="scoring-points-badge badge-yellow">0–10 PTS</span>
+            <span class="scoring-category">TARGET PRACTICE</span>
+          </div>
+          <div class="scoring-icon">🤖</div>
+          <h3 class="scoring-title">AI Bot Kills</h3>
+          <p class="scoring-desc">
+            Destroying an automated AI bot awards the streamer-configured <code>%botpoints</code> value (default: <strong>1 point</strong>). Bots carry 0 score, so no bounty is awarded.
+          </p>
+          <div class="scoring-meta">
+            <div class="scoring-meta-item">
+              <span class="meta-label">Default Reward</span>
+              <span class="meta-val">1 Point / bot kill</span>
+            </div>
+            <div class="scoring-meta-item">
+              <span class="meta-label">Configurable</span>
+              <span class="meta-val"><code>%botpoints &lt;0-10&gt;</code></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 4: Environmental & Crater Sinking -->
+        <div class="scoring-card highlight-red">
+          <div class="scoring-badge-row">
+            <span class="scoring-points-badge badge-red">-5% PENALTY</span>
+            <span class="scoring-category">SURVIVAL HAZARD</span>
+          </div>
+          <div class="scoring-icon">🌋</div>
+          <h3 class="scoring-title">Crater Falls &amp; Abyss Sinking</h3>
+          <p class="scoring-desc">
+            Blast craters reshape the terrain dynamically. Falling off the screen edges or sinking into a crater abyss destroys your tank and triggers the <strong>5% point loss</strong> penalty!
+          </p>
+          <div class="scoring-meta">
+            <div class="scoring-meta-item">
+              <span class="meta-label">Point Penalty</span>
+              <span class="meta-val text-loss">-5% of total score</span>
+            </div>
+            <div class="scoring-meta-item">
+              <span class="meta-label">Bounty Award</span>
+              <span class="meta-val text-muted">Lost to the abyss</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tactical Shield & Emotes Section -->
+  <section class="section" id="shields">
+    <div class="container">
+      <div class="scoring-tactics-bar" style="margin-top: 0;">
+        <div class="tactics-item">
+          <span class="tactics-icon">🛡️</span>
+          <div>
+            <strong>Tactical Energy Shield (<code>%shield</code>)</strong>
+            <p>Every player gets one emergency energy shield per match. If you notice an enemy shell heading straight toward your position or the terrain crumbling beneath you, deploy your shield to absorb the direct impact and protect your leaderboard score!</p>
+          </div>
+        </div>
+        <div class="tactics-item" id="emotes">
+          <span class="tactics-icon">🎨</span>
+          <div>
+            <strong>Custom Emote Tank Avatars (<code>%icon &lt;emote&gt;</code>)</strong>
+            <p>Stand out from the crowd! Use any Twitch global emote (like <code>Kappa</code>, <code>PogChamp</code>, <code>LUL</code>) or channel subscriber emotes to crown your tank. Your selection is permanently remembered in SQLite for every future round.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Twitch Extension Spotlight Section -->
+  <section class="section extension-spotlight-section" id="extension">
+    <div class="container">
+      <div class="spotlight-card">
+        <div class="spotlight-badge">
+          <span class="badge badge-pulse">COMING SOON</span>
+          <span>OFFICIAL TWITCH EXTENSION</span>
+        </div>
+
+        <h2 class="spotlight-title">Aim and Fire Directly on the <span class="gradient-text">Twitch Video Player</span></h2>
+        <p class="spotlight-subtitle">
+          No need to type chat commands or calculate angles in your head. The upcoming StreamTanks Twitch Extension embeds directly over your video player on Desktop and Mobile, providing tactile aiming controls.
+        </p>
+
+        <!-- Extension Screenshots Showcase -->
+        <div class="ext-screenshots-showcase">
+          <div class="ext-shot-card gallery-item" data-full="./screenshots/rockets_firing_with_extension.png" data-title="Extension Battle View" data-subtitle="Interactive desktop video player overlay with live aiming protractor, power gauge, and shield controls during rocket artillery battle.">
+            <div class="ext-shot-header">
+              <span class="ext-badge">🖥️ Desktop Video Player Overlay</span>
+              <span class="zoom-hint">🔍 Click to enlarge</span>
+            </div>
+            <div class="ext-shot-img-container desktop-aspect">
+              <img src="./screenshots/rockets_firing_with_extension.png" alt="StreamTanks Twitch Extension Desktop Battle View" loading="lazy">
+            </div>
+            <div class="ext-shot-footer">
+              <h4>Desktop Video Overlay</h4>
+              <p>On-screen aiming protractor, tactile power gauge, and shield controls directly over the stream video player</p>
+            </div>
+          </div>
+
+          <div class="ext-shot-card gallery-item" data-full="./screenshots/extension_mobile_view.png" data-title="Mobile Extension View" data-subtitle="Dedicated portrait mobile interface with tactile touch dial and controls for Twitch mobile viewers.">
+            <div class="ext-shot-header">
+              <span class="ext-badge">📱 Twitch Mobile App View</span>
+              <span class="zoom-hint">🔍 Click to enlarge</span>
+            </div>
+            <div class="ext-shot-img-container mobile-aspect">
+              <img src="./screenshots/extension_mobile_view.png" alt="StreamTanks Twitch Extension Mobile View" loading="lazy">
+            </div>
+            <div class="ext-shot-footer">
+              <h4>Mobile App View</h4>
+              <p>Optimized touch dial and firing controls for viewers watching from iOS &amp; Android Twitch apps</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="spotlight-features-grid">
+          <div class="spotlight-feature">
+            <div class="spotlight-icon">📐</div>
+            <h4>Interactive Dial</h4>
+            <p>Drag the neon dial directly on screen to set your cannon angle with sub-degree precision from 0° to 180°.</p>
+          </div>
+
+          <div class="spotlight-feature">
+            <div class="spotlight-icon">🎚️</div>
+            <h4>Tactile Power Slider</h4>
+            <p>Smooth 1% to 100% power slider to fine-tune your shot distance before the input countdown expires.</p>
+          </div>
+
+          <div class="spotlight-feature">
+            <div class="spotlight-icon">🛡️</div>
+            <h4>One-Click Shield</h4>
+            <p>Tap the shield button right on screen to activate your energy barrier without typing in chat.</p>
+          </div>
+
+          <div class="spotlight-feature">
+            <div class="spotlight-icon">📱</div>
+            <h4>Mobile Touch D-Pad</h4>
+            <p>Tactile touch buttons to move left and right seamlessly while watching from your phone.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Player FAQ & Tips Section -->
+  <section class="section faq-section" id="faq">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">COMMANDER TACTICS</span>
+        <h2 class="section-title">Player FAQ &amp; <span class="gradient-text">Winning Tips</span></h2>
+      </div>
+
+      <div class="faq-grid">
+        <div class="faq-card">
+          <h3 class="faq-question">Do I need to install anything to play?</h3>
+          <p class="faq-answer">Never! StreamTanks is 100% chat-driven. All you need is your regular Twitch account and chat box. When the Twitch Extension is active, you can also aim directly on the video player.</p>
+        </div>
+
+        <div class="faq-card">
+          <h3 class="faq-question">How does the 5% bounty work?</h3>
+          <p class="faq-answer">Whenever you eliminate an opponent, you steal 5% of their total leaderboard score (rounded down: <code>score / 20</code>) in addition to 1 base point. Eliminating the #1 leaderboard leader can vault you straight into the top ranks!</p>
+        </div>
+
+        <div class="faq-card">
+          <h3 class="faq-question">What angle should I use to shoot far?</h3>
+          <p class="faq-answer">In basic physics, <strong>45°</strong> (for right-side targets) and <strong>135°</strong> (for left-side targets) provide maximum horizontal range for a given power. If high hills or crater walls block your direct line of sight, try <strong>60°–75°</strong> high-angle lobs!</p>
+        </div>
+
+        <div class="faq-card">
+          <h3 class="faq-question">Does my score reset when I leave the stream?</h3>
+          <p class="faq-answer">No. All leaderboard stats and win records are saved in the streamer's persistent database. Whenever you return to the stream, your score, wins, and custom emote crown are right where you left them.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightboxModal" aria-hidden="true" role="dialog">
+    <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+    <div class="lightbox-dialog">
+      <button class="lightbox-close" id="lightboxClose" aria-label="Close screenshot modal">✕</button>
+      <div class="lightbox-content">
+        <img id="lightboxImg" src="" alt="Enlarged screenshot preview">
+        <div class="lightbox-caption">
+          <h3 id="lightboxTitle"></h3>
+          <p id="lightboxSubtitle"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container footer-container">
+      <div class="footer-col footer-brand">
+        <a href="index.html" class="brand-logo">
+          <img src="favicon.svg" alt="StreamTanks Rocket Logo" class="brand-rocket-icon" width="32" height="32">
+          <span class="logo-text">Stream<span class="neon-highlight">Tanks</span></span>
+        </a>
+        <p class="footer-tagline">
+          The open-source Twitch chat artillery battlefield and OBS browser overlay.
+        </p>
+        <p class="footer-license">
+          Licensed under <a href="https://github.com/mrpoundsign/StreamTanks/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GNU AGPLv3</a>.
+        </p>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Documentation</h4>
+        <ul class="footer-links">
+          <li><a href="index.html">Overview &amp; Features</a></li>
+          <li><a href="streamers.html">Streamer Setup Guide</a></li>
+          <li><a href="players.html">Player &amp; Viewer Guide</a></li>
+          <li><a href="#how-to-play">How to Play</a></li>
+          <li><a href="#aiming">Aiming &amp; Physics</a></li>
+          <li><a href="#commands">Chat Commands</a></li>
+          <li><a href="#scoring">Scoring Rules</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Community &amp; Code</h4>
+        <ul class="footer-links">
+          <li><a href="https://github.com/mrpoundsign/StreamTanks" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
+          <li><a href="https://github.com/mrpoundsign/StreamTanks/releases" target="_blank" rel="noopener noreferrer">Releases &amp; Binaries</a></li>
+          <li><a href="https://github.com/mrpoundsign/StreamTanks/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a></li>
+          <li><a href="https://github.com/mrpoundsign/StreamTanks/blob/main/AGENTS.md" target="_blank" rel="noopener noreferrer">Architecture Docs</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="container footer-bottom-container">
+        <p>© 2026 mrpoundsign. Open source under GNU AGPLv3.</p>
+        <p>StreamTanks is not affiliated with or endorsed by Twitch or OBS Studio.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

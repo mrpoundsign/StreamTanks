@@ -39,7 +39,7 @@ Run StreamTanks (or double-click `StreamTanks.exe`):
 1. Open the **Commander Admin Console** at `http://localhost:8102/admin` in your browser.
 2. In the top header, click **Set** next to **Channel: None (Local)**.
 3. Enter your Twitch channel name (e.g. `mrpoundsign`) and click **Save**. You are given the `%claim <CODE>` command in an authorization banner to link your channel.
-4. Type or paste `%claim <CODE>` into your Twitch chat as the broadcaster to authorize. StreamTanks permanently saves your channel and host credentials in SQLite!
+4. Type or paste `%claim <CODE>` into your Twitch chat as the streamer to authorize. StreamTanks permanently saves your channel and host credentials in SQLite!
 
 ### 3. Add to OBS Studio
 1. In OBS Studio, add a new **Browser Source** to your scene.
@@ -64,7 +64,7 @@ Every match contributes to the persistent stream leaderboard stored in the embed
 - 🤖 **AI Bot Kills**: Awards **1 point** (customizable from 0 to 10 points via `%botpoints <N>`). Bots carry 0 score, so no bounty is transferred.
 - 🌋 **Crater Falls & Abyss Sinking**: Falling off the map or sinking into a deep crater destroys your tank and triggers the **5% point loss** penalty (bounty is lost to the abyss).
 - 🛡️ **Tactical Energy Shield (`%shield`)**: Deploy a one-time emergency shield per match to absorb direct hits and crater blasts, protecting your tank and leaderboard score.
-- 🛠️ **Moderation Commands**: Broadcasters can reset the entire leaderboard via `%clearleaderboard` or remove individual players via `%deleteplayer <user>`.
+- 🛠️ **Moderation Commands**: Streamers can reset the entire leaderboard via `%clearleaderboard` or remove individual players via `%deleteplayer <user>`.
 
 ---
 

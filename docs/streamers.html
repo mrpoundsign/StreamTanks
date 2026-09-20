@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Streamer Setup & Host Guide — StreamTanks</title>
+  <meta name="description" content="Complete setup guide for streamers hosting StreamTanks on Twitch. Learn how to install the single-binary Go server, configure OBS Studio browser sources, use the Commander Admin Console, and customize match settings.">
+  <meta name="keywords" content="StreamTanks streamer guide, Twitch streamer overlay setup, OBS browser source, Twitch chat artillery game, streamer admin console">
+
+  <!-- Open Graph / Social Meta -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Streamer Setup & Host Guide — StreamTanks">
+  <meta property="og:description" content="Set up StreamTanks for your Twitch broadcast in under 3 minutes with zero runtime dependencies.">
+  <meta property="og:image" content="./screenshots/admin_console.png">
+  <meta property="og:url" content="https://mrpoundsign.github.io/StreamTanks/streamers.html">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow-orb glow-orb-1" aria-hidden="true"></div>
+  <div class="glow-orb glow-orb-2" aria-hidden="true"></div>
+  <div class="glow-orb glow-orb-3" aria-hidden="true"></div>
+
+  <!-- Navigation Header -->
+  <header class="site-header" id="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="brand-logo" aria-label="StreamTanks Home">
+        <img src="favicon.svg" alt="StreamTanks Rocket Logo" class="brand-rocket-icon" width="32" height="32">
+        <span class="logo-text">Stream<span class="neon-highlight">Tanks</span></span>
+        <span class="badge badge-version">v0.2.2</span>
+      </a>
+
+      <nav class="nav-menu" id="navMenu">
+        <a href="index.html" class="nav-link">Overview</a>
+        <a href="streamers.html" class="nav-link nav-portal-pill active">Streamer Guide</a>
+        <a href="players.html" class="nav-link nav-portal-pill">Player Guide</a>
+        <a href="#quickstart" class="nav-link">Quickstart</a>
+        <a href="#obs" class="nav-link">OBS Setup</a>
+        <a href="#admin" class="nav-link">Admin Console</a>
+        <a href="#commands" class="nav-link">Streamer Commands</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="https://github.com/mrpoundsign/StreamTanks" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm github-btn">
+          <svg class="github-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle navigation menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page Hero Header -->
+  <section class="page-hero">
+    <div class="container">
+      <div class="hero-eyebrow">
+        <span class="pulse-dot"></span>
+        <span>STREAMER SETUP & HOST GUIDE</span>
+      </div>
+      <h1 class="hero-title">
+        Host StreamTanks on Your <br><span class="gradient-text">Twitch Stream</span>
+      </h1>
+      <p class="hero-subtitle">
+        Everything you need to broadcast StreamTanks: single-binary installation, transparent OBS Studio configuration, channel claim authorization, the Commander Admin Console, and full streamer settings commands.
+      </p>
+
+      <div class="subpage-toc">
+        <a href="#quickstart" class="toc-link">⚡ 1. Download & Launch</a>
+        <a href="#obs" class="toc-link">🎥 2. OBS Studio Setup</a>
+        <a href="#claim" class="toc-link">🔗 3. Twitch Channel Claim</a>
+        <a href="#admin" class="toc-link">🎛️ 4. Admin Console</a>
+        <a href="#commands" class="toc-link">🛠️ 5. Streamer Commands</a>
+        <a href="#extension" class="toc-link">☁️ 6. Twitch Extension</a>
+        <a href="#faq" class="toc-link">❓ 7. Streamer FAQ</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 1 & 2: Download & Launch -->
+  <section class="section setup-section" id="quickstart">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">STEP-BY-STEP SETUP</span>
+        <h2 class="section-title">Up and Running in <span class="gradient-text">Under 3 Minutes</span></h2>
+        <p class="section-desc">StreamTanks compiles into a single, self-contained executable with embedded SQLite and embedded web assets. Zero external dependencies or Node.js runtime required.</p>
+      </div>
+
+      <div class="setup-steps-wrapper">
+        <!-- Step 1: Download -->
+        <div class="setup-step">
+          <div class="step-badge">1</div>
+          <div class="step-card">
+            <h3 class="step-title">Download StreamTanks</h3>
+            <p class="step-description">
+              Grab the latest release archive for your operating system from the <a href="https://github.com/mrpoundsign/StreamTanks/releases" target="_blank" rel="noopener noreferrer" class="link-highlight">Releases page</a>:
+            </p>
+            <div class="platform-badges">
+              <span class="platform-badge">🪟 Windows (x64)</span>
+              <span class="platform-badge">🐧 Linux (amd64 / arm64)</span>
+              <span class="platform-badge">🍎 macOS (Apple Silicon / Intel)</span>
+            </div>
+            <p class="step-description text-muted">
+              Extract the zip into a folder of your choice (e.g. <code>C:\StreamTanks\</code> on Windows or <code>~/StreamTanks/</code> on Linux/macOS).
+            </p>
+          </div>
+        </div>
+
+        <!-- Step 2: Launch -->
+        <div class="setup-step">
+          <div class="step-badge">2</div>
+          <div class="step-card">
+            <h3 class="step-title">Launch the Server</h3>
+            <p class="step-description">
+              Start StreamTanks on your machine. No configuration files required to start:
+            </p>
+            
+            <div class="code-snippet-box">
+              <div class="snippet-header">
+                <span class="snippet-lang">Windows</span>
+                <button class="copy-btn" data-copy=".\StreamTanks.exe">Copy</button>
+              </div>
+              <pre><code># Double-click StreamTanks.exe, or run in terminal:
+.\StreamTanks.exe</code></pre>
+            </div>
+
+            <div class="code-snippet-box">
+              <div class="snippet-header">
+                <span class="snippet-lang">macOS / Linux</span>
+                <button class="copy-btn" data-copy="chmod +x StreamTanks &amp;&amp; ./StreamTanks">Copy</button>
+              </div>
+              <pre><code>chmod +x StreamTanks
+./StreamTanks</code></pre>
+            </div>
+
+            <!-- Command Line Flags Table -->
+            <div class="callout callout-info" style="margin-top: 20px;">
+              <strong>⚙️ Optional CLI Flags:</strong>
+              <ul class="sub-list" style="margin-top: 8px;">
+                <li><code>-addr :8102</code> — Customize the local HTTP/WebSocket port (default: <code>:8102</code>).</li>
+                <li><code>-channel &lt;name&gt;</code> — Set the target Twitch channel directly via terminal flag.</li>
+                <li><code>-debug</code> — Launches in local offline testing mode with an on-screen debug command bar and target practice bot.</li>
+              </ul>
+            </div>
+
+            <div class="callout callout-info" style="margin-top: 14px;">
+              <strong>💡 Pro-Tip: Offline Debug Testing</strong>
+              <p>Want to test aiming, crater deformation, and tank physics without going live on Twitch? Launch with <code>-debug</code>:</p>
+              <div class="code-snippet-box snippet-mini">
+                <div class="snippet-header">
+                  <span class="snippet-lang">Debug Run</span>
+                  <button class="copy-btn" data-copy=".\StreamTanks.exe -debug">Copy</button>
+                </div>
+                <pre><code>.\StreamTanks.exe -debug</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 3: OBS Studio Setup -->
+  <section class="section" id="obs">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">BROADCAST OVERLAY</span>
+        <h2 class="section-title">Add to <span class="gradient-text">OBS Studio</span></h2>
+        <p class="section-desc">StreamTanks serves a transparent, high-performance 1920x1080 HTML5 canvas overlay directly over local HTTP. Your webcam and stream game show through cleanly behind the neon battlefield.</p>
+      </div>
+
+      <div class="setup-steps-wrapper" style="max-width: 900px; margin: 0 auto;">
+        <div class="setup-step">
+          <div class="step-badge">3</div>
+          <div class="step-card">
+            <h3 class="step-title">Configure OBS Browser Source</h3>
+            <p class="step-description">Follow these steps in OBS Studio to add the overlay to your stream scene:</p>
+            <ol class="obs-instructions-list">
+              <li>Open <strong>OBS Studio</strong> and select your desired streaming scene.</li>
+              <li>Under the <strong>Sources</strong> dock, click <strong>+</strong> (Add) and select <strong>Browser</strong>.</li>
+              <li>Name it <code>StreamTanks</code> and configure the properties:
+                <ul class="sub-list" style="margin-top: 8px;">
+                  <li><strong>URL:</strong> <code class="code-inline">http://localhost:8102</code></li>
+                  <li><strong>Width:</strong> <code class="code-inline">1920</code></li>
+                  <li><strong>Height:</strong> <code class="code-inline">1080</code></li>
+                  <li><strong>Shutdown source when not visible:</strong> <em>Checked (recommended)</em></li>
+                  <li><strong>Refresh browser when scene becomes active:</strong> <em>Checked (recommended)</em></li>
+                </ul>
+              </li>
+              <li>Click <strong>OK</strong>. The transparent battlefield will now render cleanly over your stream!</li>
+            </ol>
+
+            <div class="callout callout-info" style="margin-top: 16px;">
+              <strong>🛡️ Disconnect Resilience</strong>
+              <p>The overlay automatically detects server restarts or disconnects. If the game server restarts, the overlay becomes 100% transparent so your stream never shows an ugly "connection failed" browser error, and automatically reloads once the server is back online!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 4: Twitch Channel Authorization (%claim) -->
+  <section class="section" id="claim">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">TWITCH INTEGRATION</span>
+        <h2 class="section-title">Link Your <span class="gradient-text">Twitch Channel</span></h2>
+        <p class="section-desc">Connect the local game engine to your Twitch channel so chat commands and viewers are automatically routed to your battlefield.</p>
+      </div>
+
+      <div class="setup-steps-wrapper" style="max-width: 900px; margin: 0 auto;">
+        <div class="setup-step">
+          <div class="step-badge">4</div>
+          <div class="step-card">
+            <div class="step-header-with-badge">
+              <h3 class="step-title">Authorize via Commander Admin Console</h3>
+              <span class="badge badge-pulse">⭐ RECOMMENDED</span>
+            </div>
+            <p class="step-description">
+              The easiest way to connect your channel is through the built-in <strong>Commander Admin Console</strong>:
+            </p>
+            <ol class="obs-instructions-list">
+              <li>Open <a href="http://localhost:8102/admin" target="_blank" rel="noopener noreferrer" class="link-highlight"><code>http://localhost:8102/admin</code></a> in your web browser (or dock it inside OBS Studio as a Custom Browser Dock).</li>
+              <li>In the top header, locate the <strong>Channel: None (Local)</strong> pill and click <strong>Set</strong>.</li>
+              <li>Enter your Twitch channel name (e.g. <code>mrpoundsign</code>) and click <strong>Save</strong>. You will receive a unique one-time claim command (e.g. <code class="code-inline">%claim PU5HZX</code>).</li>
+              <li>Type or paste the <code class="code-inline">%claim &lt;CODE&gt;</code> command into your Twitch chat as the <strong>streamer</strong> to link and authorize your channel!</li>
+            </ol>
+            <p class="step-description text-muted" style="margin-top: 12px;">
+              Once verified, StreamTanks securely saves your host authorization token and channel in the embedded SQLite database so you never have to re-enter or re-authorize it on future launches.
+            </p>
+            <div class="code-snippet-box" style="margin-top: 14px;">
+              <div class="snippet-header">
+                <span class="snippet-lang">Twitch Chat Claim Example</span>
+                <button class="copy-btn" data-copy="%claim PU5HZX">Copy</button>
+              </div>
+              <pre><code># Type in your channel chat as the streamer:
+%claim PU5HZX</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Commander Admin Console Section -->
+  <section class="section admin-section" id="admin">
+    <div class="container">
+      <div class="admin-showcase-grid">
+        <div class="admin-content">
+          <span class="section-tag">COMMAND CENTER</span>
+          <h2 class="section-title">Commander Admin Console <span class="gradient-text">(`/admin`)</span></h2>
+          <p class="section-desc">
+            StreamTanks includes a dedicated web dashboard accessible at <code class="code-inline">http://localhost:8102/admin</code>. Control every aspect of your game without typing in Twitch chat.
+          </p>
+
+          <div class="admin-feature-list">
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Live Match Telemetry</strong>
+                <p>Monitor current round phase (IDLE, INPUT, ACTION, WINNER), remaining countdown timer, active player count, and connected OBS overlays in real time.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>One-Click Quick Controls</strong>
+                <p>Buttons to instantly trigger matches, toggle bouncy walls, toggle idle HUD, re-roll procedural terrain, and clear leaderboards.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Active Player & Roster Management</strong>
+                <p>View live players, their chosen emote crowns, and health. Kick disruptive players with one click directly from the dashboard table.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Interactive Terminal Console</strong>
+                <p>Full-featured in-browser CLI with command history (Up/Down arrow keys) and quick-action suggestion pills.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Dock in OBS Studio</strong>
+                <p>Add <code>http://localhost:8102/admin</code> under <em>Docks &gt; Custom Browser Docks</em> in OBS Studio for seamless one-click controls during your stream!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-preview-window gallery-item" data-full="./screenshots/admin_console.png" data-title="Commander Admin Console" data-subtitle="Comprehensive streamer control dashboard at /admin with live telemetry, action controls, and interactive CLI.">
+          <div class="preview-img-container">
+            <img src="./screenshots/admin_console.png" alt="StreamTanks Commander Admin Console Dashboard" loading="lazy">
+            <div class="preview-overlay-tag">
+              <span>🔍 Click to inspect dashboard</span>
+            </div>
+          </div>
+          <div class="preview-footer">
+            <span>Control every aspect of StreamTanks at <strong>http://localhost:8102/admin</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Streamer Chat Commands Codex -->
+  <section class="section commands-section" id="commands">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">STREAMER COMMAND CODEX</span>
+        <h2 class="section-title">Streamer &amp; Moderator <span class="gradient-text">Chat Commands</span></h2>
+        <p class="section-desc">All commands default to the <code>%</code> prefix (customizable via <code>%prefix</code>). Streamers can also run all of these commands from the Admin Console terminal.</p>
+      </div>
+
+      <!-- Controls & Filter Toolbar -->
+      <div class="command-toolbar">
+        <div class="filter-tabs" id="commandFilters">
+          <button class="filter-btn active" data-filter="all">All Commands</button>
+          <button class="filter-btn" data-filter="match">🎮 Match Flow</button>
+          <button class="filter-btn" data-filter="physics">⚡ Physics &amp; Visuals</button>
+          <button class="filter-btn" data-filter="bots">🤖 Bot Management</button>
+          <button class="filter-btn" data-filter="admin">🛡️ Moderation &amp; Admin</button>
+        </div>
+        <div class="search-box">
+          <input type="text" id="commandSearch" placeholder="Search streamer commands (e.g. bouncy, bot, perm)..." aria-label="Search chat commands">
+        </div>
+      </div>
+
+      <!-- Command Table -->
+      <div class="table-container">
+        <table class="command-table" id="commandTable">
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Arguments</th>
+              <th>Role</th>
+              <th>Description</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Match Flow -->
+            <tr data-category="match">
+              <td><code class="cmd-name">%startgame</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Starts an artillery match from the IDLE waiting phase. (Role permission configurable via <code>%perm</code>).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%startgame">Copy</button></td>
+            </tr>
+            <tr data-category="match">
+              <td><code class="cmd-name">%roundtime</code></td>
+              <td><span class="arg-pill">&lt;seconds&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Configures the input phase countdown duration (range: 5s to 120s, default: 20s).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%roundtime 15">Copy</button></td>
+            </tr>
+            <tr data-category="match">
+              <td><code class="cmd-name">%autoround</code></td>
+              <td><span class="arg-pill">&lt;minutes|-1|off&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Automates round starts: <code>-1</code> for immediate new round, <code>&gt;0</code> for scheduled minutes, or <code>off</code>.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%autoround 3">Copy</button></td>
+            </tr>
+            <tr data-category="match">
+              <td><code class="cmd-name">%idlemessage</code></td>
+              <td><span class="arg-pill">[on|off]</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Toggles visibility of the idle countdown message and persistent leaderboard during waiting phase.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%idlemessage off">Copy</button></td>
+            </tr>
+
+            <!-- Physics & Visuals -->
+            <tr data-category="physics">
+              <td><code class="cmd-name">%speed</code></td>
+              <td><span class="arg-pill">&lt;0.1 - 3.0&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Adjusts physics and projectile simulation speed (default: <code>0.5x</code>).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%speed 0.8">Copy</button></td>
+            </tr>
+            <tr data-category="physics">
+              <td><code class="cmd-name">%bouncywalls</code></td>
+              <td><span class="arg-pill">[on|off]</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Toggles screen-edge bouncy walls (+10% bullet speed, +50% tank speed).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%bouncywalls on">Copy</button></td>
+            </tr>
+            <tr data-category="physics">
+              <td><code class="cmd-name">%terrain</code></td>
+              <td><span class="arg-pill">&lt;min%&gt; &lt;max%&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Sets vertical screen height percentage bounds for procedural hills, or <code>%terrain reset</code>.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%terrain 30 80">Copy</button></td>
+            </tr>
+            <tr data-category="physics">
+              <td><code class="cmd-name">%terraincolor</code></td>
+              <td><span class="arg-pill">&lt;hex|preset&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Customizes neon terrain outline glow and subtle ground fill (presets: red, cyan, green, purple, orange, yellow, white, or hex e.g. <code>#00ffcc</code>; <code>%terraincolor reset</code> for default).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%terraincolor cyan">Copy</button></td>
+            </tr>
+            <tr data-category="physics">
+              <td><code class="cmd-name">%terrainclimb</code></td>
+              <td><span class="arg-pill">[on|off]</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Toggles whether tanks can scale steep cliffs and crater walls (default: <code>off</code> / blocked).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%terrainclimb on">Copy</button></td>
+            </tr>
+            <tr data-category="physics">
+              <td><code class="cmd-name">%tankcolor</code></td>
+              <td><span class="arg-pill">&lt;hex|preset&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Customizes neon tank tread outline glow (presets: red, cyan, green, purple, orange, yellow, white, or hex e.g. <code>#00ffcc</code>; <code>%tankcolor reset</code> for default).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%tankcolor purple">Copy</button></td>
+            </tr>
+
+            <!-- Bot Management -->
+            <tr data-category="bots">
+              <td><code class="cmd-name">%minplayers</code></td>
+              <td><span class="arg-pill">&lt;2 - 20&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Sets minimum player threshold to auto-fill with bot combatants (default: <code>5</code>).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%minplayers 6">Copy</button></td>
+            </tr>
+            <tr data-category="bots">
+              <td><code class="cmd-name">%botfill</code></td>
+              <td><span class="arg-pill">[on|off]</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Toggles automatic bot filling up to the minimum player threshold (default: <code>on</code>).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%botfill on">Copy</button></td>
+            </tr>
+            <tr data-category="bots">
+              <td><code class="cmd-name">%botpoints</code></td>
+              <td><span class="arg-pill">&lt;0 - 10&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Configures leaderboard points awarded to human players for destroying an AI bot (default: <code>1</code>).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%botpoints 2">Copy</button></td>
+            </tr>
+            <tr data-category="bots">
+              <td><code class="cmd-name">%botlist</code></td>
+              <td><span class="arg-pill">&lt;add|remove|list&gt; [name]</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Manages the custom pool of named AI bot combatants stored in SQLite.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%botlist list">Copy</button></td>
+            </tr>
+
+            <!-- Moderation & Admin -->
+            <tr data-category="admin">
+              <td><code class="cmd-name">%channel</code></td>
+              <td><span class="arg-pill">&lt;name|off&gt;</span></td>
+              <td><span class="role-pill role-streamer">Streamer</span></td>
+              <td>Sets the target Twitch channel, or switches to offline mode with <code>off</code>.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%channel ">Copy</button></td>
+            </tr>
+            <tr data-category="admin">
+              <td><code class="cmd-name">%claim</code></td>
+              <td><span class="arg-pill">&lt;code&gt;</span></td>
+              <td><span class="role-pill role-streamer">Streamer</span></td>
+              <td>Authorizes and links your local game host to your Twitch channel via one-time challenge code.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%claim ">Copy</button></td>
+            </tr>
+            <tr data-category="admin">
+              <td><code class="cmd-name">%prefix</code></td>
+              <td><span class="arg-pill">&lt;str&gt;</span></td>
+              <td><span class="role-pill role-streamer">Streamer</span></td>
+              <td>Customizes the command prefix for all chat triggers (e.g. <code>!</code> or <code>$</code>).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%prefix !">Copy</button></td>
+            </tr>
+            <tr data-category="admin">
+              <td><code class="cmd-name">%perm</code></td>
+              <td><span class="arg-pill">&lt;start|config&gt; &lt;role&gt;</span></td>
+              <td><span class="role-pill role-streamer">Streamer</span></td>
+              <td>Configures role permissions for starting games or modifying settings. Accepted role parameters: <code>broadcaster</code> (streamer), <code>mod</code>, <code>vip</code>, <code>sub</code>, or <code>all</code>.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%perm start mod">Copy</button></td>
+            </tr>
+            <tr data-category="admin">
+              <td><code class="cmd-name">%kick</code></td>
+              <td><span class="arg-pill">&lt;username&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Immediately removes a player from the active match, despawning their tank and projectiles.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%kick ">Copy</button></td>
+            </tr>
+            <tr data-category="admin">
+              <td><code class="cmd-name">%deleteplayer</code></td>
+              <td><span class="arg-pill">&lt;username&gt;</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Removes player entirely from the persistent SQLite leaderboard and active match.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%deleteplayer ">Copy</button></td>
+            </tr>
+            <tr data-category="admin">
+              <td><code class="cmd-name">%clearleaderboard</code></td>
+              <td><span class="arg-pill none">-</span></td>
+              <td><span class="role-pill role-streamer">Streamer</span></td>
+              <td>Resets all player win stats in the SQLite database and connected overlays.</td>
+              <td><button class="btn-copy-cmd" data-cmd="%clearleaderboard">Copy</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Twitch Extension Architecture Section -->
+  <section class="section extension-spotlight-section" id="extension">
+    <div class="container">
+      <div class="spotlight-card">
+        <div class="spotlight-badge">
+          <span class="badge badge-pulse">STREAMER EXTENSION SETUP</span>
+          <span>TWITCH VIDEO OVERLAY</span>
+        </div>
+
+        <h2 class="spotlight-title">Interactive Twitch Extension for <span class="gradient-text">Streamers</span></h2>
+        <p class="spotlight-subtitle">
+          StreamTanks integrates with the upcoming official Twitch Extension. Viewers can aim and fire directly on your live video stream with zero port forwarding required.
+        </p>
+
+        <!-- Architecture Flow Pipeline -->
+        <div class="arch-box" style="margin-top: 30px;">
+          <div class="arch-header">
+            <h4>📡 How the Extension Cloud Relay Works</h4>
+            <p class="arch-subtitle">Secure end-to-end routing without opening firewall ports on your home network:</p>
+          </div>
+          <div class="arch-pipeline">
+            <div class="arch-step">
+              <div class="step-header">
+                <span class="step-num">01</span>
+                <span class="node-icon">👤</span>
+              </div>
+              <strong>Viewer Overlay</strong>
+              <small>Twitch Video Player</small>
+              <div class="step-tag">JWT Action</div>
+            </div>
+
+            <div class="arch-connector">
+              <span class="connector-line"></span>
+              <span class="connector-arrow">➔</span>
+            </div>
+
+            <div class="arch-step highlight">
+              <div class="step-header">
+                <span class="step-num">02</span>
+                <span class="node-icon">☁️</span>
+              </div>
+              <strong>C&amp;C Relay Server</strong>
+              <small>Cloud Relay Gateway</small>
+              <div class="step-tag tag-magenta">Auth &amp; Routing</div>
+            </div>
+
+            <div class="arch-connector">
+              <span class="connector-line"></span>
+              <span class="connector-arrow">➔</span>
+            </div>
+
+            <div class="arch-step">
+              <div class="step-header">
+                <span class="step-num">03</span>
+                <span class="node-icon">🖥️</span>
+              </div>
+              <strong>StreamTanks Host</strong>
+              <small>Streamer Local PC</small>
+              <div class="step-tag">Physics &amp; Rules</div>
+            </div>
+
+            <div class="arch-connector">
+              <span class="connector-line"></span>
+              <span class="connector-arrow">➔</span>
+            </div>
+
+            <div class="arch-step">
+              <div class="step-header">
+                <span class="step-num">04</span>
+                <span class="node-icon">🎥</span>
+              </div>
+              <strong>OBS Canvas</strong>
+              <small>1080p Browser Source</small>
+              <div class="step-tag">Live Broadcast</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Streamer FAQ Section -->
+  <section class="section faq-section" id="faq">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">STREAMER TROUBLESHOOTING</span>
+        <h2 class="section-title">Frequently Asked <span class="gradient-text">Streamer Questions</span></h2>
+      </div>
+
+      <div class="faq-grid">
+        <div class="faq-card">
+          <h3 class="faq-question">How do I test the game before going live?</h3>
+          <p class="faq-answer">Launch StreamTanks with the <code>-debug</code> flag (e.g. <code>.\StreamTanks.exe -debug</code>). This enables an on-screen debug bar at the bottom of the OBS overlay and spawns a target practice bot so you can test firing and craters immediately without connecting to Twitch.</p>
+        </div>
+
+        <div class="faq-card">
+          <h3 class="faq-question">Do I need to configure router port forwarding?</h3>
+          <p class="faq-answer">No! StreamTanks serves the OBS browser source locally (<code>http://localhost:8102</code>). When using Twitch chat or the Twitch Extension cloud relay, StreamTanks makes an outbound connection to Twitch and our C&amp;C relay, requiring zero port forwarding.</p>
+        </div>
+
+        <div class="faq-card">
+          <h3 class="faq-question">What happens if StreamTanks restarts during my stream?</h3>
+          <p class="faq-answer">The frontend overlay automatically detects disconnects, becomes completely transparent so your stream never shows a broken browser page, continuously polls, and reloads automatically once the server is back online.</p>
+        </div>
+
+        <div class="faq-card">
+          <h3 class="faq-question">Where are my settings and leaderboard saved?</h3>
+          <p class="faq-answer">All settings, channels, permissions, bot rosters, and leaderboard scores are stored locally in an embedded SQLite database file (<code>streamtanks.db</code>) in your working directory. Back up this file to preserve your leaderboard across updates.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightboxModal" aria-hidden="true" role="dialog">
+    <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+    <div class="lightbox-dialog">
+      <button class="lightbox-close" id="lightboxClose" aria-label="Close screenshot modal">✕</button>
+      <div class="lightbox-content">
+        <img id="lightboxImg" src="" alt="Enlarged screenshot preview">
+        <div class="lightbox-caption">
+          <h3 id="lightboxTitle"></h3>
+          <p id="lightboxSubtitle"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container footer-container">
+      <div class="footer-col footer-brand">
+        <a href="index.html" class="brand-logo">
+          <img src="favicon.svg" alt="StreamTanks Rocket Logo" class="brand-rocket-icon" width="32" height="32">
+          <span class="logo-text">Stream<span class="neon-highlight">Tanks</span></span>
+        </a>
+        <p class="footer-tagline">
+          The open-source Twitch chat artillery battlefield and OBS browser overlay.
+        </p>
+        <p class="footer-license">
+          Licensed under <a href="https://github.com/mrpoundsign/StreamTanks/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GNU AGPLv3</a>.
+        </p>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Documentation</h4>
+        <ul class="footer-links">
+          <li><a href="index.html">Overview &amp; Features</a></li>
+          <li><a href="streamers.html">Streamer Setup Guide</a></li>
+          <li><a href="players.html">Player &amp; Viewer Guide</a></li>
+          <li><a href="#quickstart">Quickstart</a></li>
+          <li><a href="#admin">Admin Console</a></li>
+          <li><a href="#commands">Streamer Commands</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Community &amp; Code</h4>
+        <ul class="footer-links">
+          <li><a href="https://github.com/mrpoundsign/StreamTanks" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
+          <li><a href="https://github.com/mrpoundsign/StreamTanks/releases" target="_blank" rel="noopener noreferrer">Releases &amp; Binaries</a></li>
+          <li><a href="https://github.com/mrpoundsign/StreamTanks/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a></li>
+          <li><a href="https://github.com/mrpoundsign/StreamTanks/blob/main/AGENTS.md" target="_blank" rel="noopener noreferrer">Architecture Docs</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="container footer-bottom-container">
+        <p>© 2026 mrpoundsign. Open source under GNU AGPLv3.</p>
+        <p>StreamTanks is not affiliated with or endorsed by Twitch or OBS Studio.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
