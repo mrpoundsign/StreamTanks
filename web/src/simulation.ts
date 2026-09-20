@@ -87,7 +87,8 @@ export function executeActions(state: SimulationState): void {
   state.projectiles = [];
   const roundId = state.roundId ?? 0;
 
-  for (const name in state.players) {
+  const playerNames = Object.keys(state.players).sort();
+  for (const name of playerNames) {
     const p = state.players[name];
     if (p.isDead) continue;
 
@@ -139,7 +140,8 @@ export function checkTankCollisions(
   owner: string
 ): SimKill[] {
   const kills: SimKill[] = [];
-  for (const name in players) {
+  const playerNames = Object.keys(players).sort();
+  for (const name of playerNames) {
     if (name === owner) continue; // No self-damage
     const p = players[name];
     if (p.isDead || p.isShielded) continue;
@@ -171,9 +173,10 @@ export function stepSimulation(state: SimulationState, dtScale: number): Simulat
   };
 
   const { bouncyWalls, terrainClimb } = state;
+  const playerNames = Object.keys(state.players).sort();
 
   // 1. Tank Movement & Falling
-  for (const name in state.players) {
+  for (const name of playerNames) {
     const p = state.players[name];
     if (p.isDead) continue;
 
@@ -339,7 +342,7 @@ export function stepSimulation(state: SimulationState, dtScale: number): Simulat
 
     // Active Shield Collision (completely absorbs projectile)
     if (!hit) {
-      for (const name in state.players) {
+      for (const name of playerNames) {
         if (name === proj.owner) continue;
         const p = state.players[name];
         if (p.isDead || !p.isShielded) continue;
@@ -377,7 +380,7 @@ export function stepSimulation(state: SimulationState, dtScale: number): Simulat
 
     // Direct Tank Collision
     if (!hit) {
-      for (const name in state.players) {
+      for (const name of playerNames) {
         if (name === proj.owner) continue;
         const p = state.players[name];
         if (p.isDead || p.isShielded) continue;

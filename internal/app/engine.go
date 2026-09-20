@@ -2,6 +2,7 @@ package app
 
 import (
 	"math"
+	"slices"
 )
 
 // CollisionSink receives collision, elimination, and spark events during physics stepping.
@@ -34,6 +35,16 @@ func NewEngine(terrain []float64, players map[string]*Player, bouncyWalls, terra
 		MoveDistance: moveDistance,
 		BotPoints:    botPoints,
 	}
+}
+
+// sortedPlayerNames returns player names sorted alphabetically for deterministic iteration.
+func (e *Engine) sortedPlayerNames() []string {
+	names := make([]string, 0, len(e.Players))
+	for name := range e.Players {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
 }
 
 // Step advances the physics simulation by dtScale and notifies the sink of events.
@@ -72,7 +83,8 @@ func (e *Engine) Step(dtScale float64, sink CollisionSink) bool {
 // UpdateTankMovements executes tank translation, boundary clamping, and falling.
 func (e *Engine) UpdateTankMovements(dtScale float64, sink CollisionSink) bool {
 	anyMoving := false
-	for _, p := range e.Players {
+	for _, name := range e.sortedPlayerNames() {
+		p := e.Players[name]
 		if p.IsDead {
 			continue
 		}
@@ -319,7 +331,8 @@ func (e *Engine) UpdateProjectiles(dtScale float64, sink CollisionSink) {
 
 		// Active shield collision: completely absorbs projectile before terrain impact
 		if !hit {
-			for name, p := range e.Players {
+			for _, name := range e.sortedPlayerNames() {
+				p := e.Players[name]
 				if name == proj.Owner || p.IsDead || !p.IsShielded {
 					continue
 				}
@@ -361,7 +374,8 @@ func (e *Engine) UpdateProjectiles(dtScale float64, sink CollisionSink) {
 
 		// Direct tank collision
 		if !hit {
-			for name, p := range e.Players {
+			for _, name := range e.sortedPlayerNames() {
+				p := e.Players[name]
 				if name == proj.Owner || p.IsDead || p.IsShielded {
 					continue
 				}
@@ -393,7 +407,8 @@ func (e *Engine) UpdateProjectiles(dtScale float64, sink CollisionSink) {
 
 // CheckTankCollisions evaluates blast radius against all tanks and triggers eliminations.
 func (e *Engine) CheckTankCollisions(cx, cy, radius float64, owner string, sink CollisionSink) {
-	for name, p := range e.Players {
+	for _, name := range e.sortedPlayerNames() {
+		p := e.Players[name]
 		if name == owner || p.IsDead || p.IsShielded {
 			continue
 		}

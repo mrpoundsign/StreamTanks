@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"streamtanks/internal/app"
@@ -69,8 +70,15 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 
 	engine := app.NewEngine(terrain, players, s.Rules.BouncyWalls, s.Rules.TerrainClimb, s.Rules.MoveDistance, s.Rules.BotPoints)
 
-	// Spawning initial projectiles & movement
-	for name, p := range engine.Players {
+	playerNames := make([]string, 0, len(engine.Players))
+	for name := range engine.Players {
+		playerNames = append(playerNames, name)
+	}
+	slices.Sort(playerNames)
+
+	// Spawning initial projectiles & movement in deterministic alphabetical order
+	for _, name := range playerNames {
+		p := engine.Players[name]
 		if p.IsDead {
 			continue
 		}
@@ -128,7 +136,8 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 	finalPlayers := make(map[string]FinalPlayerState, len(engine.Players))
 	aliveCount := 0
 	winner := ""
-	for name, p := range engine.Players {
+	for _, name := range playerNames {
+		p := engine.Players[name]
 		finalPlayers[name] = FinalPlayerState{
 			X:      p.X,
 			Y:      p.Y,

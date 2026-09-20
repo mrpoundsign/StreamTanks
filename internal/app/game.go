@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -633,11 +634,18 @@ func executeActionPhaseForRound(roundID int) {
 		}
 	}
 
-	// Initialize projectiles and movement targets
+	// Initialize projectiles and movement targets in deterministic alphabetical order
 	gameState.Projectiles = []Projectile{}
 	gameState.Explosions = []Explosion{}
 
-	for name, p := range gameState.Players {
+	playerNames := make([]string, 0, len(gameState.Players))
+	for name := range gameState.Players {
+		playerNames = append(playerNames, name)
+	}
+	slices.Sort(playerNames)
+
+	for _, name := range playerNames {
+		p := gameState.Players[name]
 		if p.IsDead {
 			continue
 		}

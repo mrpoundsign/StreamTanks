@@ -31,7 +31,8 @@
   function executeActions(state) {
     state.projectiles = [];
     const roundId = state.roundId ?? 0;
-    for (const name in state.players) {
+    const playerNames = Object.keys(state.players).sort();
+    for (const name of playerNames) {
       const p = state.players[name];
       if (p.isDead) continue;
       if (p.actionType === ActionFire) {
@@ -70,7 +71,8 @@
   }
   function checkTankCollisions(players, cx, cy, radius, owner) {
     const kills = [];
-    for (const name in players) {
+    const playerNames = Object.keys(players).sort();
+    for (const name of playerNames) {
       if (name === owner) continue;
       const p = players[name];
       if (p.isDead || p.isShielded) continue;
@@ -96,7 +98,8 @@
       anyMoving: false
     };
     const { bouncyWalls, terrainClimb } = state;
-    for (const name in state.players) {
+    const playerNames = Object.keys(state.players).sort();
+    for (const name of playerNames) {
       const p = state.players[name];
       if (p.isDead) continue;
       if (p.moving) {
@@ -245,7 +248,7 @@
         }
       }
       if (!hit) {
-        for (const name in state.players) {
+        for (const name of playerNames) {
           if (name === proj.owner) continue;
           const p = state.players[name];
           if (p.isDead || !p.isShielded) continue;
@@ -279,7 +282,7 @@
         events.kills.push(...blastKills);
       }
       if (!hit) {
-        for (const name in state.players) {
+        for (const name of playerNames) {
           if (name === proj.owner) continue;
           const p = state.players[name];
           if (p.isDead || p.isShielded) continue;
