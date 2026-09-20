@@ -53,7 +53,10 @@ func runReplayCLI(filePath string) {
 	_ = ensureSimulationBundle()
 
 	// Run Overlay Simulation (Headless Node) to get the client reference
-	clientResults, err := runOverlaySimHeadless([]*scenariolab.Scenario{sc})
+	serverRes := scenariolab.RunScenarioSimulation(sc, 1.0)
+	clientResults, err := runOverlaySimHeadless([]OverlaySimBatchItem{
+		{Scenario: sc, ServerImpacts: serverRes.Impacts},
+	})
 	if err != nil {
 		log.Fatalf("Error running overlay simulation: %v", err)
 	}
@@ -210,15 +213,20 @@ func runFuzzCLI(count int, outDir string) {
 
 		scenarios := make([]*scenariolab.Scenario, curBatchSize)
 		serverResults := make([]*scenariolab.SimulationResult, curBatchSize)
+		items := make([]OverlaySimBatchItem, curBatchSize)
 
 		for i := range curBatchSize {
 			seed := time.Now().UnixNano() + int64(b*batchSize+i)*7919
 			sc := scenariolab.GenerateRandomScenario(seed)
 			scenarios[i] = sc
 			serverResults[i] = scenariolab.RunScenarioSimulation(sc, 1.0)
+			items[i] = OverlaySimBatchItem{
+				Scenario:      sc,
+				ServerImpacts: serverResults[i].Impacts,
+			}
 		}
 
-		clientResults, err := runOverlaySimHeadless(scenarios)
+		clientResults, err := runOverlaySimHeadless(items)
 		if err != nil {
 			log.Fatalf("Error running overlay headless simulation batch: %v", err)
 		}
@@ -255,6 +263,12 @@ func runFuzzCLI(count int, outDir string) {
 	fmt.Printf("==================================================\n")
 }
 
+// OverlaySimBatchItem pairs a scenario with server-computed impacts for overlay reconciliation testing.
+type OverlaySimBatchItem struct {
+	Scenario      *scenariolab.Scenario      `json:"scenario"`
+	ServerImpacts []scenariolab.ImpactRecord `json:"serverImpacts"`
+}
+
 func ensureSimulationBundle() error {
 	distFile := "./web/dist/simulation.mjs"
 	srcFile := "./web/src/simulation.ts"
@@ -268,13 +282,13 @@ func ensureSimulationBundle() error {
 	return cmd.Run()
 }
 
-func runOverlaySimHeadless(scenarios []*scenariolab.Scenario) ([]scenariolab.SimulationResult, error) {
+func runOverlaySimHeadless(items []OverlaySimBatchItem) ([]scenariolab.SimulationResult, error) {
 	runnerScript := "./scripts/headless_sim.mjs"
 	if _, err := os.Stat(runnerScript); err != nil {
 		return nil, fmt.Errorf("headless runner script not found: %s", runnerScript)
 	}
 
-	inputData, err := json.Marshal(scenarios)
+	inputData, err := json.Marshal(items)
 	if err != nil {
 		return nil, err
 	}

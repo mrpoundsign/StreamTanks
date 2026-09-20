@@ -39,6 +39,7 @@ export interface SimImpact {
   radius: number;
   owner: string;
   hitType: 'terrain' | 'tank' | 'shield';
+  step?: number;
 }
 
 export interface SimKill {
@@ -465,3 +466,126 @@ export function runFullSimulation(
     totalSteps: step,
   };
 }
+
+/**
+ * Simulates the browser overlay client's behavior during a round, including processing
+ * asynchronous server crater events (MsgTerrainCrater) as received over WebSockets.
+ *
+ * In the live game (game.ts), when MsgTerrainCrater arrives from the Go server:
+ * 1. The crater is checked against appliedCraterIds.
+ * 2. If not applied, appliedCraterIds.add(crater.id) is called and applyCrater(terrain, ...) deforms the terrain.
+ * 3. In the live game.ts, the in-flight projectile is NOT removed from state.projectiles!
+ *    When updatePhysics() steps the physics, that projectile continues moving, falls into the newly carved crater,
+ *    and triggers a SECOND terrain collision (double hit), deforming the terrain again.
+ */
+export function runOverlaySimulation(
+  state: SimulationState,
+  dtScale: number = 1.0,
+  serverImpacts: SimImpact[] = [],
+  maxSteps: number = 2000
+): SimulationSummary {
+  executeActions(state);
+
+  const allKills: SimKill[] = [];
+  const allImpacts: SimImpact[] = [];
+  const appliedCraterIds = new Set<string>();
+
+  // Map server impacts by step
+  const impactsByStep = new Map<number, SimImpact[]>();
+  for (const imp of serverImpacts) {
+    const s = imp.step ?? 0;
+    const list = impactsByStep.get(s) || [];
+    list.push(imp);
+    impactsByStep.set(s, list);
+  }
+
+  let step = 0;
+
+  while (step < maxSteps) {
+    step++;
+
+    // 1. Step client physics (matching game.ts updatePhysics -> stepSimulation)
+    const events = stepSimulation(state, dtScale);
+    allKills.push(...events.kills);
+    allImpacts.push(...events.impacts);
+
+    // 2. Process simulation events (matching game.ts updatePhysics line 224-228)
+    for (const impact of events.impacts) {
+      if (impact.id) {
+        appliedCraterIds.add(impact.id);
+      }
+    }
+
+    // 3. Process incoming WebSocket messages scheduled for this step (matching game.ts MsgTerrainCrater handler)
+    const incomingCraters = impactsByStep.get(step);
+    if (incomingCraters) {
+      for (const crater of incomingCraters) {
+        if (crater && typeof crater.x === 'number') {
+          if (crater.id && appliedCraterIds.has(crater.id)) {
+            continue;
+          }
+          let projOwner = crater.owner || '';
+          if (crater.id) {
+            appliedCraterIds.add(crater.id);
+            // Despawn in-flight projectile if server crater arrived before client projectile hit
+            const idx = state.projectiles.findIndex((p) => p.id === crater.id);
+            if (idx !== -1) {
+              if (!projOwner) projOwner = state.projectiles[idx].owner;
+              state.projectiles.splice(idx, 1);
+            }
+            if (!projOwner) {
+              const parts = crater.id.split('_');
+              if (parts.length >= 2) projOwner = parts.slice(1).join('_');
+            }
+          }
+          applyCrater(state.terrain, crater.x, crater.y, crater.radius);
+          allImpacts.push({
+            id: crater.id,
+            x: crater.x,
+            y: crater.y,
+            radius: crater.radius,
+            owner: projOwner,
+            hitType: 'terrain',
+            step,
+          });
+          const blastKills = checkTankCollisions(state.players, crater.x, crater.y, crater.radius, projOwner);
+          allKills.push(...blastKills);
+        }
+      }
+    }
+
+    // 4. Termination check: no projectiles and no moving tanks
+    if (state.projectiles.length === 0 && !events.anyMoving) {
+      let anyFalling = false;
+      for (const name in state.players) {
+        const p = state.players[name];
+        if (!p.isDead && p.y < getTerrainHeight(state.terrain, p.x)) {
+          anyFalling = true;
+          break;
+        }
+      }
+      if (!anyFalling) {
+        break;
+      }
+    }
+  }
+
+  const finalPlayers: Record<string, { x: number; y: number; isDead: boolean }> = {};
+  for (const name in state.players) {
+    const p = state.players[name];
+    finalPlayers[name] = {
+      x: p.x,
+      y: p.y,
+      isDead: !!p.isDead,
+    };
+  }
+
+  return {
+    kills: allKills,
+    impacts: allImpacts,
+    finalTerrain: [...state.terrain],
+    finalPlayers,
+    totalSteps: step,
+  };
+}
+

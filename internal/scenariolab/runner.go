@@ -15,17 +15,24 @@ import (
 // memoryEventSink implements app.CollisionSink in-memory for scenario testing.
 // In idiomatic Go, this sink satisfies the interface declared by app.Engine without touching SQLite or WebSockets.
 type memoryEventSink struct {
-	impacts []ImpactRecord
-	kills   []KillRecord
+	currentStep int
+	impacts     []ImpactRecord
+	kills       []KillRecord
 }
 
 func (m *memoryEventSink) OnCrater(cx, cy, radius float64, shotID string) {
+	owner := ""
+	if parts := strings.SplitN(shotID, "_", 2); len(parts) == 2 {
+		owner = parts[1]
+	}
 	m.impacts = append(m.impacts, ImpactRecord{
 		ID:      shotID,
 		X:       cx,
 		Y:       cy,
 		Radius:  radius,
+		Owner:   owner,
 		HitType: "terrain",
+		Step:    m.currentStep,
 	})
 }
 
@@ -89,7 +96,7 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 			powerScaled := powerClamped / 5.0
 			vx := math.Cos(rad) * powerScaled
 			vy := -math.Sin(rad) * powerScaled
-			shotID := fmt.Sprintf("sim_%s", name)
+			shotID := fmt.Sprintf("1_%s", name)
 			muzzleDist := 25.0
 			spawnX := p.X + math.Cos(rad)*muzzleDist
 			spawnY := p.Y - 10.0 - math.Sin(rad)*muzzleDist
@@ -127,6 +134,7 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 
 	for step < maxSteps {
 		step++
+		sink.currentStep = step
 		isDone := engine.Step(dtScale, sink)
 		if isDone {
 			break

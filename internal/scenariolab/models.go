@@ -51,6 +51,7 @@ type ImpactRecord struct {
 	Radius  float64 `json:"radius"`
 	Owner   string  `json:"owner"`
 	HitType string  `json:"hitType"` // "terrain", "tank", "shield"
+	Step    int     `json:"step,omitempty"`
 }
 
 // KillRecord records a tank elimination.

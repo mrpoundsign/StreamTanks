@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runFullSimulation } from '../web/dist/simulation.mjs';
+import { runFullSimulation, runOverlaySimulation } from '../web/dist/simulation.mjs';
 import fs from 'fs';
 
 // Read all JSON input from stdin
@@ -10,10 +10,13 @@ if (!input.trim()) {
 
 try {
   const data = JSON.parse(input);
-  const scenarios = Array.isArray(data) ? data : [data];
+  const items = Array.isArray(data) ? data : [data];
   const results = [];
 
-  for (const sc of scenarios) {
+  for (const item of items) {
+    const sc = item.scenario || item;
+    const serverImpacts = item.serverImpacts || [];
+
     const state = {
       players: sc.players || {},
       projectiles: [],
@@ -25,7 +28,10 @@ try {
       roundId: 1,
     };
 
-    const res = runFullSimulation(state, 1.0);
+    const res = item.serverImpacts !== undefined
+      ? runOverlaySimulation(state, 1.0, serverImpacts)
+      : runFullSimulation(state, 1.0);
+
     results.push({
       scenarioId: sc.id,
       kills: res.kills,

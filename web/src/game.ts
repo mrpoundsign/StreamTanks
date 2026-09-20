@@ -142,7 +142,14 @@ function createWallSpark(cx: number, cy: number): void {
   explosions.push({ x: cx, y: cy, radius: 0, maxRadius: 30, alpha: 1, isSpark: true });
 }
 
+let lastExecutedRoundId = -1;
+
 function executeActions(): void {
+  const currentRoundId = stateRef?.roundId ?? 0;
+  if (lastExecutedRoundId === currentRoundId && currentPhase === PhaseAction) {
+    return;
+  }
+  lastExecutedRoundId = currentRoundId;
   const simState: SimulationState = {
     players,
     projectiles,
@@ -885,6 +892,10 @@ net.onMessage((msg: WSMessage) => {
       }
       if (crater.id) {
         appliedCraterIds.add(crater.id);
+        const pIdx = projectiles.findIndex((p) => p.id === crater.id);
+        if (pIdx !== -1) {
+          projectiles.splice(pIdx, 1);
+        }
       }
       applyCrater(terrain, crater.x, crater.y, crater.radius);
       const hasExplosion = explosions.some(
