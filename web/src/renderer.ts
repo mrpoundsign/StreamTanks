@@ -146,8 +146,10 @@ export function drawTanks(
   currentPhase: GamePhase,
   emotesLayer: HTMLElement,
   emoteCache: Record<string, HTMLImageElement>,
-  avatarImgCache?: Record<string, HTMLImageElement>
+  avatarImgCache?: Record<string, HTMLImageElement>,
+  tankColor: string = '#ff003c'
 ): void {
+  const treadColor = tankColor || '#ff003c';
   for (const name in players) {
     const p = players[name];
     let imgEl = document.getElementById('emote-' + name) as HTMLImageElement | null;
@@ -170,10 +172,10 @@ export function drawTanks(
     ctx.rotate(angle);
 
     // Draw Treads (Neon rectangle)
-    ctx.strokeStyle = '#ff003c';
+    ctx.strokeStyle = treadColor;
     ctx.lineWidth = 2;
     ctx.shadowBlur = 10;
-    ctx.shadowColor = '#ff003c';
+    ctx.shadowColor = treadColor;
     ctx.strokeRect(-15, -10, 30, 10);
 
     ctx.restore();

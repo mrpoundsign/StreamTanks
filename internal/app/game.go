@@ -23,6 +23,7 @@ var gameState = GameState{
 	TerrainMin:    20,
 	TerrainMax:    75,
 	TerrainColor:  defaultTerrainColor,
+	TankColor:     defaultTankColor,
 	StartPerm:     "broadcaster",
 	ConfigPerm:    "broadcaster",
 	MinPlayers:    5,

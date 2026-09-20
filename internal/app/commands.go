@@ -83,6 +83,18 @@ func processCommand(username string, msg string, emotes []*twitch.Emote, userOpt
 		handleTerrainCmd(user, parts)
 	case "terraincolor", "terraincolour":
 		handleTerrainColorCmd(user, parts)
+	case "tankcolor", "tankcolour":
+		handleTankColorCmd(user, parts)
+	case "tank":
+		if len(parts) > 1 && (strings.ToLower(parts[1]) == "color" || strings.ToLower(parts[1]) == "colour") {
+			if len(parts) >= 3 {
+				handleTankColorCmd(user, []string{"tankcolor", parts[2]})
+				return
+			}
+			gameState.mu.Unlock()
+			return
+		}
+		gameState.mu.Unlock()
 	case "startperm":
 		handleStartPermCmd(user, parts)
 	case "configperm":
@@ -493,10 +505,10 @@ func handleTerrainCmd(user *twitch.User, parts []string) {
 	gameState.mu.Unlock()
 }
 
-var terrainColorPresets = map[string]string{
-	"default": defaultTerrainColor,
-	"reset":   defaultTerrainColor,
-	"red":     defaultTerrainColor,
+var colorPresets = map[string]string{
+	"default": "#ff003c",
+	"reset":   "#ff003c",
+	"red":     "#ff003c",
 	"cyan":    "#00ffcc",
 	"green":   "#00ff66",
 	"purple":  "#bf00ff",
@@ -509,12 +521,12 @@ func isHexDigit(c byte) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
 
-func parseTerrainColor(input string) (string, bool) {
+func parseColor(input string) (string, bool) {
 	raw := strings.ToLower(strings.TrimSpace(input))
 	if raw == "" {
 		return "", false
 	}
-	if hexVal, ok := terrainColorPresets[raw]; ok {
+	if hexVal, ok := colorPresets[raw]; ok {
 		return hexVal, true
 	}
 
@@ -550,7 +562,7 @@ func handleTerrainColorCmd(user *twitch.User, parts []string) {
 		return
 	}
 
-	color, valid := parseTerrainColor(parts[1])
+	color, valid := parseColor(parts[1])
 	if !valid {
 		gameState.mu.Unlock()
 		return
@@ -560,6 +572,30 @@ func handleTerrainColorCmd(user *twitch.User, parts []string) {
 	gameState.mu.Unlock()
 
 	saveSetting("terrain_color", color)
+	broadcast(msgStateUpdate, &gameState)
+}
+
+func handleTankColorCmd(user *twitch.User, parts []string) {
+	if !hasPermission(user, gameState.ConfigPerm) {
+		gameState.mu.Unlock()
+		return
+	}
+
+	if len(parts) < 2 {
+		gameState.mu.Unlock()
+		return
+	}
+
+	color, valid := parseColor(parts[1])
+	if !valid {
+		gameState.mu.Unlock()
+		return
+	}
+
+	gameState.TankColor = color
+	gameState.mu.Unlock()
+
+	saveSetting("tank_color", color)
 	broadcast(msgStateUpdate, &gameState)
 }
 

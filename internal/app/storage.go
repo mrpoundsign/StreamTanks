@@ -163,8 +163,12 @@ func loadSettings() {
 						gameState.TerrainMax = tMax
 					}
 				case "terrain_color":
-					if col, ok := parseTerrainColor(v); ok {
+					if col, ok := parseColor(v); ok {
 						gameState.TerrainColor = col
+					}
+				case "tank_color":
+					if col, ok := parseColor(v); ok {
+						gameState.TankColor = col
 					}
 				case "start_perm":
 					clean := strings.ToLower(v)
@@ -240,6 +244,9 @@ func loadSettings() {
 	}
 	if gameState.TerrainColor == "" {
 		gameState.TerrainColor = defaultTerrainColor
+	}
+	if gameState.TankColor == "" {
+		gameState.TankColor = defaultTankColor
 	}
 	gameState.BotList = loadBotList()
 	if gameState.Channel != "" {

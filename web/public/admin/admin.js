@@ -51,8 +51,15 @@
     const terrainColorVal = document.getElementById('terrain-color-val');
     const btnApplyTerrainColor = document.getElementById('btn-apply-terrain-color');
     const btnResetTerrainColor = document.getElementById('btn-reset-terrain-color');
-    const colorSwatches = document.querySelectorAll('.btn-swatch');
-    let isColorDirty = false;
+    const terrainColorSwatches = document.querySelectorAll('.btn-terrain-swatch');
+    let isTerrainColorDirty = false;
+
+    const cfgTankColor = document.getElementById('cfg-tank-color');
+    const tankColorVal = document.getElementById('tank-color-val');
+    const btnApplyTankColor = document.getElementById('btn-apply-tank-color');
+    const btnResetTankColor = document.getElementById('btn-reset-tank-color');
+    const tankColorSwatches = document.querySelectorAll('.btn-tank-swatch');
+    let isTankColorDirty = false;
     const cfgProtractorX = document.getElementById('cfg-protractor-x');
     const cfgProtractorY = document.getElementById('cfg-protractor-y');
     const protractorPosVal = document.getElementById('protractor-pos-val');
@@ -239,17 +246,35 @@
             }
         }
 
-        const activeColor = state.terrainColor || '#ff003c';
-        if (!isColorDirty) {
+        const activeTerrainColor = state.terrainColor || '#ff003c';
+        if (!isTerrainColorDirty) {
             if (cfgTerrainColor && document.activeElement !== cfgTerrainColor) {
-                cfgTerrainColor.value = activeColor;
+                cfgTerrainColor.value = activeTerrainColor;
             }
             if (terrainColorVal) {
-                terrainColorVal.innerText = activeColor;
-                terrainColorVal.style.color = activeColor;
+                terrainColorVal.innerText = activeTerrainColor;
+                terrainColorVal.style.color = activeTerrainColor;
             }
-            colorSwatches.forEach(swatch => {
-                if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === activeColor.toLowerCase()) {
+            terrainColorSwatches.forEach(swatch => {
+                if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === activeTerrainColor.toLowerCase()) {
+                    swatch.classList.add('active');
+                } else {
+                    swatch.classList.remove('active');
+                }
+            });
+        }
+
+        const activeTankColor = state.tankColor || '#ff003c';
+        if (!isTankColorDirty) {
+            if (cfgTankColor && document.activeElement !== cfgTankColor) {
+                cfgTankColor.value = activeTankColor;
+            }
+            if (tankColorVal) {
+                tankColorVal.innerText = activeTankColor;
+                tankColorVal.style.color = activeTankColor;
+            }
+            tankColorSwatches.forEach(swatch => {
+                if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === activeTankColor.toLowerCase()) {
                     swatch.classList.add('active');
                 } else {
                     swatch.classList.remove('active');
@@ -587,13 +612,13 @@
 
     if (cfgTerrainColor) {
         cfgTerrainColor.addEventListener('input', () => {
-            isColorDirty = true;
+            isTerrainColorDirty = true;
             const chosen = cfgTerrainColor.value;
             if (terrainColorVal) {
                 terrainColorVal.innerText = chosen;
                 terrainColorVal.style.color = chosen;
             }
-            colorSwatches.forEach(swatch => {
+            terrainColorSwatches.forEach(swatch => {
                 if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === chosen.toLowerCase()) {
                     swatch.classList.add('active');
                 } else {
@@ -603,7 +628,7 @@
         });
     }
 
-    colorSwatches.forEach(swatch => {
+    terrainColorSwatches.forEach(swatch => {
         swatch.addEventListener('click', () => {
             const color = swatch.dataset.color;
             if (cfgTerrainColor) cfgTerrainColor.value = color;
@@ -611,16 +636,16 @@
                 terrainColorVal.innerText = color;
                 terrainColorVal.style.color = color;
             }
-            colorSwatches.forEach(s => s.classList.remove('active'));
+            terrainColorSwatches.forEach(s => s.classList.remove('active'));
             swatch.classList.add('active');
-            isColorDirty = false;
+            isTerrainColorDirty = false;
             sendCommand(`terraincolor ${color}`);
         });
     });
 
     if (btnApplyTerrainColor) {
         btnApplyTerrainColor.addEventListener('click', () => {
-            isColorDirty = false;
+            isTerrainColorDirty = false;
             if (cfgTerrainColor) {
                 sendCommand(`terraincolor ${cfgTerrainColor.value}`);
             }
@@ -629,8 +654,57 @@
 
     if (btnResetTerrainColor) {
         btnResetTerrainColor.addEventListener('click', () => {
-            isColorDirty = false;
+            isTerrainColorDirty = false;
             sendCommand('terraincolor reset');
+        });
+    }
+
+    if (cfgTankColor) {
+        cfgTankColor.addEventListener('input', () => {
+            isTankColorDirty = true;
+            const chosen = cfgTankColor.value;
+            if (tankColorVal) {
+                tankColorVal.innerText = chosen;
+                tankColorVal.style.color = chosen;
+            }
+            tankColorSwatches.forEach(swatch => {
+                if (swatch.dataset.color && swatch.dataset.color.toLowerCase() === chosen.toLowerCase()) {
+                    swatch.classList.add('active');
+                } else {
+                    swatch.classList.remove('active');
+                }
+            });
+        });
+    }
+
+    tankColorSwatches.forEach(swatch => {
+        swatch.addEventListener('click', () => {
+            const color = swatch.dataset.color;
+            if (cfgTankColor) cfgTankColor.value = color;
+            if (tankColorVal) {
+                tankColorVal.innerText = color;
+                tankColorVal.style.color = color;
+            }
+            tankColorSwatches.forEach(s => s.classList.remove('active'));
+            swatch.classList.add('active');
+            isTankColorDirty = false;
+            sendCommand(`tankcolor ${color}`);
+        });
+    });
+
+    if (btnApplyTankColor) {
+        btnApplyTankColor.addEventListener('click', () => {
+            isTankColorDirty = false;
+            if (cfgTankColor) {
+                sendCommand(`tankcolor ${cfgTankColor.value}`);
+            }
+        });
+    }
+
+    if (btnResetTankColor) {
+        btnResetTankColor.addEventListener('click', () => {
+            isTankColorDirty = false;
+            sendCommand('tankcolor reset');
         });
     }
 

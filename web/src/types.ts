@@ -84,6 +84,7 @@ export interface GameState {
   terrainMin?: number;
   terrainMax?: number;
   terrainColor?: string;
+  tankColor?: string;
   roundId?: number;
   startPerm?: string;
   configPerm?: string;

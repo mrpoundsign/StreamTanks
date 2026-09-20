@@ -615,6 +615,11 @@ function renderConfigModal(prefix: string): void {
       cmd: `<span class="config-cmd">${prefix}terraincolor <span class="cmd-param">&lt;hex|preset&gt;</span></span>`,
     },
     {
+      label: 'Tank Color',
+      value: `<span class="config-val" style="color: ${stateRef?.tankColor ?? '#ff003c'}">${stateRef?.tankColor ?? '#ff003c'}</span>`,
+      cmd: `<span class="config-cmd">${prefix}tankcolor <span class="cmd-param">&lt;hex|preset&gt;</span></span>`,
+    },
+    {
       label: 'Start Game Perm',
       value: `<span class="config-val badge-on">${stateRef?.startPerm ?? 'broadcaster'}</span>`,
       cmd: `<span class="config-cmd">${prefix}startperm <span class="cmd-param">&lt;role&gt;</span></span>`,
@@ -1050,7 +1055,7 @@ function draw(): void {
     if (isPreview) ctx.globalAlpha = 1.0;
   }
   drawTrails(ctx, projectiles, trailParticles);
-  drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache, avatarImgCache);
+  drawTanks(ctx, players, terrain, currentPhase, emotesLayer, emoteCache, avatarImgCache, stateRef?.tankColor ?? '#ff003c');
   drawProjectiles(ctx, projectiles, emoteCache);
   drawExplosions(ctx, explosions);
 }

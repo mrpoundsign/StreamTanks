@@ -45,6 +45,7 @@ func resetGameStateForTest() {
 	gameState.TerrainMin = 20
 	gameState.TerrainMax = 75
 	gameState.TerrainColor = defaultTerrainColor
+	gameState.TankColor = defaultTankColor
 	gameState.Terrain = generateTerrain(20, 75)
 	gameState.StartPerm = "broadcaster"
 	gameState.ConfigPerm = "broadcaster"
@@ -1180,6 +1181,159 @@ func TestTerrainColorConfiguration(t *testing.T) {
 	gameState.mu.Lock()
 	if gameState.TerrainColor != "#445566" {
 		t.Errorf("expected loaded TerrainColor=#445566 from SQLite, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+}
+
+func TestTankColorConfiguration(t *testing.T) {
+	resetGameStateForTest()
+
+	testDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test sqlite db: %v", err)
+	}
+	defer func() { _ = testDB.Close() }()
+
+	_, err = testDB.Exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create test settings table: %v", err)
+	}
+
+	oldDB := db
+	db = testDB
+	defer func() { db = oldDB }()
+
+	// Default value
+	gameState.mu.Lock()
+	if gameState.TankColor != "#ff003c" {
+		t.Fatalf("expected default TankColor=#ff003c, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	// Presets
+	presets := []struct {
+		cmd      string
+		expected string
+	}{
+		{"%tankcolor cyan", "#00ffcc"},
+		{"%tankcolor green", "#00ff66"},
+		{"%tankcolor purple", "#bf00ff"},
+		{"%tankcolor orange", "#ff6600"},
+		{"%tankcolor yellow", "#ffd700"},
+		{"%tankcolor white", "#ffffff"},
+		{"%tankcolor red", "#ff003c"},
+		{"%tankcolor default", "#ff003c"},
+		{"%tankcolor reset", "#ff003c"},
+	}
+
+	for _, tc := range presets {
+		processCommand("Admin", tc.cmd, nil)
+		gameState.mu.Lock()
+		if gameState.TankColor != tc.expected {
+			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TankColor)
+		}
+		gameState.mu.Unlock()
+	}
+
+	// Hex formats
+	hexTests := []struct {
+		cmd      string
+		expected string
+	}{
+		{"%tankcolor #bf00ff", "#bf00ff"},
+		{"%tankcolor 00ffcc", "#00ffcc"},
+		{"%tankcolor #AABBCC", "#aabbcc"},
+		{"%tankcolor #0fc", "#00ffcc"},
+		{"%tankcolor f00", "#ff0000"},
+	}
+
+	for _, tc := range hexTests {
+		processCommand("Admin", tc.cmd, nil)
+		gameState.mu.Lock()
+		if gameState.TankColor != tc.expected {
+			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TankColor)
+		}
+		gameState.mu.Unlock()
+	}
+
+	// Subcommand aliases: %tank color <hex>, %tankcolour <preset>
+	processCommand("Admin", "%tank color #334455", nil)
+	gameState.mu.Lock()
+	if gameState.TankColor != "#334455" {
+		t.Errorf("%%tank color #334455: expected #334455, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	processCommand("Admin", "%tankcolour cyan", nil)
+	gameState.mu.Lock()
+	if gameState.TankColor != "#00ffcc" {
+		t.Errorf("%%tankcolour cyan: expected #00ffcc, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	// Invalid inputs should be rejected and retain current color
+	invalids := []string{
+		"%tankcolor",
+		"%tankcolor invalidcolor",
+		"%tankcolor #1234",
+		"%tankcolor #1234567",
+		"%tank color",
+		"%tank color not_a_hex",
+	}
+
+	for _, cmd := range invalids {
+		processCommand("Admin", cmd, nil)
+		gameState.mu.Lock()
+		if gameState.TankColor != "#00ffcc" {
+			t.Errorf("command %s: expected retained #00ffcc, got %s", cmd, gameState.TankColor)
+		}
+		gameState.mu.Unlock()
+	}
+
+	// Permissions check
+	nonAdmin := &twitch.User{Name: "RandomViewer"}
+	processCommand("RandomViewer", "%tankcolor #111111", nil, nonAdmin)
+	gameState.mu.Lock()
+	if gameState.TankColor != "#00ffcc" {
+		t.Errorf("expected viewer command to be ignored, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	modUser := &twitch.User{
+		Name:   "ModUser",
+		IsMod:  true,
+		Badges: map[string]int{"moderator": 1},
+	}
+	// By default configPerm is broadcaster, so mod is rejected
+	processCommand("ModUser", "%tankcolor #222222", nil, modUser)
+	gameState.mu.Lock()
+	if gameState.TankColor != "#00ffcc" {
+		t.Errorf("expected mod command to be rejected when configPerm=broadcaster, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	// Update configPerm to mod
+	processCommand("Admin", "%configperm mod", nil)
+	processCommand("ModUser", "%tankcolor #222222", nil, modUser)
+	gameState.mu.Lock()
+	if gameState.TankColor != "#222222" {
+		t.Errorf("expected mod command to succeed when configPerm=mod, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	// SQLite persistence check
+	processCommand("Admin", "%tankcolor #445566", nil)
+	resetGameStateForTest()
+	gameState.mu.Lock()
+	if gameState.TankColor != "#ff003c" {
+		t.Fatalf("expected reset to default #ff003c, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.TankColor != "#445566" {
+		t.Errorf("expected loaded TankColor=#445566 from SQLite, got %s", gameState.TankColor)
 	}
 	gameState.mu.Unlock()
 }
