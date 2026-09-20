@@ -1,5 +1,11 @@
 # 🚀 StreamTanks
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-00f0ff?style=flat&logo=github)](https://mrpoundsign.github.io/StreamTanks/)
+[![Release](https://img.shields.io/github/v/release/mrpoundsign/StreamTanks?color=ff0055)](https://github.com/mrpoundsign/StreamTanks/releases)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+
+> 🌐 **Official Guides & Documentation**: Visit **[mrpoundsign.github.io/StreamTanks](https://mrpoundsign.github.io/StreamTanks/)** for the [Streamer Setup Guide](https://mrpoundsign.github.io/StreamTanks/streamers.html) and [Player & Viewer Guide](https://mrpoundsign.github.io/StreamTanks/players.html).
+
 **StreamTanks** is a lightweight, interactive Twitch chat artillery game and transparent browser overlay designed for OBS Studio and stream broadcasts. 
 
 Viewers join the battlefield directly through your Twitch chat, command custom emote tanks, aim their cannons with angle and power, and blow chunks out of dynamic destructible terrain while competing for the stream leaderboard!
