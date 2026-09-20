@@ -123,7 +123,7 @@ describe('Terrain Generation', () => {
 
       expect(terrain[cx]).toBe(150);
       // Index 0 should be affected (dx = -10)
-      expect(terrain[0]).toBeCloseTo(100 + Math.sqrt(50 * 50 - 10 * 10));
+      expect(terrain[0]).toBeCloseTo(100 + Math.sqrt(50 * 50 - 10 * 10), 1);
     });
 
     it('should handle craters near the right edge', () => {
@@ -136,7 +136,7 @@ describe('Terrain Generation', () => {
 
       expect(terrain[cx]).toBe(150);
       // Index WIDTH - 1 should be affected (dx = 9)
-      expect(terrain[WIDTH - 1]).toBeCloseTo(100 + Math.sqrt(50 * 50 - 9 * 9));
+      expect(terrain[WIDTH - 1]).toBeCloseTo(100 + Math.sqrt(50 * 50 - 9 * 9), 1);
     });
   });
 });

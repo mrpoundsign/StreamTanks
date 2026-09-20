@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>StreamTanks — Scenario Lab &amp; Visual Replayer</title>
+    <link rel="stylesheet" href="lab.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="lab-layout">
+        <!-- Header -->
+        <header class="lab-header">
+            <div class="header-left">
+                <div class="header-logo">
+                    <span class="logo-accent">STREAM</span>TANKS
+                    <span class="logo-tag">SCENARIO LAB</span>
+                </div>
+                <div class="header-subtitle">Differential Physics Testing &amp; Frame Replayer</div>
+            </div>
+            <div class="header-center">
+                <div class="port-badge">PORT :8105 (GATED LAB)</div>
+                <div id="diff-status-pill" class="status-pill idle">
+                    <span class="pill-dot"></span>
+                    <span id="diff-status-text">Ready</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="btn-refresh-scenarios" class="btn btn-secondary btn-small">
+                    &#x21bb; Refresh Library
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace Grid -->
+        <main class="lab-grid">
+            <!-- Left Panel: Fuzzer Controls & Scenario Library -->
+            <aside class="lab-sidebar">
+                <!-- Fuzzer Controls -->
+                <section class="card fuzzer-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#9889;</span> Differential Fuzzer
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Test Iterations</label>
+                            <div class="btn-group-row">
+                                <button type="button" class="btn btn-tiny btn-batch" data-count="25">25</button>
+                                <button type="button" class="btn btn-tiny btn-batch active" data-count="100">100</button>
+                                <button type="button" class="btn btn-tiny btn-batch" data-count="500">500</button>
+                                <button type="button" class="btn btn-tiny btn-batch" data-count="1000">1000</button>
+                            </div>
+                        </div>
+
+                        <button id="btn-run-fuzz" class="btn btn-primary btn-block">
+                            &#9654; Run Fuzz Suite
+                        </button>
+
+                        <div id="fuzz-progress-container" class="progress-box" style="display: none;">
+                            <div class="progress-bar-bg">
+                                <div id="fuzz-progress-bar" class="progress-bar-fill"></div>
+                            </div>
+                            <div class="progress-text-row">
+                                <span id="fuzz-progress-label">0%</span>
+                                <span id="fuzz-stats-label">Passed: 0 | Diffs: 0</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Scenario Browser -->
+                <section class="card library-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#128193;</span> Scenario Library
+                        </div>
+                        <span id="scenario-count-badge" class="count-badge">0</span>
+                    </div>
+                    <div class="card-body scrollable-body">
+                        <div id="scenario-list" class="scenario-list">
+                            <div class="loading-placeholder">Loading scenarios...</div>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Center Panel: Visual Ghost Canvas & Playback -->
+            <section class="lab-main-stage">
+                <!-- Canvas Container (16:9 1920x1080 Aspect Ratio) -->
+                <div class="canvas-viewport">
+                    <canvas id="replayCanvas" width="1920" height="1080"></canvas>
+                    
+                    <!-- Ghost Legend Overlay -->
+                    <div class="ghost-legend">
+                        <div class="legend-item cyan">
+                            <span class="legend-indicator"></span>
+                            <span class="legend-label">Server Trajectory &amp; Impact</span>
+                        </div>
+                        <div class="legend-item pink">
+                            <span class="legend-indicator"></span>
+                            <span class="legend-label">Overlay Trajectory &amp; Impact</span>
+                        </div>
+                        <div class="legend-item yellow">
+                            <span class="legend-indicator"></span>
+                            <span class="legend-label">Terrain Drift Zone</span>
+                        </div>
+                    </div>
+
+                    <!-- Overlay Notifications Banner -->
+                    <div id="canvas-overlay-banner" class="canvas-banner" style="display: none;">
+                        <span id="canvas-banner-text">Loading...</span>
+                    </div>
+                </div>
+
+                <!-- Playback Timeline & Scrubber Toolbar -->
+                <div class="playback-bar">
+                    <div class="playback-controls">
+                        <button id="btn-rewind" class="btn btn-secondary btn-icon-only" title="Rewind to Start">&#9198;</button>
+                        <button id="btn-step-back" class="btn btn-secondary btn-icon-only" title="Step Back 1 Frame">&#9664;&#9646;</button>
+                        <button id="btn-play-pause" class="btn btn-primary btn-play" title="Play / Pause">&#9654; Play</button>
+                        <button id="btn-step-forward" class="btn btn-secondary btn-icon-only" title="Step Forward 1 Frame">&#9646;&#9654;</button>
+                    </div>
+
+                    <div class="scrubber-container">
+                        <input type="range" id="timeline-scrubber" min="0" max="100" value="0" step="1">
+                        <div class="timeline-labels">
+                            <span id="timeline-current-frame">Frame 0</span>
+                            <span id="timeline-total-frames">Total: 0</span>
+                        </div>
+                    </div>
+
+                    <div class="playback-settings">
+                        <label for="select-speed">Speed</label>
+                        <select id="select-speed" class="select-tiny">
+                            <option value="0.1">0.1x</option>
+                            <option value="0.25">0.25x</option>
+                            <option value="0.5" selected>0.5x</option>
+                            <option value="1.0">1.0x</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Discrepancy Diagnostics & Inspector -->
+            <aside class="lab-inspector">
+                <section class="card inspector-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#128269;</span> Differential Inspector
+                        </div>
+                    </div>
+                    <div class="card-body scrollable-body">
+                        <!-- Discrepancy Status Card -->
+                        <div id="inspector-status-box" class="status-box empty">
+                            <div class="status-title">NO SCENARIO LOADED</div>
+                            <div class="status-desc">Select or run a scenario to inspect differential results.</div>
+                        </div>
+
+                        <!-- Metrics Grid -->
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-val" id="metric-terrain-diff">0.0px</div>
+                                <div class="metric-label">Max Terrain Drift</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-val" id="metric-pos-diff">0.0px</div>
+                                <div class="metric-label">Max Tank Drift</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-val" id="metric-kill-mismatch">0</div>
+                                <div class="metric-label">Kill Mismatches</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-val" id="metric-steps">0</div>
+                                <div class="metric-label">Total Steps</div>
+                            </div>
+                        </div>
+
+                        <!-- Kill/Death Attribution Comparison -->
+                        <div class="inspector-section">
+                            <div class="section-title">ELIMINATIONS COMPARISON</div>
+                            <div id="kills-comparison-body" class="comparison-list">
+                                <div class="empty-text">No kills recorded</div>
+                            </div>
+                        </div>
+
+                        <!-- Frame Inspection Table -->
+                        <div class="inspector-section">
+                            <div class="section-title">CURRENT FRAME TANK COORDS</div>
+                            <table class="inspector-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tank</th>
+                                        <th>Server (X, Y)</th>
+                                        <th>Overlay (X, Y)</th>
+                                        <th>&Delta;</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inspector-tank-tbody">
+                                    <tr><td colspan="4" class="empty-text">No active tanks</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Raw JSON Toggle -->
+                        <div class="inspector-section">
+                            <button id="btn-toggle-json" class="btn btn-small btn-secondary btn-block">
+                                Toggle Scenario JSON
+                            </button>
+                            <pre id="raw-json-viewer" class="json-viewer" style="display: none;"></pre>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </main>
+    </div>
+
+    <script src="lab.js"></script>
+</body>
+</html>

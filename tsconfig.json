@@ -14,5 +14,5 @@
     "noUnusedParameters": true,
     "types": ["twitch-ext"]
   },
-  "include": ["web/src/**/*", "ext-web/src/**/*"]
+  "include": ["web/src/**/*", "ext-web/src/**/*", "lab-web/src/**/*"]
 }

@@ -726,376 +726,151 @@ func destroyTerrain(cx, cy, radius float64, shotId string) {
 	})
 }
 
-func checkTankCollisions(cx, cy, radius float64, owner string) {
-	for name, p := range gameState.Players {
-		if name == owner || p.IsDead || p.IsShielded {
-			continue
-		}
-		dist := math.Hypot(p.X-cx, p.Y-cy)
-		if dist < radius+20.0 {
-			p.IsDead = true
+// liveCollisionSink connects app.Engine physics simulation to the live game server:
+// score deductions/awards, KillEvent recording, and WebSocket event broadcasting.
+type liveCollisionSink struct {
+	roundID int
+}
 
-			// 5% point loss for human victim on death (rounded down)
-			loss := 0
-			if !p.IsBot {
-				victimScore := gameState.Leaderboard[name]
-				loss = victimScore / 20
-				if loss > 0 {
-					gameState.Leaderboard[name] -= loss
-					deductScore(name, loss)
-				}
-			}
+func (s *liveCollisionSink) OnCrater(cx, cy, radius float64, shotID string) {
+	appliedCratersMu.Lock()
+	appliedCraters[shotID] = true
+	appliedCratersMu.Unlock()
 
-			// Handle kill attribution
-			killerPlayer := gameState.Players[owner]
-			killerIsBot := false
-			angle := 0
-			power := 0
-			bountyAwarded := 0
-			pointsAwarded := 0
-			if killerPlayer != nil {
-				killerIsBot = killerPlayer.IsBot
-				angle = killerPlayer.Angle
-				power = killerPlayer.Power
-				if !killerIsBot {
-					pts := 1
-					if p.IsBot {
-						pts = gameState.BotPoints
-					}
-					totalPts := pts + loss
-					if totalPts > 0 {
-						gameState.Leaderboard[owner] += totalPts
-						addScore(owner, totalPts)
-					}
-					bountyAwarded = loss
-					pointsAwarded = totalPts
-				}
-			}
-			gameState.MatchKills = append(gameState.MatchKills, KillEvent{
-				Killer:        owner,
-				KillerIsBot:   killerIsBot,
-				Victim:        name,
-				VictimIsBot:   p.IsBot,
-				Angle:         angle,
-				Power:         power,
-				ImpactX:       cx,
-				ImpactY:       cy,
-				RoundID:       gameState.RoundID,
-				Timestamp:     time.Now().UnixMilli(),
-				PointsLost:    loss,
-				PointsAwarded: pointsAwarded,
-			})
-			broadcast(msgPlayerDied, PlayerDiedPayload{
-				Victim:        name,
-				VictimIsBot:   p.IsBot,
-				Killer:        owner,
-				KillerIsBot:   killerIsBot,
-				PointsLost:    loss,
-				PointsAwarded: pointsAwarded,
-				BountyAwarded: bountyAwarded,
-			})
+	broadcastExcept(nil, msgTerrainCrater, CraterPayload{
+		ID:     shotID,
+		X:      cx,
+		Y:      cy,
+		Radius: radius,
+	})
+}
+
+func (s *liveCollisionSink) OnSpark(x, y float64) {}
+
+func (s *liveCollisionSink) OnKill(victim, killer string, cx, cy float64, isBot bool) {
+	loss := 0
+	if !isBot {
+		victimScore := gameState.Leaderboard[victim]
+		loss = victimScore / 20
+		if loss > 0 {
+			gameState.Leaderboard[victim] -= loss
+			deductScore(victim, loss)
 		}
 	}
+
+	killerPlayer := gameState.Players[killer]
+	killerIsBot := false
+	angle := 0
+	power := 0
+	bountyAwarded := 0
+	pointsAwarded := 0
+	if killerPlayer != nil {
+		killerIsBot = killerPlayer.IsBot
+		angle = killerPlayer.Angle
+		power = killerPlayer.Power
+		if !killerIsBot {
+			pts := 1
+			if isBot {
+				pts = gameState.BotPoints
+			}
+			totalPts := pts + loss
+			if totalPts > 0 {
+				gameState.Leaderboard[killer] += totalPts
+				addScore(killer, totalPts)
+			}
+			bountyAwarded = loss
+			pointsAwarded = totalPts
+		}
+	}
+
+	gameState.MatchKills = append(gameState.MatchKills, KillEvent{
+		Killer:        killer,
+		KillerIsBot:   killerIsBot,
+		Victim:        victim,
+		VictimIsBot:   isBot,
+		Angle:         angle,
+		Power:         power,
+		ImpactX:       cx,
+		ImpactY:       cy,
+		RoundID:       s.roundID,
+		Timestamp:     time.Now().UnixMilli(),
+		PointsLost:    loss,
+		PointsAwarded: pointsAwarded,
+	})
+
+	broadcast(msgPlayerDied, PlayerDiedPayload{
+		Victim:        victim,
+		VictimIsBot:   isBot,
+		Killer:        killer,
+		KillerIsBot:   killerIsBot,
+		PointsLost:    loss,
+		PointsAwarded: pointsAwarded,
+		BountyAwarded: bountyAwarded,
+	})
+}
+
+func checkTankCollisions(cx, cy, radius float64, owner string) {
+	engine := &Engine{
+		Terrain:      gameState.Terrain,
+		Players:      gameState.Players,
+		BouncyWalls:  gameState.BouncyWalls,
+		TerrainClimb: gameState.TerrainClimb,
+		MoveDistance: gameState.MoveDistance,
+		BotPoints:    gameState.BotPoints,
+	}
+	sink := &liveCollisionSink{roundID: gameState.RoundID}
+	engine.CheckTankCollisions(cx, cy, radius, owner, sink)
 }
 
 func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
-	anyMoving := false
-	terrainClimb := gameState.TerrainClimb
-	for name, p := range gameState.Players {
-		if p.IsDead {
-			continue
-		}
-
-		// Execute Action Movement
-		if gameState.Phase == phaseAction && p.Moving {
-			anyMoving = true
-			currentSpeed := p.SpeedMultiplier * 2.0 * dtScale
-			switch p.ActionType {
-			case actionLeft:
-				nextX := p.X - currentSpeed
-				currIdx := int(math.Floor(p.X))
-				nextIdx := int(math.Floor(nextX))
-				blocked := false
-				if !terrainClimb && currIdx != nextIdx {
-					stepX := math.Abs(float64(currIdx - nextIdx))
-					rise := getTerrainHeight(gameState.Terrain, float64(currIdx)) - getTerrainHeight(gameState.Terrain, float64(nextIdx))
-					if rise > 0 && (rise/stepX) > 4.0 {
-						blocked = true
-					}
-				}
-				if blocked {
-					p.Moving = false
-				} else {
-					p.X = nextX
-					if p.X <= 20 {
-						if bouncyWalls && !p.HasBounced {
-							p.X = 20
-							p.ActionType = actionRight
-							p.MoveTarget = p.X + float64(gameState.MoveDistance)
-							p.SpeedMultiplier = 1.5
-							p.HasBounced = true
-							createWallSpark(20, p.Y)
-						} else if (p.MoveTarget != 0 && p.X <= p.MoveTarget) || p.X <= 20 {
-							p.Moving = false
-							if p.X < 20 {
-								p.X = 20
-							}
-						}
-					} else if p.MoveTarget != 0 && p.X <= p.MoveTarget {
-						p.Moving = false
-					}
-				}
-			case actionRight:
-				nextX := p.X + currentSpeed
-				currIdx := int(math.Floor(p.X))
-				nextIdx := int(math.Floor(nextX))
-				blocked := false
-				if !terrainClimb && currIdx != nextIdx {
-					stepX := math.Abs(float64(currIdx - nextIdx))
-					rise := getTerrainHeight(gameState.Terrain, float64(currIdx)) - getTerrainHeight(gameState.Terrain, float64(nextIdx))
-					if rise > 0 && (rise/stepX) > 4.0 {
-						blocked = true
-					}
-				}
-				if blocked {
-					p.Moving = false
-				} else {
-					p.X = nextX
-					if p.X >= defaultTerrainWidth-20 {
-						if bouncyWalls && !p.HasBounced {
-							p.X = defaultTerrainWidth - 20
-							p.ActionType = actionLeft
-							p.MoveTarget = p.X - float64(gameState.MoveDistance)
-							p.SpeedMultiplier = 1.5
-							p.HasBounced = true
-							createWallSpark(defaultTerrainWidth-20, p.Y)
-						} else if (p.MoveTarget != 0 && p.X >= p.MoveTarget) || p.X >= defaultTerrainWidth-20 {
-							p.Moving = false
-							if p.X > defaultTerrainWidth-20 {
-								p.X = defaultTerrainWidth - 20
-							}
-						}
-					} else if p.MoveTarget != 0 && p.X >= p.MoveTarget {
-						p.Moving = false
-					}
-				}
-			}
-		}
-
-		// Boundary clamping
-		if p.X < 20 {
-			p.X = 20
-		}
-		if p.X > defaultTerrainWidth-20 {
-			p.X = defaultTerrainWidth - 20
-		}
-
-		// Falling / Ground snapping
-		floorY := getTerrainHeight(gameState.Terrain, p.X)
-		if p.Y < floorY {
-			p.Y += 5.0 * dtScale
-			if p.Y > floorY {
-				p.Y = floorY
-			}
-		} else {
-			p.Y = floorY
-		}
-
-		// Fall off bottom of screen
-		if p.Y >= defaultTerrainHeight {
-			if !p.IsDead {
-				p.IsDead = true
-				loss := 0
-				if !p.IsBot {
-					victimScore := gameState.Leaderboard[name]
-					loss = victimScore / 20
-					if loss > 0 {
-						gameState.Leaderboard[name] -= loss
-						deductScore(name, loss)
-					}
-				}
-				gameState.MatchKills = append(gameState.MatchKills, KillEvent{
-					Victim:      name,
-					VictimIsBot: p.IsBot,
-					ImpactX:     p.X,
-					ImpactY:     p.Y,
-					RoundID:     gameState.RoundID,
-					Timestamp:   time.Now().UnixMilli(),
-				})
-				broadcast(msgPlayerDied, PlayerDiedPayload{
-					Victim:      name,
-					VictimIsBot: p.IsBot,
-					PointsLost:  loss,
-				})
-			}
-		}
+	engine := &Engine{
+		Terrain:      gameState.Terrain,
+		Players:      gameState.Players,
+		Explosions:   gameState.Explosions,
+		BouncyWalls:  bouncyWalls,
+		TerrainClimb: gameState.TerrainClimb,
+		MoveDistance: gameState.MoveDistance,
+		BotPoints:    gameState.BotPoints,
 	}
+	sink := &liveCollisionSink{roundID: gameState.RoundID}
+	anyMoving := engine.UpdateTankMovements(dtScale, sink)
+	gameState.Explosions = engine.Explosions
 	return anyMoving
 }
 
 func updateProjectiles(dtScale float64, bouncyWalls bool) {
-	gravity := 0.2
-	for i := len(gameState.Projectiles) - 1; i >= 0; i-- {
-		proj := &gameState.Projectiles[i]
-		proj.X += proj.VX * dtScale
-		proj.VY += gravity * dtScale
-		proj.Y += proj.VY * dtScale
-
-		hit := false
-
-		if proj.Y < 0 {
-			if bouncyWalls {
-				proj.Y = 0
-				proj.VY = math.Abs(proj.VY) * 1.1
-				proj.VX *= 1.1
-				proj.Bounces++
-				cx := proj.X
-				if cx < 0 {
-					cx = 0
-				} else if cx > defaultTerrainWidth {
-					cx = defaultTerrainWidth
-				}
-				createWallSpark(cx, 0)
-				if proj.Bounces > 15 {
-					hit = true
-				}
-			}
-		} else if proj.Y > defaultTerrainHeight {
-			if bouncyWalls {
-				proj.Y = defaultTerrainHeight
-				proj.VY = -math.Abs(proj.VY) * 1.1
-				proj.VX *= 1.1
-				proj.Bounces++
-				cx := proj.X
-				if cx < 0 {
-					cx = 0
-				} else if cx > defaultTerrainWidth {
-					cx = defaultTerrainWidth
-				}
-				createWallSpark(cx, defaultTerrainHeight)
-				if proj.Bounces > 15 {
-					hit = true
-				}
-			} else {
-				hit = true
-			}
-		}
-
-		if !hit {
-			if proj.X < 0 {
-				if bouncyWalls {
-					proj.X = 0
-					proj.VX = math.Abs(proj.VX) * 1.1
-					proj.VY *= 1.1
-					proj.Bounces++
-					cy := proj.Y
-					if cy < 0 {
-						cy = 0
-					} else if cy > defaultTerrainHeight {
-						cy = defaultTerrainHeight
-					}
-					createWallSpark(0, cy)
-					if proj.Bounces > 15 {
-						hit = true
-					}
-				} else {
-					hit = true
-				}
-			} else if proj.X > defaultTerrainWidth {
-				if bouncyWalls {
-					proj.X = defaultTerrainWidth
-					proj.VX = -math.Abs(proj.VX) * 1.1
-					proj.VY *= 1.1
-					proj.Bounces++
-					cy := proj.Y
-					if cy < 0 {
-						cy = 0
-					} else if cy > defaultTerrainHeight {
-						cy = defaultTerrainHeight
-					}
-					createWallSpark(defaultTerrainWidth, cy)
-					if proj.Bounces > 15 {
-						hit = true
-					}
-				} else {
-					hit = true
-				}
-			}
-		}
-
-		// Active shield collision: completely absorbs projectile before terrain impact
-		if !hit {
-			for name, p := range gameState.Players {
-				if name == proj.Owner || p.IsDead || !p.IsShielded {
-					continue
-				}
-				if math.Hypot(p.X-proj.X, p.Y-proj.Y) < 45 && proj.Y <= p.Y+5 {
-					hit = true
-					createWallSpark(proj.X, proj.Y)
-					break
-				}
-			}
-		}
-
-		// Terrain collision
-		if !hit && proj.Y >= 0 && proj.Y >= getTerrainHeight(gameState.Terrain, proj.X) {
-			hit = true
-			destroyTerrain(proj.X, proj.Y, 50.0, proj.ID) // EXPLOSION_RADIUS = 50
-			checkTankCollisions(proj.X, proj.Y, 50.0, proj.Owner)
-		}
-
-		// Direct tank collision
-		if !hit {
-			for name, p := range gameState.Players {
-				if name == proj.Owner || p.IsDead || p.IsShielded {
-					continue
-				}
-				if math.Hypot(p.X-proj.X, p.Y-proj.Y) < 20 {
-					hit = true
-					destroyTerrain(proj.X, proj.Y, 50.0, proj.ID)
-					checkTankCollisions(proj.X, proj.Y, 50.0, proj.Owner)
-					break
-				}
-			}
-		}
-
-		if hit {
-			gameState.Projectiles = append(gameState.Projectiles[:i], gameState.Projectiles[i+1:]...)
-		}
+	engine := &Engine{
+		Terrain:      gameState.Terrain,
+		Players:      gameState.Players,
+		Projectiles:  gameState.Projectiles,
+		Explosions:   gameState.Explosions,
+		BouncyWalls:  bouncyWalls,
+		TerrainClimb: gameState.TerrainClimb,
+		MoveDistance: gameState.MoveDistance,
+		BotPoints:    gameState.BotPoints,
 	}
+	sink := &liveCollisionSink{roundID: gameState.RoundID}
+	engine.UpdateProjectiles(dtScale, sink)
+	gameState.Projectiles = engine.Projectiles
+	gameState.Explosions = engine.Explosions
 }
 
 func updatePhysicsStep(dtScale float64) bool {
-	bouncyWalls := gameState.BouncyWalls
-
-	anyMoving := updateTankMovements(dtScale, bouncyWalls)
-	updateProjectiles(dtScale, bouncyWalls)
-
-	// Update explosions
-	for i := len(gameState.Explosions) - 1; i >= 0; i-- {
-		exp := &gameState.Explosions[i]
-		exp.Radius += 2.0 * dtScale
-		exp.Alpha -= 0.05 * dtScale
-		if exp.Alpha <= 0 {
-			gameState.Explosions = append(gameState.Explosions[:i], gameState.Explosions[i+1:]...)
-		}
+	engine := &Engine{
+		Terrain:      gameState.Terrain,
+		Players:      gameState.Players,
+		Projectiles:  gameState.Projectiles,
+		Explosions:   gameState.Explosions,
+		BouncyWalls:  gameState.BouncyWalls,
+		TerrainClimb: gameState.TerrainClimb,
+		MoveDistance: gameState.MoveDistance,
+		BotPoints:    gameState.BotPoints,
 	}
-
-	// Phase transition check
-	if gameState.Phase == phaseAction && len(gameState.Projectiles) == 0 && len(gameState.Explosions) == 0 && !anyMoving {
-		anyFalling := false
-		for _, p := range gameState.Players {
-			if !p.IsDead && p.Y < getTerrainHeight(gameState.Terrain, p.X) {
-				anyFalling = true
-				break
-			}
-		}
-		if !anyFalling {
-			return true // Action is finished
-		}
-	}
-
-	return false
+	sink := &liveCollisionSink{roundID: gameState.RoundID}
+	isDone := engine.Step(dtScale, sink)
+	gameState.Projectiles = engine.Projectiles
+	gameState.Explosions = engine.Explosions
+	return isDone
 }
 
 func runPhysicsLoop(roundID int) {
