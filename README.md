@@ -2,7 +2,7 @@
 
 **StreamTanks** is a lightweight, interactive Twitch chat artillery game and transparent browser overlay designed for OBS Studio and stream broadcasts. 
 
-Viewers join the battlefield directly through your Twitch chat, command custom neon tanks, aim their cannons with angle and power, and blow chunks out of dynamic destructible terrain while competing for the stream leaderboard!
+Viewers join the battlefield directly through your Twitch chat, command custom emote tanks, aim their cannons with angle and power, and blow chunks out of dynamic destructible terrain while competing for the stream leaderboard!
 
 ---
 
