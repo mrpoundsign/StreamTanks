@@ -1,17 +1,17 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	"streamtanks/internal/scenariolab"
@@ -27,7 +27,7 @@ var (
 	untilFailFlag = flag.Bool("until-fail", false, "Run replay iterations until a failure/divergence is detected")
 	dirFlag       = flag.String("dir", "./lab-web/public", "Directory containing lab frontend assets")
 	fpsFlag       = flag.Int("fps", 0, "Client overlay FPS to simulate (0 = cycle across 144, 120, 60; >0 = fixed FPS)")
-	workersFlag   = flag.Int("workers", 1, "Number of parallel worker processes for headless simulation (default: 1)")
+	workersFlag   = flag.Int("workers", runtime.GOMAXPROCS(0), "Number of persistent Node.js worker processes in the pool (default: GOMAXPROCS)")
 )
 
 func main() {
@@ -77,7 +77,14 @@ func runReplayCLI(filePath string) {
 		scaledImpacts[j].Step = int(math.Round(float64(imp.Step) * float64(clientFps) / 60.0))
 	}
 
-	clientResults, err := runOverlaySimHeadless([]OverlaySimBatchItem{
+	runnerScript := "./scripts/headless_sim.mjs"
+	pool, err := scenariolab.NewNodeWorkerPool(1, runnerScript)
+	if err != nil {
+		log.Fatalf("Failed to initialize worker pool: %v", err)
+	}
+	defer pool.Close()
+
+	clientResults, err := pool.RunBatch([]scenariolab.OverlaySimBatchItem{
 		{
 			Scenario:      sc,
 			ServerImpacts: scaledImpacts,
@@ -120,82 +127,83 @@ func runReplayCLI(filePath string) {
 	internalDivergedRuns := 0
 	totalRuns := 0
 
-	if *untilFailFlag {
-		fmt.Print("Scanning for divergence... ")
-		found := false
-		maxScan := 10000
-		for scanRun := 1; scanRun <= maxScan; scanRun++ {
-			sRes := scenariolab.RunScenarioSimulation(sc, serverDtScale)
-			if scanRun == 1 {
-				baselineServerRes = sRes
-			}
-			diff := scenariolab.CompareSimulationResults(sRes, clientRes)
-			internalDiff := scenariolab.CompareSimulationResults(sRes, baselineServerRes)
-
-			if diff.HasDiscrepancy || internalDiff.HasDiscrepancy {
-				found = true
-				firstMismatchRun = scanRun
-				if diff.HasDiscrepancy {
-					firstMismatch = diff
-				} else {
-					firstMismatch = internalDiff
-				}
-				fmt.Printf("FOUND on run #%d!\nSampling %d runs to calculate failure rate...\n\n", scanRun, targetRuns)
-				break
-			}
-		}
-		if !found {
-			fmt.Printf("No divergence detected after %d iterations.\n", maxScan)
-			fmt.Printf("\n>>> Replay Audit Summary: PERFECT MATCH: 100.0%% Deterministic (0/%d failures)\n", maxScan)
-			fmt.Printf("======================================================================\n")
-			return
-		}
-	}
-
-	for i := 1; i <= targetRuns; i++ {
+	runIteration := func(runIdx int) bool {
 		totalRuns++
-		sRes := scenariolab.RunScenarioSimulation(sc, serverDtScale)
-		if i == 1 && baselineServerRes == nil {
-			baselineServerRes = sRes
-			fmt.Printf("Server (Run #1):   %d steps, %d impacts, %d kills, Winner: %s\n",
-				sRes.TotalSteps, len(sRes.Impacts), len(sRes.Kills), sRes.Winner)
+		currentServerRes := scenariolab.RunScenarioSimulation(sc, serverDtScale)
+
+		if baselineServerRes == nil {
+			baselineServerRes = currentServerRes
+		} else {
+			internalDiff := scenariolab.CompareSimulationResults(baselineServerRes, currentServerRes)
+			if internalDiff.HasDiscrepancy {
+				internalDivergedRuns++
+			}
 		}
 
-		diff := scenariolab.CompareSimulationResults(sRes, clientRes)
-		internalDiff := scenariolab.CompareSimulationResults(sRes, baselineServerRes)
-
+		diff := scenariolab.CompareSimulationResults(currentServerRes, clientRes)
 		if diff.HasDiscrepancy {
 			divergedRuns++
 			if firstMismatch == nil {
 				firstMismatch = diff
-				firstMismatchRun = i
+				firstMismatchRun = runIdx
+			}
+			return false
+		}
+		return true
+	}
+
+	if *untilFailFlag {
+		maxScanLimit := 10000
+		scanPassed := 0
+		foundFailure := false
+
+		fmt.Printf("Scanning for divergence (up to %d iterations)...\n", maxScanLimit)
+		for i := 1; i <= maxScanLimit; i++ {
+			passed := runIteration(i)
+			if passed {
+				scanPassed++
+			} else {
+				foundFailure = true
+				fmt.Printf("-> Failure detected on iteration #%d! Sampling remaining %d runs to compute failure rate...\n", i, targetRuns-1)
+				break
 			}
 		}
-		if internalDiff.HasDiscrepancy {
-			internalDivergedRuns++
-			if firstMismatch == nil {
-				firstMismatch = internalDiff
-				firstMismatchRun = i
+
+		if foundFailure {
+			for i := totalRuns + 1; i <= totalRuns+targetRuns-1; i++ {
+				runIteration(i)
 			}
+		} else {
+			fmt.Printf("-> No divergence detected in %d consecutive runs.\n", maxScanLimit)
+		}
+	} else {
+		for i := 1; i <= targetRuns; i++ {
+			runIteration(i)
 		}
 	}
 
-	failureRate := float64(divergedRuns) / float64(totalRuns) * 100.0
-	internalRate := float64(internalDivergedRuns) / float64(totalRuns) * 100.0
+	failurePct := float64(divergedRuns) / float64(totalRuns) * 100.0
+	internalFailurePct := float64(internalDivergedRuns) / float64(totalRuns) * 100.0
 
-	fmt.Printf("\n>>> Replay Audit Summary (%d runs):\n", totalRuns)
+	fmt.Printf("\n======================================================================\n")
+	fmt.Printf(" AUDIT RESULTS (%d Iterations Tested)\n", totalRuns)
+	fmt.Printf("----------------------------------------------------------------------\n")
+
 	if divergedRuns > 0 || internalDivergedRuns > 0 {
-		fmt.Printf("  [NON-DETERMINISM / FLAKINESS DETECTED]\n")
-		fmt.Printf("  - Parity Failure Rate:      %.1f%% (%d/%d runs diverged from overlay)\n", failureRate, divergedRuns, totalRuns)
-		fmt.Printf("  - Internal Non-Determinism: %.1f%% (%d/%d runs diverged from Run #1)\n", internalRate, internalDivergedRuns, totalRuns)
+		fmt.Printf("  [FLAKINESS DETECTED]\n")
+		fmt.Printf("  - Parity Failure Rate:      %.1f%% (%d/%d runs diverged from overlay)\n", failurePct, divergedRuns, totalRuns)
+		fmt.Printf("  - Internal Non-Determinism: %.1f%% (%d/%d runs diverged from Run #1)\n", internalFailurePct, internalDivergedRuns, totalRuns)
+		fmt.Printf("  - Status: SIMULATION IS NON-DETERMINISTIC ACROSS RUNS\n\n")
+
 		if firstMismatch != nil {
-			fmt.Printf("\n>>> First Divergence Details (Observed on Run #%d):\n", firstMismatchRun)
-			fmt.Printf("  Summary: %s\n", firstMismatch.Summary)
+			fmt.Printf("  First Divergence Observed on Run #%d:\n", firstMismatchRun)
+			fmt.Printf("  - Summary: %s\n", firstMismatch.Summary)
 			for _, m := range firstMismatch.KillMismatches {
-				fmt.Printf("  [MISMATCH] %s\n", m)
+				fmt.Printf("    * %s\n", m)
 			}
 			if firstMismatch.TerrainDiffCount > 0 {
-				fmt.Printf("  [TERRAIN DIFF] %d columns differed (max: %.1fpx)\n", firstMismatch.TerrainDiffCount, firstMismatch.MaxTerrainDiff)
+				fmt.Printf("  [TERRAIN DIFF] %d columns diverged (max delta: %.1fpx)\n",
+					firstMismatch.TerrainDiffCount, firstMismatch.MaxTerrainDiff)
 			}
 			if firstMismatch.MaxPositionDiff > 1.0 {
 				fmt.Printf("  [POSITION DIFF] Max tank position delta: %.1fpx\n", firstMismatch.MaxPositionDiff)
@@ -215,7 +223,7 @@ func runFuzzCLI(count int, outDir string) {
 
 	numWorkers := *workersFlag
 	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU()
+		numWorkers = runtime.GOMAXPROCS(0)
 	}
 	if numWorkers <= 0 {
 		numWorkers = 1
@@ -227,6 +235,22 @@ func runFuzzCLI(count int, outDir string) {
 	fmt.Printf("==================================================\n\n")
 
 	_ = ensureSimulationBundle()
+
+	runnerScript := "./scripts/headless_sim.mjs"
+	pool, err := scenariolab.NewNodeWorkerPool(numWorkers, runnerScript)
+	if err != nil {
+		log.Fatalf("Failed to initialize worker pool: %v", err)
+	}
+	defer pool.Close()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Printf("\nInterrupted. Shutting down %d workers...\n", pool.Size())
+		pool.Close()
+		os.Exit(130)
+	}()
 
 	batchSize := *batchFlag
 	if batchSize <= 0 {
@@ -254,7 +278,7 @@ func runFuzzCLI(count int, outDir string) {
 
 		scenarios := make([]*scenariolab.Scenario, curBatchSize)
 		serverResults := make([]*scenariolab.SimulationResult, curBatchSize)
-		items := make([]OverlaySimBatchItem, curBatchSize)
+		items := make([]scenariolab.OverlaySimBatchItem, curBatchSize)
 
 		var genWg sync.WaitGroup
 		chunkSize := (curBatchSize + numWorkers - 1) / numWorkers
@@ -288,7 +312,7 @@ func runFuzzCLI(count int, outDir string) {
 						scaledImpacts[j].Step = int(math.Round(float64(imp.Step) * float64(clientFps) / 60.0))
 					}
 
-					items[i] = OverlaySimBatchItem{
+					items[i] = scenariolab.OverlaySimBatchItem{
 						Scenario:      sc,
 						ServerImpacts: scaledImpacts,
 						ClientFPS:     clientFps,
@@ -299,7 +323,7 @@ func runFuzzCLI(count int, outDir string) {
 		}
 		genWg.Wait()
 
-		clientResults, err := runOverlaySimHeadlessParallel(items, numWorkers)
+		clientResults, err := pool.RunBatchParallel(items)
 		if err != nil {
 			log.Fatalf("Error running overlay headless simulation batch: %v", err)
 		}
@@ -336,14 +360,6 @@ func runFuzzCLI(count int, outDir string) {
 	fmt.Printf("==================================================\n")
 }
 
-// OverlaySimBatchItem pairs a scenario with server-computed impacts for overlay reconciliation testing.
-type OverlaySimBatchItem struct {
-	Scenario      *scenariolab.Scenario      `json:"scenario"`
-	ServerImpacts []scenariolab.ImpactRecord `json:"serverImpacts"`
-	ClientFPS     int                        `json:"clientFps"`
-	ClientDtScale float64                    `json:"clientDtScale"`
-}
-
 func ensureSimulationBundle() error {
 	distFile := "./web/dist/simulation.mjs"
 	srcFile := "./web/src/simulation.ts"
@@ -355,97 +371,4 @@ func ensureSimulationBundle() error {
 	_ = os.MkdirAll("./web/dist", 0o755)
 	cmd := exec.Command("npx", "esbuild", "web/src/simulation.ts", "--bundle", "--format=esm", "--outfile="+distFile)
 	return cmd.Run()
-}
-
-func runOverlaySimHeadless(items []OverlaySimBatchItem) ([]scenariolab.SimulationResult, error) {
-	runnerScript := "./scripts/headless_sim.mjs"
-	if _, err := os.Stat(runnerScript); err != nil {
-		return nil, fmt.Errorf("headless runner script not found: %s", runnerScript)
-	}
-
-	inputData, err := json.Marshal(items)
-	if err != nil {
-		return nil, err
-	}
-
-	cmd := exec.Command("node", runnerScript)
-	cmd.Stdin = bytes.NewReader(inputData)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("node simulation failed: %v, stderr: %s", err, stderr.String())
-	}
-
-	type clientItem struct {
-		ScenarioID   string                                  `json:"scenarioId"`
-		Kills        []scenariolab.KillRecord                `json:"kills"`
-		Impacts      []scenariolab.ImpactRecord              `json:"impacts"`
-		FinalTerrain []float64                               `json:"finalTerrain"`
-		FinalPlayers map[string]scenariolab.FinalPlayerState `json:"finalPlayers"`
-		TotalSteps   int                                     `json:"totalSteps"`
-	}
-
-	var rawItems []clientItem
-	if err := json.Unmarshal(stdout.Bytes(), &rawItems); err != nil {
-		return nil, fmt.Errorf("failed to parse node simulation output: %v", err)
-	}
-
-	results := make([]scenariolab.SimulationResult, len(rawItems))
-	for i, item := range rawItems {
-		results[i] = scenariolab.SimulationResult{
-			Kills:        item.Kills,
-			Impacts:      item.Impacts,
-			FinalTerrain: item.FinalTerrain,
-			FinalPlayers: item.FinalPlayers,
-			TotalSteps:   item.TotalSteps,
-		}
-	}
-	return results, nil
-}
-
-func runOverlaySimHeadlessParallel(items []OverlaySimBatchItem, numWorkers int) ([]scenariolab.SimulationResult, error) {
-	if len(items) == 0 {
-		return nil, nil
-	}
-	if numWorkers <= 1 || len(items) == 1 {
-		return runOverlaySimHeadless(items)
-	}
-
-	results := make([]scenariolab.SimulationResult, len(items))
-	chunkSize := (len(items) + numWorkers - 1) / numWorkers
-
-	var wg sync.WaitGroup
-	var errMu sync.Mutex
-	var firstErr error
-
-	for w := range numWorkers {
-		start := w * chunkSize
-		if start >= len(items) {
-			break
-		}
-		end := min(start+chunkSize, len(items))
-
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
-			subResults, err := runOverlaySimHeadless(items[start:end])
-			if err != nil {
-				errMu.Lock()
-				if firstErr == nil {
-					firstErr = err
-				}
-				errMu.Unlock()
-				return
-			}
-			copy(results[start:end], subResults)
-		}(start, end)
-	}
-
-	wg.Wait()
-	if firstErr != nil {
-		return nil, firstErr
-	}
-	return results, nil
 }
