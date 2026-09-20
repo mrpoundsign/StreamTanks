@@ -1,6 +1,6 @@
 {
   "name": "streamtanks",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "Interactive Twitch chat artillery game and OBS browser overlay",
   "license": "AGPL-3.0-or-later",
