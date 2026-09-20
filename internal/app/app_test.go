@@ -18,9 +18,16 @@ import (
 	extweb "streamtanks/ext-web"
 	"streamtanks/web"
 
+	"github.com/benbjohnson/clock"
 	"github.com/gempir/go-twitch-irc/v4"
 	"golang.org/x/net/websocket"
 )
+
+func useMockClock() *clock.Mock {
+	mock := clock.NewMock()
+	setClock(mock)
+	return mock
+}
 
 func resetGameStateForTest() {
 	gameState.mu.Lock()
@@ -74,10 +81,13 @@ func resetGameStateForTest() {
 	playerEmotesMu.Lock()
 	playerEmotesCache = make(map[string]savedEmote)
 	playerEmotesMu.Unlock()
+
+	setClock(clock.New())
 }
 
 func TestProcessCommand_JoinAndFire(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	// Test join command with %
 	processCommand("Alice", "%join Kappa", nil)
@@ -110,7 +120,7 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 	processCommand("Alice", "%startgame", nil)
 
 	// Wait briefly for input phase to activate
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
@@ -139,7 +149,8 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// All players fired, so executeActionPhase should trigger within 1s
-	time.Sleep(700 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -150,6 +161,7 @@ func TestProcessCommand_JoinAndFire(t *testing.T) {
 
 func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	gameState.mu.Lock()
 	gameState.Debug = true
@@ -174,9 +186,6 @@ func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 	// Start game
 	startInputPhase()
 
-	// Wait 1.2s for TargetBot to auto-ready
-	time.Sleep(1200 * time.Millisecond)
-
 	gameState.mu.Lock()
 	bot := gameState.Players["TargetBot"]
 	if !bot.Fired {
@@ -191,7 +200,8 @@ func TestDebugBotLifecycle_NoDeadlock(t *testing.T) {
 	processCommand("Player1", "%fire 45 60", nil)
 
 	// Action phase should trigger promptly
-	time.Sleep(700 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -790,6 +800,7 @@ func TestInactivePlayerRandomDirection(t *testing.T) {
 
 func TestInactivePlayerNotWaitedOn(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	gameState.mu.Lock()
 	gameState.RoundID = 1
@@ -804,9 +815,9 @@ func TestInactivePlayerNotWaitedOn(t *testing.T) {
 	// Alice fires
 	processCommand("Alice", "%fire 45 50", nil)
 
-	// Since Bob was inactive last round, we do not wait for the full round time on Bob.
-	// Alice firing truncates the timer to minDuration (clamped to InputDuration=2s in test) + 500ms fast-forward.
-	time.Sleep(3000 * time.Millisecond)
+	// Advance mock clock past minDuration (2s) and fast-forward delay (500ms)
+	mock.Add(3 * time.Second)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -1654,8 +1665,9 @@ func TestScoringPerKill(t *testing.T) {
 
 func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
-	// 1. Join two players
+	// 1. Two humans join (Alice and Bob)
 	processCommand("Alice", "%join Kappa", nil)
 	processCommand("Bob", "%join LUL", nil)
 
@@ -1665,7 +1677,7 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 
 	// Start game -> Round 1 begins (prevRoundHadCommands is false)
 	processCommand("Alice", "%startgame", nil)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
@@ -1681,7 +1693,8 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	// 2. Alice fires at T=0. Because this is round 1 and Bob hasn't fired,
 	// it should NOT fast forward immediately.
 	processCommand("Alice", "%fire 45 50", nil)
-	time.Sleep(200 * time.Millisecond)
+	mock.Add(200 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
@@ -1692,7 +1705,8 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 
 	// 3. Now Bob fires too. All alive players have fired, so it should fast forward immediately!
 	processCommand("Bob", "%left", nil)
-	time.Sleep(700 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -1703,6 +1717,7 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 
 	// 4. Test timer expiry with short InputDuration (simulating minDuration window reaching end)
 	resetGameStateForTest()
+	mock = useMockClock()
 	processCommand("Alice", "%join Kappa", nil)
 	processCommand("Bob", "%join LUL", nil)
 	gameState.mu.Lock()
@@ -1710,13 +1725,14 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	gameState.mu.Unlock()
 
 	processCommand("Alice", "%startgame", nil)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Alice fires; Bob does not
 	processCommand("Alice", "%fire 45 50", nil)
 
 	// After 200ms, should still be in INPUT phase
-	time.Sleep(200 * time.Millisecond)
+	mock.Add(200 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
 		gameState.mu.Unlock()
@@ -1725,7 +1741,8 @@ func TestInputPhase_TenSecondMinimumWhenNoCommandsInPrevRound(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// After 1.5s total (> 1s minDuration + 500ms sleep), should have transitioned to ACTION phase
-	time.Sleep(1500 * time.Millisecond)
+	mock.Add(1500 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
 		gameState.mu.Unlock()
@@ -2370,6 +2387,7 @@ func TestAutoRoundCustomMinutes(t *testing.T) {
 
 func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	// 1 human joins against bots
 	processCommand("Alice", "%join Kappa", nil)
@@ -2380,7 +2398,7 @@ func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
 
 	// Start game -> Round 1
 	processCommand("Alice", "%startgame", nil)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
@@ -2394,12 +2412,13 @@ func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Alice does NOT enter a command in Round 1.
-	// Wait for Round 1 to complete and execute actions:
-	time.Sleep(1600 * time.Millisecond)
+	// Advance time for Round 1 to complete and execute actions:
+	mock.Add(1600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Simulate start of Round 2
 	startInputPhase()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.RoundID != 2 {
@@ -2418,7 +2437,8 @@ func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
 	}
 	// At 200ms, should still be in INPUT phase during window
 	gameState.mu.Unlock()
-	time.Sleep(200 * time.Millisecond)
+	mock.Add(200 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
@@ -2428,7 +2448,8 @@ func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// After 1s duration + 500ms delay, should have transitioned to phaseAction
-	time.Sleep(1500 * time.Millisecond)
+	mock.Add(1500 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
 		gameState.mu.Unlock()
@@ -2439,6 +2460,7 @@ func TestBotGame_InactivePlayerRound2InactivityTimer(t *testing.T) {
 
 func TestBotGame_InactivePlayerFiresDuringWindow(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	// 1 human joins against bots
 	processCommand("Alice", "%join Kappa", nil)
@@ -2453,7 +2475,7 @@ func TestBotGame_InactivePlayerFiresDuringWindow(t *testing.T) {
 
 	// Start Round 2
 	startInputPhase()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if prevRoundHadCommands {
@@ -2466,7 +2488,8 @@ func TestBotGame_InactivePlayerFiresDuringWindow(t *testing.T) {
 	processCommand("Alice", "%fire 45 60", nil)
 
 	// All alive humans (Alice) have fired, should fast-forward immediately within 700ms
-	time.Sleep(700 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -2478,6 +2501,7 @@ func TestBotGame_InactivePlayerFiresDuringWindow(t *testing.T) {
 
 func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	// 2 humans join with bots: Human A and Human B
 	processCommand("Alice", "%join Kappa", nil)
@@ -2493,7 +2517,7 @@ func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
 
 	// Start Round 2
 	startInputPhase()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if !prevRoundHadCommands {
@@ -2507,7 +2531,8 @@ func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Simulate 1.5s elapsed, then Human B (the only active human from round 1) enters a command
-	time.Sleep(1500 * time.Millisecond)
+	mock.Add(1500 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	processCommand("Bob", "%fire 45 60", nil)
 
 	gameState.mu.Lock()
@@ -2526,7 +2551,8 @@ func TestRound2_ActiveHumanFromRound1TriggersTenSecondWindow(t *testing.T) {
 
 	// If Alice also fires now, all alive humans have fired -> immediate fast-forward!
 	processCommand("Alice", "%left", nil)
-	time.Sleep(700 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	if gameState.Phase != phaseAction {
@@ -3409,6 +3435,7 @@ func TestTopPlayerAutoJoin_TieBreaker(t *testing.T) {
 
 func TestAutoRoundTimer_WithTopPlayer(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	gameState.mu.Lock()
 	gameState.Leaderboard["Champion"] = 100
@@ -3417,7 +3444,8 @@ func TestAutoRoundTimer_WithTopPlayer(t *testing.T) {
 
 	triggerAutoRound()
 
-	time.Sleep(600 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	defer gameState.mu.Unlock()
@@ -3432,6 +3460,7 @@ func TestAutoRoundTimer_WithTopPlayer(t *testing.T) {
 
 func TestAutoRoundTimer_EmptyLeaderboard(t *testing.T) {
 	resetGameStateForTest()
+	mock := useMockClock()
 
 	gameState.mu.Lock()
 	gameState.AutoRound = -1
@@ -3439,7 +3468,8 @@ func TestAutoRoundTimer_EmptyLeaderboard(t *testing.T) {
 
 	triggerAutoRound()
 
-	time.Sleep(600 * time.Millisecond)
+	mock.Add(600 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	gameState.mu.Lock()
 	defer gameState.mu.Unlock()

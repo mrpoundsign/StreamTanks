@@ -8,8 +8,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/gempir/go-twitch-irc/v4"
 )
+
+var (
+	appClock clock.Clock = clock.New()
+)
+
+func setClock(c clock.Clock) {
+	appClock = c
+}
 
 var gameState = GameState{
 	Phase:         phaseIdle,
@@ -127,11 +136,11 @@ var (
 	inputStartTime       time.Time
 	prevRoundHadCommands bool
 	fastForwardScheduled bool
-	minWaitTimer         *time.Timer
+	minWaitTimer         *clock.Timer
 	fastForwardTimerMu   sync.Mutex
-	fastForwardTimer     *time.Timer
+	fastForwardTimer     *clock.Timer
 	autoRoundTimerMu     sync.Mutex
-	autoRoundTimer       *time.Timer
+	autoRoundTimer       *clock.Timer
 )
 
 func cancelFastForward() {
@@ -149,7 +158,7 @@ func scheduleFastForward(roundID int) {
 	if fastForwardTimer != nil {
 		fastForwardTimer.Stop()
 	}
-	fastForwardTimer = time.AfterFunc(500*time.Millisecond, func() {
+	fastForwardTimer = appClock.AfterFunc(500*time.Millisecond, func() {
 		executeActionPhaseForRound(roundID)
 	})
 }
@@ -196,7 +205,7 @@ func triggerAutoRound() {
 	}
 
 	autoRoundTimerMu.Lock()
-	autoRoundTimer = time.AfterFunc(delay, func() {
+	autoRoundTimer = appClock.AfterFunc(delay, func() {
 		gameState.mu.Lock()
 		if gameState.Phase == phaseIdle {
 			humanCount := 0
@@ -326,7 +335,7 @@ func startInputPhase() {
 	}
 	gameState.Phase = phaseInput
 	gameState.RoundID++
-	inputStartTime = time.Now()
+	inputStartTime = appClock.Now()
 	fastForwardScheduled = false
 	if minWaitTimer != nil {
 		minWaitTimer.Stop()
@@ -406,7 +415,7 @@ func startInputPhase() {
 
 	// 1-second countdown ticker for synchronized HUD and viewer extension timer updates
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := appClock.Ticker(1 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -431,7 +440,7 @@ func startInputPhase() {
 
 	go func() {
 		select {
-		case <-time.After(roundDuration):
+		case <-appClock.After(roundDuration):
 			executeActionPhaseForRound(roundID)
 		case <-cancelChan:
 			return
@@ -504,7 +513,7 @@ func checkAllPlayersFired() {
 			minDuration = dur
 		}
 
-		elapsed := time.Since(inputStartTime)
+		elapsed := appClock.Since(inputStartTime)
 		if elapsed >= minDuration {
 			// At least 10s has already elapsed: fast-forward immediately
 			if minWaitTimer != nil {
@@ -531,7 +540,7 @@ func checkAllPlayersFired() {
 		if minWaitTimer != nil {
 			minWaitTimer.Stop()
 		}
-		minWaitTimer = time.AfterFunc(remaining, func() {
+		minWaitTimer = appClock.AfterFunc(remaining, func() {
 			gameState.mu.Lock()
 			defer gameState.mu.Unlock()
 			select {
@@ -1139,7 +1148,7 @@ func checkGameOverAndTransition() {
 		broadcast(msgStateUpdate, &gameState)
 
 		// Wait 18 seconds for celebration then reset to idle/next match
-		time.AfterFunc(18*time.Second, func() {
+		appClock.AfterFunc(18*time.Second, func() {
 			resetMatchState()
 		})
 	} else {
@@ -1275,7 +1284,7 @@ func removePlayerFromMatchLocked(playerKey string) {
 				gameState.Leaderboard[winner] += 5
 				addScore(winner, 5)
 			}
-			time.AfterFunc(18*time.Second, func() {
+			appClock.AfterFunc(18*time.Second, func() {
 				resetMatchState()
 			})
 		} else {
