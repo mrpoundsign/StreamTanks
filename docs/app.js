@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 6. Active Nav Link Tracking on Scroll (for in-page anchor hash links)
-  const navHashLinks = document.querySelectorAll('.nav-link[href^="#"], .subpage-toc a[href^="#"]');
+  const navHashLinks = document.querySelectorAll('.nav-link[href^="#"], .sub-nav-link[href^="#"], .subpage-toc a[href^="#"]');
   const sections = document.querySelectorAll('section[id]');
 
   if (window.IntersectionObserver && sections.length > 0 && navHashLinks.length > 0) {
@@ -191,5 +191,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { rootMargin: '-20% 0px -70% 0px' });
 
     sections.forEach(sec => observer.observe(sec));
+  }
+
+  // 7. Live Stream Checker & Dynamic Embed (octothorpebot)
+  const liveSection = document.getElementById('liveStreamSection');
+  const liveNavPill = document.getElementById('liveNavPill');
+  const liveIframeContainer = document.getElementById('liveIframeContainer');
+
+  if (liveSection && liveIframeContainer) {
+    const targetChannel = 'octothorpebot';
+
+    async function checkTwitchLive() {
+      try {
+        const response = await fetch('https://gql.twitch.tv/gql', {
+          method: 'POST',
+          headers: {
+            'Client-Id': 'kimne78kx3ncx6brgo4mv6wki5h1ko',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            query: `query { user(login: "${targetChannel}") { stream { id type viewersCount } } }`
+          })
+        });
+
+        if (!response.ok) return;
+        const result = await response.json();
+        const stream = result?.data?.user?.stream;
+        const isLive = stream && stream.type === 'live';
+
+        if (isLive) {
+          if (window.location.protocol === 'file:') {
+            if (!liveIframeContainer.querySelector('.live-file-placeholder')) {
+              liveIframeContainer.innerHTML = `
+                <div class="live-file-placeholder">
+                  <div class="live-file-content">
+                    <div class="live-file-badge">🔴 STREAM IS LIVE NOW</div>
+                    <h3>Watch 24/7 StreamTanks on Twitch</h3>
+                    <p>The interactive match is running right now! Twitch's embed player requires an <code>http://</code> or <code>https://</code> origin to play inline, but you can jump directly into chat and command your tank:</p>
+                    <a href="https://twitch.tv/${targetChannel}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg">
+                      <span>🎮 Open twitch.tv/${targetChannel}</span>
+                    </a>
+                    <small class="live-file-hint">💡 Tip: When published on GitHub Pages or served via a local web server (e.g. <code>localhost</code>), the live video player will embed directly here.</small>
+                  </div>
+                </div>
+              `;
+            }
+          } else {
+            if (!liveIframeContainer.querySelector('iframe')) {
+              liveIframeContainer.innerHTML = '';
+              const host = window.location.hostname || 'localhost';
+              const parents = ['mrpoundsign.github.io', 'localhost', '127.0.0.1'];
+              if (!parents.includes(host) && host) parents.push(host);
+              const parentParams = parents.map(p => `parent=${encodeURIComponent(p)}`).join('&');
+
+              const iframe = document.createElement('iframe');
+              iframe.src = `https://player.twitch.tv/?channel=${targetChannel}&${parentParams}&muted=true&autoplay=false`;
+              iframe.allowFullscreen = true;
+              iframe.setAttribute('title', `${targetChannel} StreamTanks 24/7 Live Stream`);
+              liveIframeContainer.appendChild(iframe);
+            }
+          }
+
+          liveSection.style.display = 'block';
+          if (liveNavPill) liveNavPill.style.display = 'inline-flex';
+        } else {
+          liveSection.style.display = 'none';
+          if (liveNavPill) liveNavPill.style.display = 'none';
+          liveIframeContainer.innerHTML = '';
+        }
+      } catch (err) {
+        console.warn('Twitch live check failed:', err);
+      }
+    }
+
+    checkTwitchLive();
+    setInterval(checkTwitchLive, 60000);
   }
 });

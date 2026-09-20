@@ -40,16 +40,9 @@
       </a>
 
       <nav class="nav-menu" id="navMenu">
-        <a href="index.html" class="nav-link active">Overview</a>
+        <a href="index.html" class="nav-link nav-portal-pill active">Overview</a>
         <a href="streamers.html" class="nav-link nav-portal-pill">Streamer Guide</a>
         <a href="players.html" class="nav-link nav-portal-pill">Player Guide</a>
-        <a href="#portals" class="nav-link">Get Started</a>
-        <a href="#features" class="nav-link">Features</a>
-        <a href="#screenshots" class="nav-link">Screenshots</a>
-        <a href="#extension" class="nav-link ext-link">
-          Twitch Extension
-          <span class="badge badge-pulse">Soon</span>
-        </a>
       </nav>
 
       <div class="header-actions">
@@ -67,6 +60,23 @@
       </div>
     </div>
   </header>
+
+  <!-- Sub-Navigation Category Bar -->
+  <div class="sub-nav-bar overview-bar" id="subNavBar">
+    <div class="container sub-nav-container">
+      <div class="sub-nav-label">
+        <span class="sub-nav-badge sub-nav-badge-overview">OVERVIEW</span>
+      </div>
+      <nav class="sub-nav-links">
+        <a href="#live" class="sub-nav-link live-nav-pill" id="liveNavPill" style="display: none;">🔴 Live 24/7 Stream</a>
+        <a href="#portals" class="sub-nav-link">🚀 Choose Your Role</a>
+        <a href="#features" class="sub-nav-link">✨ Key Pillars</a>
+        <a href="#screenshots" class="sub-nav-link">📸 Visual Showcase</a>
+        <a href="#extension" class="sub-nav-link">📱 Twitch Extension</a>
+        <a href="#faq" class="sub-nav-link">❓ FAQ</a>
+      </nav>
+    </div>
+  </div>
 
   <!-- Hero Section -->
   <section class="hero-section">
@@ -133,6 +143,38 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live 24/7 Stream Embed Section (Conditionally shown when octothorpebot is live) -->
+  <section class="section live-stream-section" id="liveStreamSection" style="display: none;">
+    <div class="container" id="live">
+      <div class="live-stream-card">
+        <div class="live-stream-header">
+          <div class="live-stream-title-group">
+            <span class="live-indicator">
+              <span class="live-pulse-dot"></span>
+              <span>LIVE NOW &bull; 24/7 BATTLEFIELD</span>
+            </span>
+            <h2 class="live-stream-title">Watch &amp; Play Live on Twitch</h2>
+          </div>
+          <a href="https://twitch.tv/octothorpebot" target="_blank" rel="noopener noreferrer" class="live-twitch-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
+            </svg>
+            <span>Open twitch.tv/octothorpebot ➔</span>
+          </a>
+        </div>
+
+        <div class="live-player-wrapper" id="liveIframeContainer">
+          <!-- Iframe dynamically inserted by app.js when live -->
+        </div>
+
+        <div class="live-stream-tips">
+          <span>🎮 <strong>Jump in right now:</strong> Open Twitch chat and type <code>%join</code> (or <code>%join PogChamp</code>) to spawn your tank!</span>
+          <span>🎯 Aim with <code>%fire &lt;angle&gt; &lt;power&gt;</code> &bull; Move with <code>%left</code> / <code>%right</code></span>
         </div>
       </div>
     </div>
@@ -323,12 +365,12 @@
       <div class="spotlight-card">
         <div class="spotlight-badge">
           <span class="badge badge-pulse">COMING SOON</span>
-          <span>OFFICIAL TWITCH EXTENSION</span>
+          <span>STREAMTANKS CONTROLLER EXTENSION FOR TWITCH</span>
         </div>
 
         <h2 class="spotlight-title">Aim and Fire Directly on the <span class="gradient-text">Twitch Video Player</span></h2>
         <p class="spotlight-subtitle">
-          No need to type chat commands or memorize angles. The upcoming StreamTanks Twitch Extension embeds directly over your stream on Desktop and Mobile, providing tactile, zero-latency aiming controls.
+          No need to type chat commands or memorize angles. The upcoming StreamTanks Controller extension for Twitch embeds directly over your stream on Desktop and Mobile, providing tactile, zero-latency aiming controls.
         </p>
 
         <!-- Extension Screenshots Showcase -->
@@ -392,7 +434,7 @@
   </section>
 
   <!-- FAQ Section -->
-  <section class="section faq-section">
+  <section class="section faq-section" id="faq">
     <div class="container">
       <div class="section-header text-center">
         <span class="section-tag">FREQUENTLY ASKED QUESTIONS</span>

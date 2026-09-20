@@ -1,10 +1,12 @@
-# 🚀 StreamTanks
+# <img src="docs/favicon.svg" width="36" height="36" alt="StreamTanks Logo" align="center"> StreamTanks
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-00f0ff?style=flat&logo=github)](https://mrpoundsign.github.io/StreamTanks/)
 [![Release](https://img.shields.io/github/v/release/mrpoundsign/StreamTanks?color=ff0055)](https://github.com/mrpoundsign/StreamTanks/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 > 🌐 **Official Guides & Documentation**: Visit **[mrpoundsign.github.io/StreamTanks](https://mrpoundsign.github.io/StreamTanks/)** for the [Streamer Setup Guide](https://mrpoundsign.github.io/StreamTanks/streamers.html) and [Player & Viewer Guide](https://mrpoundsign.github.io/StreamTanks/players.html).
+>
+> 🔴 **Play Right Now (24/7 Live Stream)**: A live instance of StreamTanks is running 24/7 at **[twitch.tv/octothorpebot](https://twitch.tv/octothorpebot)**! Hop into chat and type `%join` to parachute onto the battlefield and test your artillery aim!
 
 **StreamTanks** is a lightweight, interactive Twitch chat artillery game and transparent browser overlay designed for OBS Studio and stream broadcasts. 
 
@@ -15,7 +17,7 @@ Viewers join the battlefield directly through your Twitch chat, command custom e
 ## 🎮 How It Works
 
 1. **Wait for Players**: In the waiting phase, viewers type `%join` (or `%join <emote>`) to spawn their tank with their favorite Twitch emote.
-2. **Start the Match**: The streamer or chat starts the match with `%startgame` (or rounds can start automatically via `%autoround`).
+2. **Start the Match**: The streamer starts the match with `%startgame` (or rounds can start automatically via `%autoround`; role permission can be configured via `%perm start <role>`).
 3. **Input Phase**: Viewers have a countdown window (default: 20s) to lock in their aim and shot power (e.g. `%fire 45 60`) or move left/right. An aiming protractor appears above each player's tank showing their aim.
 4. **Action Phase**: All shots fire simultaneously! Cannon shells arc across the sky, exploding into destructible terrain and knocking out opponent tanks.
 5. **Celebration**: The last surviving commander wins, earning a point on the persistent stream leaderboard, celebrated with an emote victory shower!
@@ -88,13 +90,13 @@ All commands default to the `%` prefix (customizable via `%prefix`).
 | `%right` | *none* | Moves your tank right across the hills. | `%right` |
 | `%shield` | *none* | Activates your tactical one-time energy shield for the current match. | `%shield` |
 | `%leave` | *none* | Leaves the active match or waiting lobby immediately. | `%leave` |
-| `%startgame` | *none* | Starts a new artillery match from the waiting phase. | `%startgame` |
 
 ### 🛠️ Streamer & Mod Settings Commands
 All settings automatically save to the local database and persist across restarts.
 
 | Command | Arguments | Description | Example |
 | :--- | :--- | :--- | :--- |
+| `%startgame` | *none* | Starts an artillery match from the IDLE waiting phase (streamer by default; permission configurable via `%perm start <role>`). | `%startgame` |
 | `%channel` | `<name\|off>` | Sets the target Twitch channel, or switches to offline mode with `off`. | `%channel mrpoundsign` |
 | `%claim` | `<code>` | Authorizes and links your local game host to your Twitch channel via one-time challenge code. | `%claim PU5HZX` |
 | `%config` | `[on\|off]` | Toggles the live settings modal right in the middle of the screen. | `%config` |
