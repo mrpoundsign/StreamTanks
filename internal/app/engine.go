@@ -50,7 +50,7 @@ func (e *Engine) sortedPlayerNames() []string {
 // Step advances the physics simulation by dtScale and notifies the sink of events.
 // Returns true when the action phase has concluded (no moving projectiles or falling tanks).
 func (e *Engine) Step(dtScale float64, sink CollisionSink) bool {
-	anyMoving := e.UpdateTankMovements(dtScale, sink)
+	anyMoving, anyFalling := e.UpdateTankMovements(dtScale, sink)
 	e.UpdateProjectiles(dtScale, sink)
 
 	// Update explosions
@@ -64,25 +64,17 @@ func (e *Engine) Step(dtScale float64, sink CollisionSink) bool {
 	}
 
 	// Completion check: no projectiles, no explosions, no tanks moving or falling
-	if len(e.Projectiles) == 0 && len(e.Explosions) == 0 && !anyMoving {
-		anyFalling := false
-		for _, p := range e.Players {
-			if !p.IsDead && p.Y < getTerrainHeight(e.Terrain, p.X) {
-				anyFalling = true
-				break
-			}
-		}
-		if !anyFalling {
-			return true
-		}
+	if len(e.Projectiles) == 0 && len(e.Explosions) == 0 && !anyMoving && !anyFalling {
+		return true
 	}
 
 	return false
 }
 
 // UpdateTankMovements executes tank translation, boundary clamping, and falling.
-func (e *Engine) UpdateTankMovements(dtScale float64, sink CollisionSink) bool {
+func (e *Engine) UpdateTankMovements(dtScale float64, sink CollisionSink) (bool, bool) {
 	anyMoving := false
+	anyFalling := false
 	for _, name := range e.sortedPlayerNames() {
 		p := e.Players[name]
 		if p.IsDead {
@@ -198,6 +190,8 @@ func (e *Engine) UpdateTankMovements(dtScale float64, sink CollisionSink) bool {
 			p.Y += 5.0 * dtScale
 			if p.Y > floorY {
 				p.Y = floorY
+			} else if p.Y < floorY {
+				anyFalling = true
 			}
 		} else {
 			p.Y = floorY
@@ -213,7 +207,7 @@ func (e *Engine) UpdateTankMovements(dtScale float64, sink CollisionSink) bool {
 			}
 		}
 	}
-	return anyMoving
+	return anyMoving, anyFalling
 }
 
 // UpdateProjectiles updates projectile ballistics, boundary ricochets, and collision detection.

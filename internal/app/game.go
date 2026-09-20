@@ -830,7 +830,7 @@ func checkTankCollisions(cx, cy, radius float64, owner string) {
 	engine.CheckTankCollisions(cx, cy, radius, owner, sink)
 }
 
-func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
+func updateTankMovements(dtScale float64, bouncyWalls bool) (bool, bool) {
 	engine := &Engine{
 		Terrain:      gameState.Terrain,
 		Players:      gameState.Players,
@@ -841,9 +841,9 @@ func updateTankMovements(dtScale float64, bouncyWalls bool) bool {
 		BotPoints:    gameState.BotPoints,
 	}
 	sink := &liveCollisionSink{roundID: gameState.RoundID}
-	anyMoving := engine.UpdateTankMovements(dtScale, sink)
+	anyMoving, anyFalling := engine.UpdateTankMovements(dtScale, sink)
 	gameState.Explosions = engine.Explosions
-	return anyMoving
+	return anyMoving, anyFalling
 }
 
 func updateProjectiles(dtScale float64, bouncyWalls bool) {
