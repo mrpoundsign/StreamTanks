@@ -10,6 +10,7 @@
 > 4. **User tests GUI before committing**: Always stop and let the user manually test the GUI/overlay before any changes are committed to git.
 > 5. **Prioritize Built-in Agent Tools Over Shelling Out**: Always use built-in tools (`grep_search`, `list_dir`, `view_file`, and Go MCP tools) for searching code, finding files, and inspecting contents. Do not shell out to PowerShell commands (e.g., `Select-String`, `grep`, `dir`, `cat`) when built-in tools are capable of performing the search or inspection. Only shell out via `run_command` when strictly necessary (e.g., git operations, building/running code, tests, or `gh` CLI).
 > 6. **Always Check for Go Modernization**: Always run `go fix -diff ./...` to check for modernization diffs to evaluate before completing Go backend tasks.
+> 7. **Always Rebase and Merge**: The user always prefers "Rebase and merge" for pull requests to maintain a clean, linear git commit history without merge commits.
 
 ---
 
