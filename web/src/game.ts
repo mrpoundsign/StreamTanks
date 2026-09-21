@@ -24,6 +24,7 @@ import {
 import { createDefaultTerrain, getTerrainHeight, applyCrater } from './terrain';
 import { SimulationState, executeActions as simExecuteActions, stepSimulation } from './simulation';
 import { NetworkManager } from './network';
+import { escapeHtml } from './utils';
 import {
   drawTerrain,
   drawGiantProtractor,
@@ -119,12 +120,6 @@ function preloadPlayerAvatar(name: string): void {
 
 // Network
 const net = new NetworkManager();
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.innerText = str;
-  return div.innerHTML;
-}
 
 function showKillMessage(html: string): void {
   const el = document.createElement('div');
