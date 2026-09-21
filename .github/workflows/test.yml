@@ -36,9 +36,9 @@ jobs:
           fi
 
       - name: Run golangci-lint (v2)
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.13.2
+          version: v1.64.6
 
       - name: Verify Binary Compilation
         run: go build -v ./cmd/streamtanks
