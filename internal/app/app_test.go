@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -2879,6 +2880,106 @@ func TestBroadcastViewerState(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for IDLE ViewerState")
 	}
+}
+
+func TestCCClientAuthErrorHandling(t *testing.T) {
+	resetGameStateForTest()
+	testDBPath := filepath.Join(t.TempDir(), "test_auth_error.db")
+	if err := initDB(testDBPath); err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	defer closeDB()
+
+	// 1. "channel already claimed" preserves stored cc_host_token
+	saveSetting("cc_host_token", "sample.valid.token.1")
+
+	server1 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_ = websocket.JSON.Send(ws, map[string]any{
+			"type":    "AUTH_ERROR",
+			"payload": "channel already claimed",
+		})
+		_ = ws.Close()
+	}))
+	defer server1.Close()
+
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel1()
+
+	_ = runCCClient(ctx1, "ws://"+server1.Listener.Addr().String(), "mrpoundsign")
+
+	if token := getSetting("cc_host_token"); token != "sample.valid.token.1" {
+		t.Errorf("expected cc_host_token to be preserved on 'channel already claimed', got '%s'", token)
+	}
+
+	// 2. "channel is actively hosted" preserves stored cc_host_token
+	saveSetting("cc_host_token", "sample.valid.token.2")
+
+	server2 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_ = websocket.JSON.Send(ws, map[string]any{
+			"type":    "AUTH_ERROR",
+			"payload": "channel is actively hosted",
+		})
+		_ = ws.Close()
+	}))
+	defer server2.Close()
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel2()
+
+	_ = runCCClient(ctx2, "ws://"+server2.Listener.Addr().String(), "mrpoundsign")
+
+	if token := getSetting("cc_host_token"); token != "sample.valid.token.2" {
+		t.Errorf("expected cc_host_token to be preserved on 'channel is actively hosted', got '%s'", token)
+	}
+
+	// 3. "invalid authentication token" deletes stored cc_host_token
+	saveSetting("cc_host_token", "sample.invalid.token.3")
+
+	server3 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_ = websocket.JSON.Send(ws, map[string]any{
+			"type":    "AUTH_ERROR",
+			"payload": "invalid authentication token",
+		})
+		_ = ws.Close()
+	}))
+	defer server3.Close()
+
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel3()
+
+	_ = runCCClient(ctx3, "ws://"+server3.Listener.Addr().String(), "mrpoundsign")
+
+	if token := getSetting("cc_host_token"); token != "" {
+		t.Errorf("expected cc_host_token to be deleted on 'invalid authentication token', got '%s'", token)
+	}
+
+	// 4. "HOST_WARNING" is parsed and logged without affecting connection or token
+	saveSetting("cc_host_token", "sample.valid.token.4")
+
+	server4 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		_ = websocket.JSON.Send(ws, map[string]any{
+			"type": "HOST_WARNING",
+			"payload": map[string]any{
+				"event":   "unauthorized_claim_attempt",
+				"channel": "mrpoundsign",
+				"message": "An unauthenticated connection attempted to claim this channel, but was blocked.",
+			},
+		})
+		_ = ws.Close()
+	}))
+	defer server4.Close()
+
+	ctx4, cancel4 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel4()
+
+	_ = runCCClient(ctx4, "ws://"+server4.Listener.Addr().String(), "mrpoundsign")
+
+	if token := getSetting("cc_host_token"); token != "sample.valid.token.4" {
+		t.Errorf("expected cc_host_token to remain intact on HOST_WARNING, got '%s'", token)
+	}
+
+	// Clean up
+	deleteSetting("cc_host_token")
 }
 
 func TestLateJoiningBotReplacementAndRejection(t *testing.T) {

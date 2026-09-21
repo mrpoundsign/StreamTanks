@@ -23,6 +23,10 @@ function Write-Fail ($msg) {
 }
 
 try {
+    # Ensure native GOOS / GOARCH environment (in case deploy scripts set GOOS=linux)
+    Remove-Item env:\GOOS -ErrorAction SilentlyContinue
+    Remove-Item env:\GOARCH -ErrorAction SilentlyContinue
+
     # 1. Test & Build TypeScript Frontend
     if (-not $SkipFrontend) {
         Write-Step "Testing TypeScript frontend..."

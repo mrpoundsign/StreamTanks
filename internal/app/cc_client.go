@@ -326,7 +326,7 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 						saveSetting("cc_host_token", success.Token)
 						log.Println("[C&C] Channel authorization confirmed! Token securely saved to database.")
 					} else {
-						log.Println("[C&C] Channel authorization confirmed via existing token.")
+						log.Printf("[C&C] Channel '%s' authorization confirmed via existing host token.", channel)
 					}
 
 					gameState.mu.Lock()
@@ -339,12 +339,36 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 					BroadcastViewerState()
 				}
 
+			case "HOST_WARNING":
+				var warning struct {
+					Event   string `json:"event"`
+					Channel string `json:"channel"`
+					Message string `json:"message"`
+				}
+				if err := json.Unmarshal(env.Payload, &warning); err == nil {
+					log.Printf("[C&C Security Alert] %s (channel: %s)", warning.Message, warning.Channel)
+				} else {
+					var rawMsg string
+					if err := json.Unmarshal(env.Payload, &rawMsg); err == nil {
+						log.Printf("[C&C Security Alert] %s", rawMsg)
+					}
+				}
+
 			case "AUTH_ERROR":
 				var errMsg string
 				_ = json.Unmarshal(env.Payload, &errMsg)
 				log.Printf("[C&C] Authentication error: %s", errMsg)
 
-				deleteSetting("cc_host_token")
+				lowerErr := strings.ToLower(errMsg)
+				switch {
+				case strings.Contains(lowerErr, "invalid") || strings.Contains(lowerErr, "revoked") || strings.Contains(lowerErr, "expired"):
+					deleteSetting("cc_host_token")
+					log.Println("[C&C] Stored host token invalidated; will request new challenge on next reconnect.")
+				case strings.Contains(lowerErr, "actively hosted") || strings.Contains(lowerErr, "already claimed"):
+					log.Printf("[C&C] Notice: Channel '%s' is actively hosted by another session; retaining host token and retrying in background.", channel)
+				default:
+					log.Printf("[C&C] Retaining stored host token despite AUTH_ERROR: %s", errMsg)
+				}
 
 				gameState.mu.Lock()
 				gameState.CCStatus = "disconnected"

@@ -27,19 +27,23 @@ func NewHub() *Hub {
 	}
 }
 
-// RegisterHost attempts to claim the specified channel for a host connection.
-// Returns an error if the channel is already actively claimed.
+// RegisterHost registers the host connection for a channel.
+// If an existing host connection exists (e.g. from an abrupt disconnect or reconnect),
+// it is gracefully closed and replaced by the newly authenticated host connection.
 func (h *Hub) RegisterHost(channel string, ws *websocket.Conn) error {
 	cleanChan := strings.ToLower(channel)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if _, exists := h.hosts[cleanChan]; exists {
-		return errors.New("channel already claimed")
+	if existingWs, exists := h.hosts[cleanChan]; exists {
+		if existingWs != ws {
+			log.Printf("[Host Auth] Authenticated host reconnected for channel '%s'; replacing existing session", cleanChan)
+			_ = existingWs.Close()
+		}
 	}
 
 	h.hosts[cleanChan] = ws
-	log.Printf("Host registered for channel: %s", cleanChan)
+	log.Printf("[Host Auth] Host registered successfully for channel: %s", cleanChan)
 	return nil
 }
 
@@ -168,6 +172,32 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 						"payload": err.Error(),
 					})
 					_ = ws.Close()
+					return
+				}
+
+				h.mu.RLock()
+				existingHost, isActivelyHosted := h.hosts[reqChannel]
+				h.mu.RUnlock()
+
+				if isActivelyHosted {
+					remoteAddr := req.RemoteAddr
+					log.Printf("[Host Auth] Challenge rejected for channel '%s' (remote: %s): channel is already actively hosted", reqChannel, remoteAddr)
+					_ = websocket.JSON.Send(ws, map[string]any{
+						"type":    "AUTH_ERROR",
+						"payload": "channel is actively hosted",
+					})
+					_ = ws.Close()
+
+					if existingHost != nil {
+						_ = websocket.JSON.Send(existingHost, map[string]any{
+							"type": "HOST_WARNING",
+							"payload": map[string]any{
+								"event":   "unauthorized_claim_attempt",
+								"channel": reqChannel,
+								"message": "An unauthenticated connection attempted to claim this channel, but was blocked because this host is actively connected.",
+							},
+						})
+					}
 					return
 				}
 
