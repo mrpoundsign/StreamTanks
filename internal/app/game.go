@@ -699,41 +699,6 @@ func executeActionPhaseForRound(roundID int) {
 	go runPhysicsLoop(roundID)
 }
 
-func createWallSpark(cx, cy float64) {
-	gameState.Explosions = append(gameState.Explosions, Explosion{
-		X:         cx,
-		Y:         cy,
-		Radius:    0,
-		MaxRadius: 30,
-		Alpha:     1.0,
-		IsSpark:   true,
-	})
-}
-
-func destroyTerrain(cx, cy, radius float64, shotId string) {
-	appliedCratersMu.Lock()
-	if !appliedCraters[shotId] {
-		appliedCraters[shotId] = true
-		applyCrater(gameState.Terrain, cx, cy, radius)
-	}
-	appliedCratersMu.Unlock()
-
-	gameState.Explosions = append(gameState.Explosions, Explosion{
-		X:         cx,
-		Y:         cy,
-		Radius:    0,
-		MaxRadius: radius,
-		Alpha:     1.0,
-		IsSpark:   false,
-	})
-	broadcastExcept(nil, msgTerrainCrater, CraterPayload{
-		ID:     shotId,
-		X:      cx,
-		Y:      cy,
-		Radius: radius,
-	})
-}
-
 // liveCollisionSink connects app.Engine physics simulation to the live game server:
 // score deductions/awards, KillEvent recording, and WebSocket event broadcasting.
 type liveCollisionSink struct {

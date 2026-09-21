@@ -128,18 +128,19 @@ func (s *ScenarioLabServer) handleListScenarios(w http.ResponseWriter, r *http.R
 	}
 
 	sortMode := r.URL.Query().Get("sort")
-	if sortMode == "name" {
+	switch sortMode {
+	case "name":
 		sort.SliceStable(items, func(i, j int) bool {
 			return items[i].Name < items[j].Name
 		})
-	} else if sortMode == "source" {
+	case "source":
 		sort.SliceStable(items, func(i, j int) bool {
 			if items[i].Source != items[j].Source {
 				return items[i].Source < items[j].Source
 			}
 			return items[i].Name < items[j].Name
 		})
-	} else {
+	default:
 		// Default: sort by MaxPixelDiff descending (highest pixel diff first)
 		sort.SliceStable(items, func(i, j int) bool {
 			diffI := items[i].MaxPixelDiff

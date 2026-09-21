@@ -3,6 +3,7 @@ package scenariolab
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -236,12 +237,12 @@ func (p *NodeWorkerPool) RunBatch(items []OverlaySimBatchItem) ([]SimulationResu
 		return nil, nil
 	}
 	if p.closed.Load() {
-		return nil, fmt.Errorf("worker pool is closed")
+		return nil, errors.New("worker pool is closed")
 	}
 
 	w, ok := <-p.available
 	if !ok {
-		return nil, fmt.Errorf("worker pool channel closed")
+		return nil, errors.New("worker pool channel closed")
 	}
 
 	results, err := w.RunBatch(items)

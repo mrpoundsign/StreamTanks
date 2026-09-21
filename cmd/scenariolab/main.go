@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -34,12 +35,16 @@ func main() {
 	flag.Parse()
 
 	if *replayFlag != "" {
-		runReplayCLI(*replayFlag)
+		if err := runReplayCLI(*replayFlag); err != nil {
+			log.Fatalf("Replay error: %v", err)
+		}
 		return
 	}
 
 	if *fuzzFlag > 0 {
-		runFuzzCLI(*fuzzFlag, *outFlag)
+		if err := runFuzzCLI(*fuzzFlag, *outFlag); err != nil {
+			log.Fatalf("Fuzz error: %v", err)
+		}
 		return
 	}
 
@@ -49,10 +54,10 @@ func main() {
 	}
 }
 
-func runReplayCLI(filePath string) {
+func runReplayCLI(filePath string) error {
 	sc, err := scenariolab.LoadScenario(filePath)
 	if err != nil {
-		log.Fatalf("Failed to load scenario %q: %v", filePath, err)
+		return fmt.Errorf("failed to load scenario %q: %w", filePath, err)
 	}
 
 	_ = ensureSimulationBundle()
@@ -80,7 +85,7 @@ func runReplayCLI(filePath string) {
 	runnerScript := "./scripts/headless_sim.mjs"
 	pool, err := scenariolab.NewNodeWorkerPool(1, runnerScript)
 	if err != nil {
-		log.Fatalf("Failed to initialize worker pool: %v", err)
+		return fmt.Errorf("failed to initialize worker pool: %w", err)
 	}
 	defer pool.Close()
 
@@ -93,10 +98,10 @@ func runReplayCLI(filePath string) {
 		},
 	})
 	if err != nil {
-		log.Fatalf("Error running overlay simulation: %v", err)
+		return fmt.Errorf("error running overlay simulation: %w", err)
 	}
 	if len(clientResults) == 0 {
-		log.Fatalf("Overlay simulation returned 0 results")
+		return errors.New("overlay simulation returned 0 results")
 	}
 	clientRes := &clientResults[0]
 
@@ -216,9 +221,10 @@ func runReplayCLI(filePath string) {
 		fmt.Printf("  - Status: All %d runs produced identical bit-for-bit results matching overlay.\n", totalRuns)
 	}
 	fmt.Printf("======================================================================\n")
+	return nil
 }
 
-func runFuzzCLI(count int, outDir string) {
+func runFuzzCLI(count int, outDir string) error {
 	_ = os.MkdirAll(outDir, 0o755)
 
 	numWorkers := *workersFlag
@@ -239,7 +245,7 @@ func runFuzzCLI(count int, outDir string) {
 	runnerScript := "./scripts/headless_sim.mjs"
 	pool, err := scenariolab.NewNodeWorkerPool(numWorkers, runnerScript)
 	if err != nil {
-		log.Fatalf("Failed to initialize worker pool: %v", err)
+		return fmt.Errorf("failed to initialize worker pool: %w", err)
 	}
 	defer pool.Close()
 
@@ -325,7 +331,7 @@ func runFuzzCLI(count int, outDir string) {
 
 		clientResults, err := pool.RunBatchParallel(items)
 		if err != nil {
-			log.Fatalf("Error running overlay headless simulation batch: %v", err)
+			return fmt.Errorf("error running overlay headless simulation batch: %w", err)
 		}
 
 		for i := range curBatchSize {
@@ -358,6 +364,7 @@ func runFuzzCLI(count int, outDir string) {
 	fmt.Printf(" Elapsed Time:    %s (%.1f scenarios/sec)\n", elapsed, float64(count)/elapsed.Seconds())
 	fmt.Printf(" Saved Mismatches: %s/\n", outDir)
 	fmt.Printf("==================================================\n")
+	return nil
 }
 
 func ensureSimulationBundle() error {

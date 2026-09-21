@@ -96,7 +96,7 @@ func RunScenarioSimulation(s *Scenario, dtScale float64) *SimulationResult {
 			powerScaled := powerClamped / 5.0
 			vx := math.Cos(rad) * powerScaled
 			vy := -math.Sin(rad) * powerScaled
-			shotID := fmt.Sprintf("1_%s", name)
+			shotID := "1_" + name
 			muzzleDist := 25.0
 			spawnX := p.X + math.Cos(rad)*muzzleDist
 			spawnY := p.Y - 10.0 - math.Sin(rad)*muzzleDist

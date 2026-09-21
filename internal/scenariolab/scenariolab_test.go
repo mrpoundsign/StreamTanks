@@ -57,7 +57,7 @@ func TestSaveAndLoadScenario(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	s := GenerateRandomScenario(300)
 	savedPath, err := SaveScenario(tempDir, s, nil)
