@@ -9,18 +9,6 @@ before:
     - go mod tidy
 
 builds:
-  - id: streamtanks-android
-    main: ./cmd/streamtanks-android
-    binary: StreamTanks-Android
-    hooks:
-      post:
-        - ./build_android.sh
-    env:
-      - CGO_ENABLED=1
-    goos:
-      - linux
-    goarch:
-      - amd64
   - id: streamtanks
     main: ./cmd/streamtanks
     binary: StreamTanks

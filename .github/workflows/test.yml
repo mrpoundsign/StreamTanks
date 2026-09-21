@@ -20,6 +20,9 @@ jobs:
           go-version: '1.27'
           cache: true
 
+      - name: Install Fyne Dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libx11-dev
+
       - name: Run Go Test Suite
         run: go test -v ./...
 

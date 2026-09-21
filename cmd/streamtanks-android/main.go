@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -19,11 +19,63 @@ var (
 	date    = "unknown"
 )
 
+// URLManager defines the interface for interacting with application URLs.
+type URLManager interface {
+	CopyOverlayURL()
+	CopyAdminURL()
+	CopyPreviewURL()
+	OpenAdminURL()
+	OpenPreviewURL()
+}
+
+type appURLManager struct {
+	clipboard  fyne.Clipboard
+	app        fyne.App
+	baseURL    string
+	adminURL   string
+	previewURL string
+}
+
+func newAppURLManager(clipboard fyne.Clipboard, app fyne.App, baseURL string) URLManager {
+	return &appURLManager{
+		clipboard:  clipboard,
+		app:        app,
+		baseURL:    baseURL,
+		adminURL:   fmt.Sprintf("%s/admin", baseURL),
+		previewURL: fmt.Sprintf("%s/preview.html", baseURL),
+	}
+}
+
+func (m *appURLManager) CopyOverlayURL() {
+	m.clipboard.SetContent(m.baseURL)
+}
+
+func (m *appURLManager) CopyAdminURL() {
+	m.clipboard.SetContent(m.adminURL)
+}
+
+func (m *appURLManager) CopyPreviewURL() {
+	m.clipboard.SetContent(m.previewURL)
+}
+
+func (m *appURLManager) OpenAdminURL() {
+	if u, err := url.Parse(m.adminURL); err == nil {
+		m.app.OpenURL(u)
+	}
+}
+
+func (m *appURLManager) OpenPreviewURL() {
+	if u, err := url.Parse(m.previewURL); err == nil {
+		m.app.OpenURL(u)
+	}
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("StreamTanks")
 
 	addr := "127.0.0.1:8102"
+	baseURL := fmt.Sprintf("http://%s", addr)
 
 	// Start server in background
 	go func() {
@@ -42,33 +94,16 @@ func main() {
 		}
 	}()
 
-	// Wait for server to start
-	time.Sleep(1 * time.Second)
-
-	baseURL := fmt.Sprintf("http://%s", addr)
-	adminURL := fmt.Sprintf("%s/admin", baseURL)
-	previewURL := fmt.Sprintf("%s/preview.html", baseURL)
-
-	copyOverlayBtn := widget.NewButton("Copy Overlay URL", func() {
-		w.Clipboard().SetContent(baseURL)
-	})
-
-	openAdminBtn := widget.NewButton("Open Admin", func() {
-		u, _ := url.Parse(adminURL)
-		a.OpenURL(u)
-	})
-
-	openPreviewBtn := widget.NewButton("Open Preview", func() {
-		u, _ := url.Parse(previewURL)
-		a.OpenURL(u)
-	})
+	manager := newAppURLManager(w.Clipboard(), a, baseURL)
 
 	content := container.NewVBox(
 		widget.NewLabel("StreamTanks Server is running on:"),
 		widget.NewLabel(baseURL),
-		copyOverlayBtn,
-		openAdminBtn,
-		openPreviewBtn,
+		widget.NewButton("Copy Overlay URL", manager.CopyOverlayURL),
+		widget.NewButton("Copy Admin URL", manager.CopyAdminURL),
+		widget.NewButton("Copy Preview URL", manager.CopyPreviewURL),
+		widget.NewButton("Open Admin", manager.OpenAdminURL),
+		widget.NewButton("Open Preview", manager.OpenPreviewURL),
 	)
 
 	w.SetContent(content)
