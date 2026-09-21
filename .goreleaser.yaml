@@ -45,6 +45,7 @@ archives:
 release:
   extra_files:
     - glob: ./extension.zip
+    - glob: ./StreamTanks.apk
 
 checksum:
   name_template: "checksums.txt"

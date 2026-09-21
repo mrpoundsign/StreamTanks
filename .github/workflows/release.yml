@@ -34,6 +34,9 @@ jobs:
           npm ci
           npm run build:prod
 
+      - name: Install Fyne Dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libx11-dev
+
       - name: Run Full Test Suite
         run: go test -v ./...
 
@@ -74,6 +77,12 @@ jobs:
       - name: Package Twitch Extension
         run: |
           cd ext-web/public && zip -r ../../extension.zip *
+
+      - name: Install Fyne Dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libx11-dev
+
+      - name: Build Android APK
+        run: ./build_android.sh
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
