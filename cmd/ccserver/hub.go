@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -9,7 +10,36 @@ import (
 	"time"
 
 	"golang.org/x/net/websocket"
+	"google.golang.org/protobuf/proto"
+
+	streamtankspbv1 "streamtanks/internal/proto/streamtanks/v1"
 )
+
+type wsFrame struct {
+	payloadType byte
+	data        []byte
+}
+
+var frameCodec = websocket.Codec{
+	Marshal: func(v any) ([]byte, byte, error) {
+		switch data := v.(type) {
+		case string:
+			return []byte(data), websocket.TextFrame, nil
+		case []byte:
+			return data, websocket.BinaryFrame, nil
+		default:
+			return nil, websocket.UnknownFrame, errors.New("unsupported payload type")
+		}
+	},
+	Unmarshal: func(data []byte, payloadType byte, v any) error {
+		if f, ok := v.(*wsFrame); ok {
+			f.payloadType = payloadType
+			f.data = data
+			return nil
+		}
+		return errors.New("unsupported target type for frameCodec")
+	},
+}
 
 // Hub manages active host connections and routes viewer messages to them.
 type Hub struct {
@@ -62,19 +92,130 @@ func (h *Hub) UnregisterHost(channel string, ws *websocket.Conn) {
 
 // RegisterViewer registers a viewer connection for a channel.
 // If cached state exists for the channel, it is immediately sent to the new viewer.
-func (h *Hub) RegisterViewer(channel string, ws *websocket.Conn) {
+// jsonStateToProtoBytes converts a legacy JSON state update into a Protobuf ViewerServerMessage.
+func jsonStateToProtoBytes(payload any) []byte {
+	m, ok := payload.(map[string]any)
+	if !ok {
+		return nil
+	}
+	msgType, _ := m["type"].(string)
+	if msgType != "GAME_STATE" {
+		return nil
+	}
+	pMap, ok := m["payload"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	getStringSlice := func(key string) []string {
+		arr, ok := pMap[key].([]any)
+		if !ok {
+			if strArr, ok := pMap[key].([]string); ok {
+				return strArr
+			}
+			return nil
+		}
+		res := make([]string, 0, len(arr))
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				res = append(res, s)
+			}
+		}
+		return res
+	}
+
+	getInt := func(key string) int32 {
+		if v, ok := pMap[key].(float64); ok {
+			return int32(v)
+		}
+		if v, ok := pMap[key].(int); ok {
+			return int32(v)
+		}
+		return 0
+	}
+
+	getBool := func(key string) bool {
+		if v, ok := pMap[key].(bool); ok {
+			return v
+		}
+		return false
+	}
+
+	getString := func(key string) string {
+		if v, ok := pMap[key].(string); ok {
+			return v
+		}
+		return ""
+	}
+
+	vsProto := &streamtankspbv1.ViewerState{
+		Phase:             getString("phase"),
+		TimerRemaining:    getInt("timer_remaining"),
+		RoundId:           int64(getInt("round_id")),
+		Winner:            getString("winner"),
+		PlayersCount:      getInt("players_count"),
+		Players:           getStringSlice("players"),
+		ProtractorX:       getInt("protractor_x"),
+		ProtractorY:       getInt("protractor_y"),
+		CanStart:          getBool("can_start"),
+		CanJoin:           getBool("can_join"),
+		JoinedPlayers:     getStringSlice("joined_players"),
+		LeavingPlayers:    getStringSlice("leaving_players"),
+		ShieldUsedPlayers: getStringSlice("shield_used_players"),
+		ShieldedPlayers:   getStringSlice("shielded_players"),
+	}
+
+	serverMsg := &streamtankspbv1.ViewerServerMessage{
+		Payload: &streamtankspbv1.ViewerServerMessage_State{
+			State: vsProto,
+		},
+	}
+	bytes, err := proto.Marshal(serverMsg)
+	if err != nil {
+		return nil
+	}
+	return bytes
+}
+
+// RegisterViewer registers a viewer connection for a channel.
+// If cached state exists for the channel, it is immediately sent to the new viewer.
+func (h *Hub) RegisterViewer(channel string, ws *websocket.Conn, isProto ...bool) {
+	protoClient := len(isProto) > 0 && isProto[0]
 	cleanChan := strings.ToLower(channel)
 	h.mu.Lock()
 	if _, exists := h.viewers[cleanChan]; !exists {
 		h.viewers[cleanChan] = make(map[*websocket.Conn]bool)
 	}
-	h.viewers[cleanChan][ws] = true
+	h.viewers[cleanChan][ws] = protoClient
 	cached := h.latestState[cleanChan]
 	h.mu.Unlock()
 
 	if cached != nil {
-		if err := websocket.JSON.Send(ws, cached); err != nil {
-			log.Printf("Failed to send initial cached state to viewer on %s: %v", cleanChan, err)
+		if protoClient {
+			if cachedBytes, ok := cached.([]byte); ok {
+				_ = websocket.Message.Send(ws, cachedBytes)
+			} else {
+				// Convert legacy JSON state to Protobuf bytes for modern viewer
+				if pBytes := jsonStateToProtoBytes(cached); pBytes != nil {
+					_ = websocket.Message.Send(ws, pBytes)
+				} else {
+					_ = websocket.JSON.Send(ws, cached)
+				}
+			}
+		} else {
+			if cachedBytes, ok := cached.([]byte); ok {
+				var sMsg streamtankspbv1.ViewerServerMessage
+				if err := proto.Unmarshal(cachedBytes, &sMsg); err == nil && sMsg.GetState() != nil {
+					_ = websocket.JSON.Send(ws, map[string]any{
+						"type":    "GAME_STATE",
+						"payload": sMsg.GetState(),
+					})
+				}
+			} else {
+				if err := websocket.JSON.Send(ws, cached); err != nil {
+					log.Printf("Failed to send initial cached state to viewer on %s: %v", cleanChan, err)
+				}
+			}
 		}
 	}
 }
@@ -102,16 +243,62 @@ func (h *Hub) BroadcastToViewers(channel string, payload any) {
 		h.mu.Unlock()
 		return
 	}
-	// Copy connections so we don't hold the lock while sending over the network
-	conns := make([]*websocket.Conn, 0, len(channelViewers))
-	for ws := range channelViewers {
-		conns = append(conns, ws)
+	type target struct {
+		ws      *websocket.Conn
+		isProto bool
+	}
+	targets := make([]target, 0, len(channelViewers))
+	for ws, isProto := range channelViewers {
+		targets = append(targets, target{ws: ws, isProto: isProto})
 	}
 	h.mu.Unlock()
 
-	for _, ws := range conns {
-		if err := websocket.JSON.Send(ws, payload); err != nil {
-			log.Printf("Failed to broadcast to viewer on channel %s: %v", cleanChan, err)
+	payloadBytes, isPayloadBytes := payload.([]byte)
+	var cachedJSON any
+	var cachedProtoBytes []byte
+
+	for _, t := range targets {
+		if t.isProto {
+			if isPayloadBytes {
+				if err := websocket.Message.Send(t.ws, payloadBytes); err != nil {
+					log.Printf("Failed to broadcast proto to viewer on channel %s: %v", cleanChan, err)
+				}
+			} else {
+				// Convert legacy JSON state to Protobuf bytes for proto viewer
+				if cachedProtoBytes == nil {
+					cachedProtoBytes = jsonStateToProtoBytes(payload)
+				}
+				if cachedProtoBytes != nil {
+					if err := websocket.Message.Send(t.ws, cachedProtoBytes); err != nil {
+						log.Printf("Failed to broadcast converted proto to viewer on channel %s: %v", cleanChan, err)
+					}
+				} else {
+					if err := websocket.JSON.Send(t.ws, payload); err != nil {
+						log.Printf("Failed to broadcast json fallback to proto viewer on channel %s: %v", cleanChan, err)
+					}
+				}
+			}
+		} else {
+			if isPayloadBytes {
+				if cachedJSON == nil {
+					var sMsg streamtankspbv1.ViewerServerMessage
+					if err := proto.Unmarshal(payloadBytes, &sMsg); err == nil && sMsg.GetState() != nil {
+						cachedJSON = map[string]any{
+							"type":    "GAME_STATE",
+							"payload": sMsg.GetState(),
+						}
+					}
+				}
+				if cachedJSON != nil {
+					if err := websocket.JSON.Send(t.ws, cachedJSON); err != nil {
+						log.Printf("Failed to broadcast json to viewer on channel %s: %v", cleanChan, err)
+					}
+				}
+			} else {
+				if err := websocket.JSON.Send(t.ws, payload); err != nil {
+					log.Printf("Failed to broadcast to viewer on channel %s: %v", cleanChan, err)
+				}
+			}
 		}
 	}
 }
@@ -154,12 +341,21 @@ func (h *Hub) HandleHost(auth HostAuthenticator, claimMgr *ClaimManager) websock
 			errChan := make(chan error, 1)
 			go func() {
 				for {
-					var m any
-					if err := websocket.JSON.Receive(ws, &m); err != nil {
+					var frame wsFrame
+					if err := frameCodec.Receive(ws, &frame); err != nil {
 						errChan <- err
 						return
 					}
-					msgChan <- m
+					if frame.payloadType == websocket.BinaryFrame {
+						msgChan <- frame.data
+					} else {
+						var m any
+						if err := json.Unmarshal(frame.data, &m); err == nil {
+							msgChan <- m
+						} else {
+							msgChan <- frame.data
+						}
+					}
 				}
 			}()
 

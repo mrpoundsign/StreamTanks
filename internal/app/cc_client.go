@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"golang.org/x/net/websocket"
+	"google.golang.org/protobuf/proto"
+
+	streamtankspbv1 "streamtanks/internal/proto/streamtanks/v1"
 )
 
 var (
@@ -21,13 +24,19 @@ var (
 
 	ccConnMu        sync.Mutex
 	ccConn          *websocket.Conn
+	ccConnIsProto   bool
 	lastViewerState ViewerState
 )
 
 func setCCConn(conn *websocket.Conn) {
+	setCCConnProto(conn, false)
+}
+
+func setCCConnProto(conn *websocket.Conn, isProto bool) {
 	ccConnMu.Lock()
 	defer ccConnMu.Unlock()
 	ccConn = conn
+	ccConnIsProto = isProto
 	if conn == nil {
 		lastViewerState = ViewerState{}
 	}
@@ -38,6 +47,7 @@ func setCCConn(conn *websocket.Conn) {
 func BroadcastViewerState() {
 	ccConnMu.Lock()
 	conn := ccConn
+	isProto := ccConnIsProto
 	if conn == nil {
 		ccConnMu.Unlock()
 		return
@@ -49,10 +59,24 @@ func BroadcastViewerState() {
 	leavingPlayers := make([]string, 0, len(gameState.Players))
 	shieldUsedPlayers := make([]string, 0, len(gameState.Players))
 	shieldedPlayers := make([]string, 0, len(gameState.Players))
+	tanks := make([]*streamtankspbv1.TankState, 0, len(gameState.Players))
 	hasAliveBot := false
 	for name, p := range gameState.Players {
-		if !p.IsDead && (gameState.Phase != phaseIdle || p.Joined) {
+		isAlive := !p.IsDead && (gameState.Phase != phaseIdle || p.Joined)
+		if isAlive {
 			alivePlayers = append(alivePlayers, strings.ToLower(name))
+			tanks = append(tanks, &streamtankspbv1.TankState{
+				Id:         name,
+				Username:   name,
+				X:          float32(p.X),
+				Y:          float32(p.Y),
+				Angle:      float32(p.Angle),
+				Health:     100,
+				IsBot:      p.IsBot,
+				Color:      p.EmoteURL,
+				IsShielded: p.IsShielded,
+				ShieldUsed: p.ShieldUsed,
+			})
 		}
 		if !p.IsBot && p.Joined {
 			joinedPlayers = append(joinedPlayers, strings.ToLower(name))
@@ -78,6 +102,11 @@ func BroadcastViewerState() {
 
 	canStart := gameState.Phase == phaseIdle && len(joinedPlayers) > 0
 	canJoin := gameState.Phase == phaseIdle || (gameState.Phase == phaseInput && hasAliveBot)
+
+	terrainHeights := make([]int32, len(gameState.Terrain))
+	for i, h := range gameState.Terrain {
+		terrainHeights[i] = int32(h)
+	}
 
 	vs := ViewerState{
 		Phase:             gameState.Phase,
@@ -117,13 +146,50 @@ func BroadcastViewerState() {
 	lastViewerState = vs
 	ccConnMu.Unlock()
 
-	msg := WSMessage{
-		Type:    "GAME_STATE",
-		Payload: vs,
-	}
+	if isProto {
+		vsProto := &streamtankspbv1.ViewerState{
+			Phase:             vs.Phase,
+			TimerRemaining:    int32(vs.TimerRemaining),
+			RoundId:           int64(vs.RoundID),
+			Winner:            vs.Winner,
+			PlayersCount:      int32(vs.PlayersCount),
+			Players:           vs.Players,
+			ProtractorX:       int32(vs.ProtractorX),
+			ProtractorY:       int32(vs.ProtractorY),
+			CanStart:          vs.CanStart,
+			CanJoin:           vs.CanJoin,
+			JoinedPlayers:     vs.JoinedPlayers,
+			LeavingPlayers:    vs.LeavingPlayers,
+			ShieldUsedPlayers: vs.ShieldUsedPlayers,
+			ShieldedPlayers:   vs.ShieldedPlayers,
+			Terrain:           terrainHeights,
+			Tanks:             tanks,
+		}
 
-	if err := websocket.JSON.Send(conn, msg); err != nil {
-		log.Printf("[C&C] Failed to send viewer state update: %v", err)
+		serverMsg := &streamtankspbv1.ViewerServerMessage{
+			Payload: &streamtankspbv1.ViewerServerMessage_State{
+				State: vsProto,
+			},
+		}
+
+		protoBytes, err := proto.Marshal(serverMsg)
+		if err != nil {
+			log.Printf("[C&C] Failed to marshal viewer state proto: %v", err)
+			return
+		}
+
+		if err := websocket.Message.Send(conn, protoBytes); err != nil {
+			log.Printf("[C&C] Failed to send viewer state update: %v", err)
+		}
+	} else {
+		msg := WSMessage{
+			Type:    "GAME_STATE",
+			Payload: vs,
+		}
+
+		if err := websocket.JSON.Send(conn, msg); err != nil {
+			log.Printf("[C&C] Failed to send viewer state update: %v", err)
+		}
 	}
 }
 
@@ -213,7 +279,7 @@ func runCCClientLoop(ctx context.Context, baseURL, channel string) {
 
 func runCCClient(ctx context.Context, baseURL, channel string) error {
 	token := getSetting("cc_host_token")
-	connectURL := fmt.Sprintf("%s/ws/host?channel=%s", baseURL, url.QueryEscape(channel))
+	connectURL := fmt.Sprintf("%s/ws/host?channel=%s&format=proto", baseURL, url.QueryEscape(channel))
 	if token != "" {
 		connectURL += "&token=" + url.QueryEscape(token)
 	}
@@ -334,7 +400,7 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 					gameState.ClaimCode = ""
 					gameState.mu.Unlock()
 
-					setCCConn(ws)
+					setCCConnProto(ws, true)
 					broadcast(msgStateUpdate, &gameState)
 					BroadcastViewerState()
 				}

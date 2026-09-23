@@ -27,16 +27,22 @@
 
 ```
 StreamTanks/
+├── proto/                # Protocol Buffers schema definitions
+│   └── streamtanks/v1/
+│       └── game.proto    # ViewerState, TankState, ViewerContext, Action & Server envelopes
+├── buf.yaml              # Buf CLI module configuration (v2)
+├── buf.gen.yaml          # Buf code generation plugins (protoc-gen-go, @bufbuild/protoc-gen-es)
 ├── cmd/
 │   ├── streamtanks/
 │   │   └── main.go       # CLI entrypoint, flag parsing, server bootstrap
 │   └── ccserver/         # Twitch Extension Command & Control (C&C) relay server
 │       ├── main.go       # C&C HTTP/WS entrypoint, static file server, health check
-│       ├── hub.go        # Broadcaster host connection pool & viewer broadcast hub
+│       ├── hub.go        # Broadcaster host connection pool, viewer hub & JSON/Protobuf bridge
 │       ├── auth.go       # Twitch extension HMAC/JWT authentication
 │       ├── claim.go      # Streamer claim & host registration manager
 │       └── viewer.go     # Viewer WebSocket handler & Twitch chat command dispatcher
 ├── internal/
+│   ├── proto/            # Generated Go Protobuf structs (internal/proto/streamtanks/v1/)
 │   └── app/              # Core backend engine & services
 │       ├── commands.go   # Twitch chat command dispatcher & dedicated handlers
 │       ├── game.go       # Phase state machine, game loop, physics, bot lifecycle
@@ -66,6 +72,7 @@ StreamTanks/
 │           └── admin.js  # Live WebSocket sync, command dispatcher, history
 ├── ext-web/              # Twitch Extension (Desktop Video Overlay & Mobile Views)
 │   ├── src/
+│   │   ├── proto/        # Generated TypeScript Protobuf schemas (game_pb.ts)
 │   │   └── ext.ts        # Protractor aiming, power gauge, Twitch JWT auth, C&C WebSocket
 │   └── public/
 │       ├── video_overlay.html # Desktop video player transparent SVG protractor overlay
@@ -78,7 +85,7 @@ StreamTanks/
 ├── build.bat             # Batch launcher for build.ps1
 ├── go.mod                # Go module definitions
 ├── go.sum                # Checksums
-├── package.json          # Frontend build tooling (TypeScript, esbuild)
+├── package.json          # Frontend build tooling (TypeScript, esbuild, buf)
 ├── tsconfig.json         # Strict TypeScript configuration (ES2022)
 ├── AGENTS.md             # Coding standards, architecture documentation, agent instructions
 └── .gitignore            # Ignores .exe binaries, .db files, dist/, and IDE state
@@ -158,11 +165,35 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 
 ### Architecture Overview
 1. **Local Game Instance** (`cmd/streamtanks`):
-   Runs on the streamer's local machine, manages physics, game loop, and the OBS browser source overlay. Connects outbound to the C&C server (`internal/app/cc_client.go`) over WebSockets.
+   Runs on the streamer's local machine, manages physics, game loop, and the OBS browser source overlay. Connects outbound to the C&C server (`internal/app/cc_client.go`) over WebSockets (`/ws/host?channel=<chan>&format=proto`). Serializes state into binary Protocol Buffers (`ViewerServerMessage`).
 2. **C&C Relay Server** (`cmd/ccserver`):
-   Cloud-hosted gateway (`wss://st-cc.poundsigndesign.com`). Authenticates viewers using Twitch Extension JWT tokens, pairs broadcasters via claim handshake, and relays chat commands and real-time game state broadcasts.
+   Cloud-hosted gateway (`wss://st-cc.poundsigndesign.com`). Authenticates viewers using Twitch Extension JWT tokens, pairs broadcasters via claim handshake, and multiplexes binary Protobuf streams with a dynamic translation bridge for legacy JSON servers.
 3. **Twitch Extension Frontend** (`ext-web/`):
-   Runs in the viewer's browser or mobile app. Connects to `wss://st-cc.poundsigndesign.com/ws/viewer` to send actions (`%join`, `%fire`, `%left`, `%right`) and render live aiming controls.
+   Runs in the viewer's browser or mobile app. Connects to `wss://st-cc.poundsigndesign.com/ws/viewer?format=proto` via binary WebSockets to dispatch typed Protobuf actions (`ViewerActionMessage`) and render interactive aiming controls.
+
+### Protocol Buffers & Code Generation
+- **Schema**: Defined in `proto/streamtanks/v1/game.proto`.
+- **Generation Tooling**: Managed via [Buf](https://buf.build/) CLI (`buf.yaml`, `buf.gen.yaml`).
+- **One-Command Generation**:
+  ```bash
+  npm run proto:gen
+  ```
+  Generates Go code in `internal/proto/streamtanks/v1/game.pb.go` and TypeScript schemas in `ext-web/src/proto/streamtanks/v1/game_pb.ts`.
+- **Full Terrain Resolution**: The server synchronizes the full 1920-point `int32` terrain heightmap array during the `INPUT` phase. Downscaling is avoided to guarantee pixel-perfect zoom inspection on mobile and desktop clients.
+
+### Networking & Cloudflare Ingress Rules
+- **WebSockets over TCP (Port 443)**: Binary Protocol Buffers frames run over standard `wss://`.
+- **Why QUIC / UDP Was Rejected**: Standard Cloudflare reverse-proxy ("Orange Cloud") proxies TCP HTTP/WSS on port 443, but drops raw UDP (e.g. port 4433) unless paying for Enterprise Spectrum. WebTransport to custom origin servers is not supported on standard plans. Standard WSS leverages Cloudflare's SSL termination, DDoS protection, and global CDN without custom TLS cert maintenance.
+
+### Dual-Compatibility & Legacy Server Rules
+> [!IMPORTANT]
+> **Zero Breakage for Legacy Servers**: `cmd/ccserver` must always maintain bidirectional backward compatibility for older StreamTanks hosts running previous JSON versions:
+> 1. **Old Host -> Modern Viewer**: `jsonStateToProtoBytes` in `cmd/ccserver/hub.go` dynamically converts legacy JSON `GAME_STATE` into binary Protobuf `ViewerServerMessage` frames.
+> 2. **Modern Viewer -> Old Host**: `cmd/ccserver/viewer.go` unpacks Protobuf `ViewerActionMessage` frames and converts them into canonical JSON `EXTENSION_COMMAND` envelopes (`{"type": "CHAT_COMMAND", "payload": "%fire 45 60"}`) that older servers natively parse and execute.
+> 3. **Frame Discrimination**: `golang.org/x/net/websocket` does NOT update `ws.PayloadType` during reads. Always use `wsFrame` and `frameCodec` in `cmd/ccserver` to inspect the actual WebSocket frame opcode (`0x01` Text vs `0x02` Binary).
+
+### Detailed Architecture Reference
+For the complete networking architecture, claim flow, and schema specifications, refer to [docs/cc_architecture.md](docs/cc_architecture.md).
 
 ### Versioning Guidelines
 - **StreamTanks Game & Server**: Tracks application semantic versioning (e.g. `v0.2.0`).
@@ -176,4 +207,5 @@ All commands default to the `%` prefix (configurable via `%prefix`):
   Packages `ext-web/public/*` into `dist/extension.zip`.
 - **Zip Structure**: All extension files (`video_overlay.html`, `mobile.html`, `config.html`, `ext.js`, `ext.css`) must reside directly at the **root of the `.zip`** (no enclosing directory).
 - **Twitch Review Human-Readability Requirement**: Twitch Extension review strictly forbids obfuscated code and requires readable JavaScript. Therefore, `npm run build` (without `--minify`) is used when bundling `ext.js` for extension review uploads.
+
 
