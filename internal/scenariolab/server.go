@@ -191,7 +191,11 @@ func (s *ScenarioLabServer) handleGenerateScenarios(w http.ResponseWriter, r *ht
 	for i := range req.Count {
 		curSeed := req.Seed + int64(i)*1337
 		sc := GenerateRandomScenario(curSeed)
-		res := RunScenarioSimulation(sc, 1.0)
+		dtScale := sc.Rules.PhysicsSpeed
+		if dtScale <= 0 {
+			dtScale = 1.0
+		}
+		res := RunScenarioSimulation(sc, dtScale)
 		items = append(items, GeneratedItem{
 			Scenario:     sc,
 			ServerResult: res,

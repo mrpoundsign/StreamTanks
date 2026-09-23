@@ -95,6 +95,7 @@ const timelineScrubber = document.getElementById('timeline-scrubber') as HTMLInp
 const timelineCurrentFrame = document.getElementById('timeline-current-frame') as HTMLElement;
 const timelineTotalFrames = document.getElementById('timeline-total-frames') as HTMLElement;
 const selectSpeed = document.getElementById('select-speed') as HTMLSelectElement;
+const selectFps = document.getElementById('select-fps') as HTMLSelectElement | null;
 
 const inspectorStatusBox = document.getElementById('inspector-status-box') as HTMLElement;
 const metricTerrainDiff = document.getElementById('metric-terrain-diff') as HTMLElement;
@@ -159,6 +160,17 @@ function setupEventListeners(): void {
       startPlayback();
     }
   });
+
+  if (selectFps) {
+    selectFps.addEventListener('change', () => {
+      if (currentScenario) {
+        pausePlayback();
+        recordOverlaySimulation(currentScenario);
+        updateInspector(currentScenario, currentServerResult);
+        seekFrame(0);
+      }
+    });
+  }
 
   btnToggleJson.addEventListener('click', () => {
     const isHidden = rawJsonViewer.style.display === 'none';
@@ -331,14 +343,18 @@ function recordOverlaySimulation(sc: Scenario): void {
   executeActions(state);
   saveFrameSnapshot(0, state, [], []);
 
+  const clientFps = selectFps ? parseInt(selectFps.value, 10) : 60;
+  const physicsSpeed = sc.rules?.physicsSpeed || 0.5;
+  const dtScale = (60.0 / clientFps) * physicsSpeed;
+
   const accumulatedImpacts: SimImpact[] = [];
   const accumulatedKills: SimKill[] = [];
   let step = 0;
-  const maxSteps = 2000;
+  const maxSteps = Math.ceil(2000 * (clientFps / 60));
 
   while (step < maxSteps) {
     step++;
-    const events = stepSimulation(state, 1.0);
+    const events = stepSimulation(state, dtScale);
     accumulatedImpacts.push(...events.impacts);
     accumulatedKills.push(...events.kills);
 
@@ -696,7 +712,8 @@ async function runFuzzSuite(): Promise<void> {
           roundId: 1,
         };
 
-        const clientRes = runFullSimulation(state, 1.0);
+        const physicsSpeed = item.scenario.rules?.physicsSpeed || 0.5;
+        const clientRes = runFullSimulation(state, physicsSpeed);
 
         // Check for mismatch
         const serverKills = new Set((item.serverResult.kills || []).map((k) => k.victim));
