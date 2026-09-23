@@ -2,12 +2,17 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/net/websocket"
+	"google.golang.org/protobuf/proto"
+
+	streamtankspbv1 "streamtanks/internal/proto/streamtanks/v1"
 )
 
 // ViewerClaims defines the expected payload from a Twitch Extension JWT.
@@ -56,19 +61,37 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 			return nil
 		},
 		Handler: func(ws *websocket.Conn) {
-			// The viewer frontend connects and sends an initial auth payload
-			// For example: {"jwt": "eyJhbG..."}
+			req := ws.Request()
+			isProto := req != nil && req.URL.Query().Get("format") == "proto"
 
-			var authMsg struct {
-				JWT string `json:"jwt"`
-			}
-
-			if err := websocket.JSON.Receive(ws, &authMsg); err != nil {
+			var authFrame wsFrame
+			if err := frameCodec.Receive(ws, &authFrame); err != nil {
 				log.Printf("Viewer failed initial auth payload: %v", err)
 				return
 			}
 
-			claims, err := ViewerAuth(authMsg.JWT, twitchSecret)
+			var jwtToken string
+			if authFrame.payloadType == websocket.BinaryFrame || isProto {
+				var authPb streamtankspbv1.ViewerAuthMessage
+				if err := proto.Unmarshal(authFrame.data, &authPb); err == nil && authPb.Jwt != "" {
+					jwtToken = authPb.Jwt
+				}
+			}
+			if jwtToken == "" {
+				var authMsg struct {
+					JWT string `json:"jwt"`
+				}
+				if err := json.Unmarshal(authFrame.data, &authMsg); err == nil {
+					jwtToken = authMsg.JWT
+				}
+			}
+
+			if jwtToken == "" {
+				log.Printf("Viewer auth token missing or invalid payload")
+				return
+			}
+
+			claims, err := ViewerAuth(jwtToken, twitchSecret)
 			if err != nil {
 				log.Printf("Viewer JWT validation failed: %v", err)
 				return
@@ -77,11 +100,15 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 			// Resolve viewer username ONLY if UserID is present (identity granted)
 			var viewerUsername string
 			twitchUserID := claims.UserID
-			if twitchUserID != "" && twitchClient != nil {
-				if name, err := twitchClient.GetUsername(twitchUserID); err == nil {
-					viewerUsername = name
+			if twitchUserID != "" {
+				if twitchClient != nil {
+					if name, err := twitchClient.GetUsername(twitchUserID); err == nil {
+						viewerUsername = name
+					} else {
+						log.Printf("Failed to resolve username for Twitch UserID %s: %v", twitchUserID, err)
+					}
 				} else {
-					log.Printf("Failed to resolve username for Twitch UserID %s: %v", twitchUserID, err)
+					viewerUsername = twitchUserID
 				}
 			}
 
@@ -94,51 +121,118 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 				}
 			}
 
-			log.Printf("Viewer (twitch_id: %s, opaque: %s, name: %s) connected for channel %s", twitchUserID, claims.OpaqueUserID, viewerUsername, channelID)
+			log.Printf("Viewer (twitch_id: %s, opaque: %s, name: %s, proto: %v) connected for channel %s", twitchUserID, claims.OpaqueUserID, viewerUsername, isProto, channelID)
 
-			// Send viewer identity and channel context to viewer client
-			_ = websocket.JSON.Send(ws, map[string]any{
-				"type": "VIEWER_INFO",
-				"payload": map[string]any{
-					"user":      viewerUsername,
-					"twitch_id": twitchUserID,
-					"channel":   channelID,
-				},
-			})
+			if isProto {
+				ctxMsg := &streamtankspbv1.ViewerServerMessage{
+					Payload: &streamtankspbv1.ViewerServerMessage_Context{
+						Context: &streamtankspbv1.ViewerContext{
+							Username:     viewerUsername,
+							ChannelId:    channelID,
+							OpaqueUserId: claims.OpaqueUserID,
+							TwitchUserId: twitchUserID,
+						},
+					},
+				}
+				if ctxBytes, err := proto.Marshal(ctxMsg); err == nil {
+					_ = websocket.Message.Send(ws, ctxBytes)
+				}
+			} else {
+				// Send viewer identity and channel context to viewer client
+				_ = websocket.JSON.Send(ws, map[string]any{
+					"type": "VIEWER_INFO",
+					"payload": map[string]any{
+						"user":      viewerUsername,
+						"twitch_id": twitchUserID,
+						"channel":   channelID,
+					},
+				})
+			}
 
-			hub.RegisterViewer(channelID, ws)
+			hub.RegisterViewer(channelID, ws, isProto)
 			defer hub.UnregisterViewer(channelID, ws)
 
 			// Loop to receive commands and route them to the host
 			for {
-				var cmdPayload any
-				if err := websocket.JSON.Receive(ws, &cmdPayload); err != nil {
+				var frame wsFrame
+				if err := frameCodec.Receive(ws, &frame); err != nil {
 					log.Printf("Viewer %s disconnected from channel %s", viewerUsername, channelID)
 					break
 				}
 
 				if viewerUsername == "" {
 					log.Printf("[Security] Rejected command from unlinked viewer (opaque: %s): identity share required", claims.OpaqueUserID)
-					_ = websocket.JSON.Send(ws, map[string]any{
-						"type":    "AUTH_REQUIRED",
-						"payload": "Twitch identity link required to participate in StreamTanks",
-					})
+					if !isProto {
+						_ = websocket.JSON.Send(ws, map[string]any{
+							"type":    "AUTH_REQUIRED",
+							"payload": "Twitch identity link required to participate in StreamTanks",
+						})
+					}
 					continue
 				}
 
-				// Pass an envelope to the Host with resolved username and permanent Twitch UserID
-				envelope := map[string]any{
-					"type": "EXTENSION_COMMAND",
-					"payload": map[string]any{
-						"user":      viewerUsername,
-						"twitch_id": twitchUserID,
-						"command":   cmdPayload,
-					},
+				var cmdStr string
+				var rawCmdPayload any
+
+				if frame.payloadType == websocket.BinaryFrame || isProto {
+					var actionMsg streamtankspbv1.ViewerActionMessage
+					if err := proto.Unmarshal(frame.data, &actionMsg); err == nil && actionMsg.Action != nil {
+						switch act := actionMsg.Action.(type) {
+						case *streamtankspbv1.ViewerActionMessage_Fire:
+							cmdStr = fmt.Sprintf("%%fire %g %g", act.Fire.Angle, act.Fire.Power)
+						case *streamtankspbv1.ViewerActionMessage_Move:
+							switch act.Move.Direction {
+							case streamtankspbv1.MoveAction_DIRECTION_LEFT:
+								cmdStr = "%left"
+							case streamtankspbv1.MoveAction_DIRECTION_RIGHT:
+								cmdStr = "%right"
+							}
+						case *streamtankspbv1.ViewerActionMessage_Shield:
+							cmdStr = "%shield"
+						case *streamtankspbv1.ViewerActionMessage_Join:
+							if act.Join.Emote != "" {
+								cmdStr = "%join " + act.Join.Emote
+							} else {
+								cmdStr = "%join"
+							}
+						case *streamtankspbv1.ViewerActionMessage_Leave:
+							cmdStr = "%leave"
+						case *streamtankspbv1.ViewerActionMessage_StartMatch:
+							cmdStr = "%startgame"
+						}
+					}
+				}
+				if cmdStr == "" {
+					_ = json.Unmarshal(frame.data, &rawCmdPayload)
 				}
 
-				_ = hub.RouteMessage(channelID, envelope)
-				// If err != nil, the host is not connected or failed to receive.
-				// We silently drop it for now.
+				var envelope map[string]any
+				if cmdStr != "" {
+					envelope = map[string]any{
+						"type": "EXTENSION_COMMAND",
+						"payload": map[string]any{
+							"user":      viewerUsername,
+							"twitch_id": twitchUserID,
+							"command": map[string]any{
+								"type":    "CHAT_COMMAND",
+								"payload": cmdStr,
+							},
+						},
+					}
+				} else if rawCmdPayload != nil {
+					envelope = map[string]any{
+						"type": "EXTENSION_COMMAND",
+						"payload": map[string]any{
+							"user":      viewerUsername,
+							"twitch_id": twitchUserID,
+							"command":   rawCmdPayload,
+						},
+					}
+				}
+
+				if envelope != nil {
+					_ = hub.RouteMessage(channelID, envelope)
+				}
 			}
 		},
 	}

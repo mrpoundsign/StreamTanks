@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package streamtanks.v1;
+
+option go_package = "streamtanks/internal/proto/streamtanks/v1;streamtankspbv1";
+
+// TankState represents the visual and gameplay state of an individual tank.
+message TankState {
+  string id = 1;
+  string username = 2;
+  float x = 3;
+  float y = 4;
+  float angle = 5;
+  int32 health = 6;
+  bool is_bot = 7;
+  string color = 8;
+  bool is_shielded = 9;
+  bool shield_used = 10;
+}
+
+// ViewerState is the authoritative snapshot broadcast to viewers.
+message ViewerState {
+  string phase = 1;
+  int32 timer_remaining = 2;
+  int64 round_id = 3;
+  string winner = 4;
+  int32 players_count = 5;
+  repeated string players = 6;
+  int32 protractor_x = 7;
+  int32 protractor_y = 8;
+  bool can_start = 9;
+  bool can_join = 10;
+  repeated string joined_players = 11;
+  repeated string leaving_players = 12;
+  repeated string shield_used_players = 13;
+  repeated string shielded_players = 14;
+  repeated int32 terrain = 15 [packed = true]; // 1920-point heightmap
+  repeated TankState tanks = 16;
+}
+
+// ViewerContext provides viewer identity metadata returned upon authentication.
+message ViewerContext {
+  string username = 1;
+  string channel_id = 2;
+  string opaque_user_id = 3;
+  string twitch_user_id = 4;
+}
+
+// ViewerServerMessage is the top-level envelope sent from server to viewer.
+message ViewerServerMessage {
+  oneof payload {
+    ViewerState state = 1;
+    ViewerContext context = 2;
+  }
+}
+
+// ViewerAuthMessage sends authentication credentials from client to server.
+message ViewerAuthMessage {
+  string jwt = 1;
+}
+
+// FireAction parameters.
+message FireAction {
+  float angle = 1;
+  float power = 2;
+}
+
+// MoveAction parameters.
+message MoveAction {
+  enum Direction {
+    DIRECTION_UNSPECIFIED = 0;
+    DIRECTION_LEFT = 1;
+    DIRECTION_RIGHT = 2;
+  }
+  Direction direction = 1;
+}
+
+// ShieldAction parameters.
+message ShieldAction {}
+
+// JoinAction parameters.
+message JoinAction {
+  string emote = 1;
+}
+
+// LeaveAction parameters.
+message LeaveAction {}
+
+// StartMatchAction parameters.
+message StartMatchAction {}
+
+// ViewerActionMessage is the top-level envelope for actions submitted by viewers.
+message ViewerActionMessage {
+  oneof action {
+    FireAction fire = 1;
+    MoveAction move = 2;
+    ShieldAction shield = 3;
+    JoinAction join = 4;
+    LeaveAction leave = 5;
+    StartMatchAction start_match = 6;
+  }
+}

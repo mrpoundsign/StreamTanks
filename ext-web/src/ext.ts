@@ -1,10 +1,20 @@
 // Twitch Extension Frontend Logic (Desktop Protractor Overlay & Mobile UI)
 // Connects to the C&C WebSocket server to relay commands from viewer to StreamTanks.
 
-export {};
+import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import {
+    ViewerServerMessageSchema,
+    ViewerActionMessageSchema,
+    MoveAction_Direction,
+    type TankState
+} from "./proto/streamtanks/v1/game_pb";
 
 const CC_SERVER_URL = "wss://st-cc.poundsigndesign.com/ws/viewer";
 
+export let latestTerrain: number[] = [];
+export let latestTanks: TankState[] = [];
+export function getLatestTerrain(): number[] { return latestTerrain; }
+export function getLatestTanks(): TankState[] { return latestTanks; }
 let ws: WebSocket | null = null;
 let viewerToken: string = "";
 let currentUsername: string = "";
@@ -693,6 +703,183 @@ function updateUIForPhase(phase: string, timerRemaining?: number, playersCount?:
     }
 }
 
+function handleViewerStateUpdate(payload: any) {
+    const phase = String(payload.phase || "IDLE").toUpperCase();
+    const timerRemaining = payload.timerRemaining !== undefined ? payload.timerRemaining : payload.timer_remaining;
+    const playersCount = payload.playersCount !== undefined ? payload.playersCount : (payload.players_count ?? (Array.isArray(payload.players) ? payload.players.length : 0));
+    const winner = payload.winner || "";
+
+    if (payload.terrain && Array.isArray(payload.terrain) && payload.terrain.length > 0) {
+        latestTerrain = payload.terrain;
+    }
+    if (payload.tanks && Array.isArray(payload.tanks) && payload.tanks.length > 0) {
+        latestTanks = payload.tanks;
+    }
+
+    if (payload.canStart !== undefined) {
+        canStartGame = !!payload.canStart;
+    } else if (payload.can_start !== undefined) {
+        canStartGame = !!payload.can_start;
+    } else {
+        canStartGame = false;
+    }
+
+    if (payload.canJoin !== undefined) {
+        canJoinGame = !!payload.canJoin;
+    } else if (payload.can_join !== undefined) {
+        canJoinGame = !!payload.can_join;
+    } else {
+        canJoinGame = phase === "IDLE";
+    }
+
+    const rawJoined = payload.joinedPlayers ?? payload.joined_players;
+    if (Array.isArray(rawJoined)) {
+        joinedPlayersList = rawJoined.map((p: string) => String(p).toLowerCase());
+    } else {
+        joinedPlayersList = [];
+    }
+
+    const rawPlayers = payload.players;
+    if (Array.isArray(rawPlayers)) {
+        activePlayers = rawPlayers.map((p: any) => typeof p === 'string' ? p.toLowerCase() : String(p.name || p.username || "").toLowerCase());
+    } else if (rawPlayers && typeof rawPlayers === 'object') {
+        activePlayers = Object.values(rawPlayers)
+            .filter((p: any) => p && !p.isBot && !p.isDead && (phase !== "IDLE" || p.joined))
+            .map((p: any) => String(p.name || p.username || "").toLowerCase());
+
+        if (joinedPlayersList.length === 0) {
+            joinedPlayersList = Object.values(rawPlayers)
+                .filter((p: any) => p && !p.isBot && p.joined)
+                .map((p: any) => String(p.name || p.username || "").toLowerCase());
+        }
+    }
+
+    if (isLocalDev && !currentUsername) {
+        if (joinedPlayersList.length > 0) {
+            currentUsername = joinedPlayersList[0];
+        } else if (activePlayers.length > 0) {
+            currentUsername = activePlayers[0];
+        }
+    }
+
+    if (timerRemaining !== undefined) {
+        localTimerRemaining = timerRemaining;
+    }
+
+    if (!isMobile) {
+        const px = payload.protractorX ?? payload.protractor_x;
+        const py = payload.protractorY ?? payload.protractor_y;
+        let posChanged = false;
+        if (typeof px === 'number') {
+            if (lastProtractorX !== px) posChanged = true;
+            pivotX = px;
+            lastProtractorX = px;
+        }
+        if (typeof py === 'number') {
+            if (lastProtractorY !== py) posChanged = true;
+            pivotY = py;
+            lastProtractorY = py;
+        }
+        if (protractorOverlayGroup) {
+            protractorOverlayGroup.setAttribute("transform", `translate(${pivotX}, ${pivotY})`);
+        }
+        if (posChanged) {
+            setAngle(currentAngle);
+            showProtractorPreview(2500);
+        }
+    }
+
+    const rawLeaving = payload.leavingPlayers ?? payload.leaving_players;
+    if (Array.isArray(rawLeaving)) {
+        leavingPlayersList = rawLeaving.map((p: string) => String(p).toLowerCase());
+    } else if (payload.players && typeof payload.players === 'object') {
+        leavingPlayersList = Object.values(payload.players)
+            .filter((p: any) => p && p.leaving)
+            .map((p: any) => String(p.name || p.username || "").toLowerCase());
+    } else {
+        leavingPlayersList = [];
+    }
+
+    if (currentUsername) {
+        isPlayerLeaving = leavingPlayersList.includes(currentUsername);
+    } else if (isLocalDev) {
+        isPlayerLeaving = leavingPlayersList.length > 0;
+    } else {
+        isPlayerLeaving = false;
+    }
+
+    const rawShieldUsed = payload.shieldUsedPlayers ?? payload.shield_used_players;
+    if (Array.isArray(rawShieldUsed)) {
+        shieldUsedPlayersList = rawShieldUsed.map((p: string) => String(p).toLowerCase());
+    } else if (payload.players && typeof payload.players === 'object') {
+        shieldUsedPlayersList = Object.values(payload.players)
+            .filter((p: any) => p && p.shieldUsed)
+            .map((p: any) => String(p.name || p.username || "").toLowerCase());
+    } else {
+        shieldUsedPlayersList = [];
+    }
+
+    const rawShielded = payload.shieldedPlayers ?? payload.shielded_players;
+    if (Array.isArray(rawShielded)) {
+        shieldedPlayersList = rawShielded.map((p: string) => String(p).toLowerCase());
+    } else if (payload.players && typeof payload.players === 'object') {
+        shieldedPlayersList = Object.values(payload.players)
+            .filter((p: any) => p && p.isShielded)
+            .map((p: any) => String(p.name || p.username || "").toLowerCase());
+    } else {
+        shieldedPlayersList = [];
+    }
+
+    if (currentUsername) {
+        isShieldUsed = shieldUsedPlayersList.includes(currentUsername);
+        isShieldActive = shieldedPlayersList.includes(currentUsername);
+    } else if (isLocalDev && joinedPlayersList.length > 0) {
+        const u = joinedPlayersList[0];
+        isShieldUsed = shieldUsedPlayersList.includes(u);
+        isShieldActive = shieldedPlayersList.includes(u);
+    } else {
+        isShieldUsed = false;
+        isShieldActive = false;
+    }
+
+    const currentlyJoined = getIsPlayerJoined();
+    hasJoined = currentlyJoined;
+    if (currentUsername && joinedPlayersList.includes(currentUsername)) {
+        joinRequestedAt = 0;
+    }
+
+    if (phase === "IDLE") {
+        isPlayerDead = false;
+        isPlayerLeaving = false;
+        isShieldUsed = false;
+        isShieldActive = false;
+    } else {
+        if (currentlyJoined) {
+            if (currentUsername) {
+                isPlayerDead = !activePlayers.includes(currentUsername);
+            } else if (isLocalDev) {
+                if (payload.players && typeof payload.players === 'object' && !Array.isArray(payload.players)) {
+                    const humans = Object.values(payload.players).filter((p: any) => p && !p.isBot && p.joined);
+                    if (humans.length > 0 && humans.every((p: any) => p.isDead)) {
+                        isPlayerDead = true;
+                    } else if (humans.some((p: any) => !p.isDead)) {
+                        isPlayerDead = false;
+                    }
+                } else if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
+                    isPlayerDead = true;
+                } else if (activePlayers.length > 0) {
+                    isPlayerDead = false;
+                }
+            }
+        } else {
+            isPlayerDead = false;
+            isPlayerLeaving = false;
+        }
+    }
+
+    updateUIForPhase(phase, timerRemaining, playersCount, winner);
+}
+
 // WebSocket Connection to C&C Relay or Local Game Instance
 function connectWebSocket() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -707,7 +894,8 @@ function connectWebSocket() {
         ws = new WebSocket(`${proto}//${window.location.host}/ws?client=extension`);
     } else {
         logMessage("Connecting to C&C...");
-        ws = new WebSocket(`${CC_SERVER_URL}?token=${viewerToken}`);
+        ws = new WebSocket(`${CC_SERVER_URL}?token=${viewerToken}&format=proto`);
+        ws.binaryType = "arraybuffer";
     }
 
     ws.onopen = () => {
@@ -731,12 +919,32 @@ function connectWebSocket() {
 
         // Re-send join if viewer deployed before identity refresh
         if (hasJoined) {
-            sendCommand("%join");
+            sendAction({ join: {} });
         }
     };
 
     ws.onmessage = (event) => {
         try {
+            if (event.data instanceof ArrayBuffer) {
+                const serverMsg = fromBinary(ViewerServerMessageSchema, new Uint8Array(event.data));
+                if (serverMsg.payload.case === "context") {
+                    const ctx = serverMsg.payload.value;
+                    const userStr = ctx.username ? String(ctx.username).trim() : "";
+                    if (userStr && (!isOpaque(userStr) || isLocalDev)) {
+                        currentUsername = userStr.toLowerCase();
+                        isLinked = true;
+                    } else {
+                        currentUsername = "";
+                        isLinked = false;
+                    }
+                    updateLandingVisibility();
+                    updateUIForPhase(currentPhaseStr, localTimerRemaining);
+                } else if (serverMsg.payload.case === "state") {
+                    handleViewerStateUpdate(serverMsg.payload.value);
+                }
+                return;
+            }
+
             const data = JSON.parse(event.data);
             if (data.type === "VIEWER_INFO" && data.payload) {
                 const userStr = data.payload.user ? String(data.payload.user).trim() : "";
@@ -755,177 +963,7 @@ function connectWebSocket() {
                 updateLandingVisibility();
                 logMessage(data.payload || "Twitch identity link required.");
             } else if ((data.type === "GAME_STATE" || data.type === "STATE_UPDATE") && data.payload) {
-                const payload = data.payload;
-                const phase = payload.phase;
-                const timerRemaining = payload.timer_remaining ?? payload.timerRemaining;
-                const playersCount = payload.players_count ?? (payload.players ? Object.keys(payload.players).length : 0);
-                const winner = payload.winner;
-
-                if (payload.can_start !== undefined) {
-                    canStartGame = !!payload.can_start;
-                } else if (payload.canStart !== undefined) {
-                    canStartGame = !!payload.canStart;
-                } else {
-                    canStartGame = false;
-                }
-
-                if (payload.can_join !== undefined) {
-                    canJoinGame = !!payload.can_join;
-                } else if (payload.canJoin !== undefined) {
-                    canJoinGame = !!payload.canJoin;
-                } else {
-                    canJoinGame = phase === "IDLE";
-                }
-
-                if (Array.isArray(payload.joined_players)) {
-                    joinedPlayersList = payload.joined_players.map((p: string) => String(p).toLowerCase());
-                } else if (Array.isArray(payload.joinedPlayers)) {
-                    joinedPlayersList = payload.joinedPlayers.map((p: string) => String(p).toLowerCase());
-                } else {
-                    joinedPlayersList = [];
-                }
-
-                if (Array.isArray(payload.players)) {
-                    activePlayers = payload.players.map((p: string) => String(p).toLowerCase());
-                } else if (payload.players && typeof payload.players === 'object') {
-                    activePlayers = Object.values(payload.players)
-                        .filter((p: any) => p && !p.isBot && !p.isDead && (phase !== "IDLE" || p.joined))
-                        .map((p: any) => String(p.name || "").toLowerCase());
-
-                    if (joinedPlayersList.length === 0) {
-                        joinedPlayersList = Object.values(payload.players)
-                            .filter((p: any) => p && !p.isBot && p.joined)
-                            .map((p: any) => String(p.name || "").toLowerCase());
-                    }
-                }
-
-                if (isLocalDev && !currentUsername) {
-                    if (joinedPlayersList.length > 0) {
-                        currentUsername = joinedPlayersList[0];
-                    } else if (activePlayers.length > 0) {
-                        currentUsername = activePlayers[0];
-                    }
-                }
-
-                if (timerRemaining !== undefined) {
-                    localTimerRemaining = timerRemaining;
-                }
-
-                if (!isMobile) {
-                    const px = payload.protractor_x ?? payload.protractorX;
-                    const py = payload.protractor_y ?? payload.protractorY;
-                    let posChanged = false;
-                    if (typeof px === 'number') {
-                        if (lastProtractorX !== px) posChanged = true;
-                        pivotX = px;
-                        lastProtractorX = px;
-                    }
-                    if (typeof py === 'number') {
-                        if (lastProtractorY !== py) posChanged = true;
-                        pivotY = py;
-                        lastProtractorY = py;
-                    }
-                    if (protractorOverlayGroup) {
-                        protractorOverlayGroup.setAttribute("transform", `translate(${pivotX}, ${pivotY})`);
-                    }
-                    if (posChanged) {
-                        setAngle(currentAngle);
-                        showProtractorPreview(2500);
-                    }
-                }
-
-                if (Array.isArray(payload.leaving_players)) {
-                    leavingPlayersList = payload.leaving_players.map((p: string) => String(p).toLowerCase());
-                } else if (Array.isArray(payload.leavingPlayers)) {
-                    leavingPlayersList = payload.leavingPlayers.map((p: string) => String(p).toLowerCase());
-                } else if (payload.players && typeof payload.players === 'object') {
-                    leavingPlayersList = Object.values(payload.players)
-                        .filter((p: any) => p && p.leaving)
-                        .map((p: any) => String(p.name || "").toLowerCase());
-                } else {
-                    leavingPlayersList = [];
-                }
-
-                if (currentUsername) {
-                    isPlayerLeaving = leavingPlayersList.includes(currentUsername);
-                } else if (isLocalDev) {
-                    isPlayerLeaving = leavingPlayersList.length > 0;
-                } else {
-                    isPlayerLeaving = false;
-                }
-
-                if (Array.isArray(payload.shield_used_players)) {
-                    shieldUsedPlayersList = payload.shield_used_players.map((p: string) => String(p).toLowerCase());
-                } else if (Array.isArray(payload.shieldUsedPlayers)) {
-                    shieldUsedPlayersList = payload.shieldUsedPlayers.map((p: string) => String(p).toLowerCase());
-                } else if (payload.players && typeof payload.players === 'object') {
-                    shieldUsedPlayersList = Object.values(payload.players)
-                        .filter((p: any) => p && p.shieldUsed)
-                        .map((p: any) => String(p.name || "").toLowerCase());
-                } else {
-                    shieldUsedPlayersList = [];
-                }
-
-                if (Array.isArray(payload.shielded_players)) {
-                    shieldedPlayersList = payload.shielded_players.map((p: string) => String(p).toLowerCase());
-                } else if (Array.isArray(payload.shieldedPlayers)) {
-                    shieldedPlayersList = payload.shieldedPlayers.map((p: string) => String(p).toLowerCase());
-                } else if (payload.players && typeof payload.players === 'object') {
-                    shieldedPlayersList = Object.values(payload.players)
-                        .filter((p: any) => p && p.isShielded)
-                        .map((p: any) => String(p.name || "").toLowerCase());
-                } else {
-                    shieldedPlayersList = [];
-                }
-
-                if (currentUsername) {
-                    isShieldUsed = shieldUsedPlayersList.includes(currentUsername);
-                    isShieldActive = shieldedPlayersList.includes(currentUsername);
-                } else if (isLocalDev && joinedPlayersList.length > 0) {
-                    const u = joinedPlayersList[0];
-                    isShieldUsed = shieldUsedPlayersList.includes(u);
-                    isShieldActive = shieldedPlayersList.includes(u);
-                } else {
-                    isShieldUsed = false;
-                    isShieldActive = false;
-                }
-
-                const currentlyJoined = getIsPlayerJoined();
-                hasJoined = currentlyJoined;
-                if (currentUsername && joinedPlayersList.includes(currentUsername)) {
-                    joinRequestedAt = 0;
-                }
-
-                if (phase === "IDLE") {
-                    isPlayerDead = false;
-                    isPlayerLeaving = false;
-                    isShieldUsed = false;
-                    isShieldActive = false;
-                } else {
-                    if (currentlyJoined) {
-                        if (currentUsername) {
-                            isPlayerDead = !activePlayers.includes(currentUsername);
-                        } else if (isLocalDev) {
-                            if (payload.players && typeof payload.players === 'object') {
-                                const humans = Object.values(payload.players).filter((p: any) => p && !p.isBot && p.joined);
-                                if (humans.length > 0 && humans.every((p: any) => p.isDead)) {
-                                    isPlayerDead = true;
-                                } else if (humans.some((p: any) => !p.isDead)) {
-                                    isPlayerDead = false;
-                                }
-                            } else if (joinedPlayersList.length > 0 && activePlayers.length === 0) {
-                                isPlayerDead = true;
-                            } else if (activePlayers.length > 0) {
-                                isPlayerDead = false;
-                            }
-                        }
-                    } else {
-                        isPlayerDead = false;
-                        isPlayerLeaving = false;
-                    }
-                }
-
-                updateUIForPhase(phase, timerRemaining, playersCount, winner);
+                handleViewerStateUpdate(data.payload);
             } else if (data.type === "PLAYER_DIED" && data.payload) {
                 const victim = String(data.payload.victim || "").toLowerCase();
                 if (currentUsername && victim === currentUsername) {
@@ -975,6 +1013,63 @@ function sendCommand(cmd: string) {
     ws.send(JSON.stringify(payload));
 }
 
+function sendAction(actionData: {
+    fire?: { angle: number; power: number };
+    move?: { direction: MoveAction_Direction };
+    shield?: {};
+    join?: { emote?: string };
+    leave?: {};
+    startMatch?: {};
+}) {
+    if (!isLinked) {
+        logMessage("Twitch account link required to play.");
+        promptIdentityShare();
+        return;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        logMessage("Error: Not connected.");
+        return;
+    }
+
+    let actionOneOf: any = { case: undefined };
+    let fallbackCmd = "";
+    if (actionData.fire) {
+        actionOneOf = { case: "fire", value: actionData.fire };
+        fallbackCmd = `%fire ${actionData.fire.angle} ${actionData.fire.power}`;
+    } else if (actionData.move) {
+        actionOneOf = { case: "move", value: actionData.move };
+        fallbackCmd = actionData.move.direction === MoveAction_Direction.LEFT ? "%left" : "%right";
+    } else if (actionData.shield) {
+        actionOneOf = { case: "shield", value: {} };
+        fallbackCmd = "%shield";
+    } else if (actionData.join) {
+        actionOneOf = { case: "join", value: { emote: actionData.join.emote || "" } };
+        fallbackCmd = actionData.join.emote ? `%join ${actionData.join.emote}` : "%join";
+    } else if (actionData.leave) {
+        actionOneOf = { case: "leave", value: {} };
+        fallbackCmd = "%leave";
+    } else if (actionData.startMatch) {
+        actionOneOf = { case: "startMatch", value: {} };
+        fallbackCmd = "%startgame";
+    }
+
+    if (isLocalDev || ws.binaryType !== "arraybuffer") {
+        sendCommand(fallbackCmd);
+        return;
+    }
+
+    try {
+        const actionMsg = create(ViewerActionMessageSchema, {
+            action: actionOneOf
+        });
+        const bytes = toBinary(ViewerActionMessageSchema, actionMsg);
+        ws.send(bytes);
+    } catch (err) {
+        console.error("Failed to serialize protobuf action, falling back to JSON:", err);
+        sendCommand(fallbackCmd);
+    }
+}
+
 function logMessage(msg: string) {
     if (!msgLog) return;
     msgLog.textContent = msg;
@@ -1007,7 +1102,7 @@ btnOpenLanding?.addEventListener("click", () => {
 // Button Click Event Listeners
 btnStartMatch?.addEventListener("click", () => {
     if (!canStartGame) return;
-    sendCommand("%startgame");
+    sendAction({ startMatch: {} });
     logMessage("Match starting...");
 });
 
@@ -1018,7 +1113,7 @@ btnJoin?.addEventListener("click", () => {
     }
     const isJoined = getIsPlayerJoined();
     if (isJoined || !canJoinGame) return;
-    sendCommand("%join");
+    sendAction({ join: {} });
     hasJoined = true;
     joinRequestedAt = Date.now();
     logMessage("Tank deployed!");
@@ -1030,25 +1125,25 @@ btnJoin?.addEventListener("click", () => {
 });
 
 btnLeft?.addEventListener("click", () => {
-    sendCommand("%left");
+    sendAction({ move: { direction: MoveAction_Direction.LEFT } });
     setCurrentAction("LOCKED: MOVE LEFT");
     logMessage("Moving left...");
 });
 
 btnRight?.addEventListener("click", () => {
-    sendCommand("%right");
+    sendAction({ move: { direction: MoveAction_Direction.RIGHT } });
     setCurrentAction("LOCKED: MOVE RIGHT");
     logMessage("Moving right...");
 });
 
 btnFire?.addEventListener("click", () => {
-    sendCommand(`%fire ${currentAngle} ${currentPower}`);
+    sendAction({ fire: { angle: currentAngle, power: currentPower } });
     setCurrentAction(`LOCKED: FIRE ${currentAngle}° @ ${currentPower}%`);
     logMessage(`Fired: ${currentAngle}° @ ${currentPower}%`);
 });
 
 btnShield?.addEventListener("click", () => {
-    sendCommand("%shield");
+    sendAction({ shield: {} });
     isShieldActive = true;
     isShieldUsed = true;
     setCurrentAction("LOCKED: SHIELD ACTIVATED");
@@ -1062,7 +1157,7 @@ btnShield?.addEventListener("click", () => {
 btnLeave?.addEventListener("click", (e) => {
     e.stopPropagation();
     e.preventDefault();
-    sendCommand("%leave");
+    sendAction({ leave: {} });
     setCurrentAction("LEAVING AT END OF MATCH");
     logMessage("Leaving match...");
     setLeaveButtonVisible(false);

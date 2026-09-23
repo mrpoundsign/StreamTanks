@@ -22,6 +22,9 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/gempir/go-twitch-irc/v4"
 	"golang.org/x/net/websocket"
+	"google.golang.org/protobuf/proto"
+
+	streamtankspbv1 "streamtanks/internal/proto/streamtanks/v1"
 )
 
 func useMockClock() *clock.Mock {
@@ -2980,6 +2983,81 @@ func TestCCClientAuthErrorHandling(t *testing.T) {
 
 	// Clean up
 	deleteSetting("cc_host_token")
+}
+
+func TestBroadcastViewerState_Protobuf(t *testing.T) {
+	resetGameStateForTest()
+
+	msgChan := make(chan []byte, 10)
+	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
+		for {
+			var raw []byte
+			if err := websocket.Message.Receive(ws, &raw); err == nil {
+				msgChan <- raw
+			} else {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+
+	clientWS, err := websocket.Dial("ws://"+server.Listener.Addr().String(), "", "http://localhost/")
+	if err != nil {
+		t.Fatalf("failed to dial mock server: %v", err)
+	}
+	defer func() { _ = clientWS.Close() }()
+
+	setCCConnProto(clientWS, true)
+	defer setCCConnProto(nil, false)
+
+	gameState.mu.Lock()
+	gameState.Phase = phaseInput
+	gameState.RoundID = 42
+	gameState.TimerRemaining = 15
+	gameState.Terrain = make([]float64, defaultTerrainWidth)
+	for i := range gameState.Terrain {
+		gameState.Terrain[i] = float64(500 + i%50)
+	}
+	gameState.Players["Alice"] = &Player{
+		Name:       "Alice",
+		X:          120.5,
+		Y:          520.0,
+		Angle:      45,
+		Power:      80,
+		EmoteURL:   "https://example.com/alice.png",
+		IsDead:     false,
+		IsShielded: true,
+	}
+	gameState.mu.Unlock()
+
+	BroadcastViewerState()
+
+	select {
+	case data := <-msgChan:
+		var serverMsg streamtankspbv1.ViewerServerMessage
+		if err := proto.Unmarshal(data, &serverMsg); err != nil {
+			t.Fatalf("failed to unmarshal ViewerServerMessage: %v", err)
+		}
+		vs := serverMsg.GetState()
+		if vs == nil {
+			t.Fatalf("expected State payload in ViewerServerMessage, got nil")
+		}
+		if vs.Phase != phaseInput || vs.RoundId != 42 || vs.TimerRemaining != 15 {
+			t.Errorf("unexpected ViewerState fields: %+v", vs)
+		}
+		if len(vs.Terrain) != defaultTerrainWidth {
+			t.Errorf("expected %d terrain points, got %d", defaultTerrainWidth, len(vs.Terrain))
+		}
+		if len(vs.Tanks) != 1 {
+			t.Fatalf("expected 1 tank, got %d", len(vs.Tanks))
+		}
+		tank := vs.Tanks[0]
+		if tank.Username != "Alice" || tank.Angle != 45 || !tank.IsShielded {
+			t.Errorf("unexpected tank state: %+v", tank)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Protobuf ViewerServerMessage")
+	}
 }
 
 func TestLateJoiningBotReplacementAndRejection(t *testing.T) {
