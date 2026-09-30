@@ -214,6 +214,36 @@
                                 </div>
                             </div>
 
+                            <div class="form-group span-2">
+                                <label>Leaderboard Layout: <span id="lb-pos-val" class="highlight-val">X: 40, Y: 40 (1.0x)</span></label>
+                                <div class="range-triple" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                                    <div style="flex: 1;">
+                                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">X Pos</span>
+                                        <input type="range" id="cfg-lb-x" min="0" max="1820" value="40" style="width: 100%;" />
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Y Pos</span>
+                                        <input type="range" id="cfg-lb-y" min="0" max="1000" value="40" style="width: 100%;" />
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Scale</span>
+                                        <input type="range" id="cfg-lb-scale" min="0.5" max="2.0" step="0.05" value="1.0" style="width: 100%;" />
+                                    </div>
+                                </div>
+                                <div class="lb-presets-row" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                                    <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Corners:</span>
+                                    <button type="button" class="btn btn-tiny btn-lb-preset" data-x="40" data-y="40">Top-Left</button>
+                                    <button type="button" class="btn btn-tiny btn-lb-preset" data-x="1530" data-y="40">Top-Right</button>
+                                    <button type="button" class="btn btn-tiny btn-lb-preset" data-x="40" data-y="700">Bottom-Left</button>
+                                    <button type="button" class="btn btn-tiny btn-lb-preset" data-x="1530" data-y="700">Bottom-Right</button>
+                                    <button type="button" class="btn btn-tiny btn-lb-preset" data-scale="1.0" style="margin-left: auto;">Reset 1.0x</button>
+                                </div>
+                                <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                    <button id="btn-cancel-lb" class="btn btn-small btn-secondary" type="button">Cancel</button>
+                                    <button id="btn-apply-lb" class="btn btn-small" type="button">Apply Layout</button>
+                                </div>
+                            </div>
+
                             <div class="form-group span-2 toggle-row">
                                 <button id="btn-toggle-idle" class="btn btn-secondary">
                                     Idle HUD: <span id="idle-status-text">On</span>
@@ -302,37 +332,69 @@
                 </div>
             </section>
 
-            <!-- Right Column: Persistent Leaderboard -->
-            <section class="card leaderboard-card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-icon">&#127942;</span> Stream Leaderboard
+            <!-- Right Column: Persistent Leaderboard & Bot Pool -->
+            <div class="admin-col right-col">
+                <section class="card leaderboard-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#127942;</span> Stream Leaderboard
+                        </div>
+                        <div class="card-actions">
+                            <button id="btn-clear-lb" class="btn btn-small btn-danger">Clear All</button>
+                        </div>
                     </div>
-                    <div class="card-actions">
-                        <button id="btn-clear-lb" class="btn btn-small btn-danger">Clear All</button>
+                    <div class="card-body scrollable-body" style="max-height: 380px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th>Commander</th>
+                                    <th style="width: 70px;">Wins</th>
+                                    <th style="width: 80px;">Manage</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-table-body">
+                                <tr class="empty-row">
+                                    <td colspan="4">No scores recorded yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-                <div class="card-body scrollable-body">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 40px;">#</th>
-                                <th>Commander</th>
-                                <th style="width: 70px;">Wins</th>
-                                <th style="width: 80px;">Manage</th>
-                            </tr>
-                        </thead>
-                        <tbody id="leaderboard-table-body">
-                            <tr class="empty-row">
-                                <td colspan="4">No scores recorded yet.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                </section>
+
+                <section class="card bot-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon">&#129302;</span> Bot Roster
+                            <span id="bot-count-badge" class="count-badge">0</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-with-action" style="margin-bottom: 12px;">
+                            <input type="text" id="input-add-bot" placeholder="Bot name (e.g. MechaUnit)" maxlength="25" />
+                            <button id="btn-add-bot" class="btn btn-small btn-primary">Add Bot</button>
+                        </div>
+                        <div class="scrollable-body" style="max-height: 250px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Bot Name</th>
+                                        <th style="width: 80px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bot-table-body">
+                                    <tr class="empty-row">
+                                        <td colspan="2">No named bots in pool.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </main>
     </div>
 
-    <script src="admin.js?v=18"></script>
+    <script src="admin.js?v=19"></script>
 </body>
 </html>

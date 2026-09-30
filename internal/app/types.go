@@ -23,6 +23,7 @@ const (
 	msgChatCommand         = "CHAT_COMMAND"
 	msgDebugCommand        = "DEBUG_COMMAND"
 	msgTerrainCrater       = "TERRAIN_CRATER"
+	msgSettingsUpdate      = "SETTINGS_UPDATE"
 )
 
 // Player actions
@@ -126,11 +127,49 @@ type GameState struct {
 	MatchKills     []KillEvent        `json:"matchKills,omitempty"`
 	Projectiles    []Projectile       `json:"projectiles"`
 	Explosions     []Explosion        `json:"explosions"`
-	ProtractorX    int                `json:"protractorX"`
-	ProtractorY    int                `json:"protractorY"`
-	CanStart       bool               `json:"canStart"`
-	CanJoin        bool               `json:"canJoin"`
-	JoinedPlayers  []string           `json:"joinedPlayers,omitempty"`
+	ProtractorX      int                `json:"protractorX"`
+	ProtractorY      int                `json:"protractorY"`
+	LeaderboardX     int                `json:"leaderboardX"`
+	LeaderboardY     int                `json:"leaderboardY"`
+	LeaderboardScale float64            `json:"leaderboardScale"`
+	CanStart         bool               `json:"canStart"`
+	CanJoin          bool               `json:"canJoin"`
+	JoinedPlayers    []string           `json:"joinedPlayers,omitempty"`
+}
+
+// SettingsUpdate encapsulates configurable game and overlay settings received over WebSocket
+type SettingsUpdate struct {
+	Channel          *string  `json:"channel,omitempty"`
+	Prefix           *string  `json:"prefix,omitempty"`
+	PhysicsSpeed     *float64 `json:"physics_speed,omitempty"`
+	CommandTime      *int     `json:"command_time,omitempty"`
+	AutoRound        *int     `json:"auto_round,omitempty"`
+	IdleMessage      *bool    `json:"idle_message,omitempty"`
+	BouncyWalls      *bool    `json:"bouncy_walls,omitempty"`
+	TerrainClimb     *bool    `json:"terrain_climb,omitempty"`
+	TerrainMin       *int     `json:"terrain_min,omitempty"`
+	TerrainMax       *int     `json:"terrain_max,omitempty"`
+	TerrainColor     *string  `json:"terrain_color,omitempty"`
+	TankColor        *string  `json:"tank_color,omitempty"`
+	StartPerm        *string  `json:"start_perm,omitempty"`
+	ConfigPerm       *string  `json:"config_perm,omitempty"`
+	MinPlayers       *int     `json:"min_players,omitempty"`
+	BotFill          *bool    `json:"bot_fill,omitempty"`
+	BotPoints        *int     `json:"bot_points,omitempty"`
+	CCEnabled        *bool    `json:"cc_enabled,omitempty"`
+	CCServerURL      *string  `json:"cc_url,omitempty"`
+	ProtractorX      *int     `json:"protractor_x,omitempty"`
+	ProtractorY      *int     `json:"protractor_y,omitempty"`
+	LeaderboardX     *int     `json:"leaderboard_x,omitempty"`
+	LeaderboardY     *int     `json:"leaderboard_y,omitempty"`
+	LeaderboardScale *float64 `json:"leaderboard_scale,omitempty"`
+	NoSave           bool     `json:"nosave,omitempty"`
+	TerrainReroll    bool     `json:"terrain_reroll,omitempty"`
+	ClearLeaderboard bool     `json:"clear_leaderboard,omitempty"`
+	DeletePlayer     string   `json:"delete_player,omitempty"`
+	AddBot           string   `json:"add_bot,omitempty"`
+	RemoveBot        string   `json:"remove_bot,omitempty"`
+	ResetCCKey       bool     `json:"reset_cc_key,omitempty"`
 }
 
 var defaultBotList = []string{"BattleBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}

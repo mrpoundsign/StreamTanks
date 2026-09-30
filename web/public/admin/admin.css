@@ -575,6 +575,28 @@ input[type="range"] {
     box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
 }
 
+.btn-lb-preset {
+    background: rgba(0, 255, 204, 0.08);
+    border: 1px solid rgba(0, 255, 204, 0.25);
+    color: var(--neon-cyan);
+    cursor: pointer;
+}
+
+.btn-lb-preset:hover {
+    background: rgba(0, 255, 204, 0.2);
+    border-color: var(--neon-cyan);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
+}
+
+.bot-card {
+    border-color: rgba(0, 255, 204, 0.25);
+}
+
+.bot-card:hover {
+    border-color: rgba(0, 255, 204, 0.45);
+}
+
 .bot-badge {
     font-size: 10px;
     font-family: var(--font-mono);

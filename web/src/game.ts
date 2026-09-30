@@ -51,9 +51,6 @@ const celebrationDisplay = document.getElementById('celebration-display') as HTM
 const hudAvatar = document.getElementById('hud-avatar') as HTMLImageElement | null;
 const celebrationRecap = document.getElementById('celebration-recap') as HTMLElement | null;
 const recapList = document.getElementById('recap-list') as HTMLElement | null;
-const configModal = document.getElementById('config-modal') as HTMLElement;
-const configTableBody = document.getElementById('config-table-body') as HTMLElement;
-const configDismissHint = document.getElementById('config-dismiss-hint') as HTMLElement;
 const debugBar = document.getElementById('debug-bar') as HTMLElement;
 const debugInput = document.getElementById('debug-input') as HTMLInputElement;
 const debugSendBtn = document.getElementById('debug-send-btn') as HTMLElement;
@@ -382,150 +379,6 @@ function updateLeaderboard(lb: Record<string, number>): void {
   }
 }
 
-function renderConfigModal(prefix: string): void {
-  if (!configModal || !configTableBody) return;
-
-  const isVisible = !!stateRef?.showConfig;
-  if (!isVisible) {
-    configModal.style.display = 'none';
-    return;
-  }
-
-  configModal.style.display = 'flex';
-
-  if (configDismissHint) {
-    configDismissHint.innerText = `${prefix}config off`;
-  }
-
-  const speedVal = stateRef?.physicsSpeed ?? 0.5;
-  const roundDuration = stateRef?.inputDuration ?? 20;
-  const autoRoundVal = stateRef?.autoRound ?? 0;
-
-  let autoRoundDisplay = `<span class="config-val badge-off">Off</span>`;
-  if (autoRoundVal === -1) {
-    autoRoundDisplay = `<span class="config-val badge-on">Immediate</span>`;
-  } else if (autoRoundVal > 0) {
-    autoRoundDisplay = `<span class="config-val badge-on">${autoRoundVal} min</span>`;
-  }
-
-  const idleMessageVal = stateRef?.idleMessage ?? true;
-  const idleMessageDisplay = idleMessageVal
-    ? `<span class="config-val badge-on">On</span>`
-    : `<span class="config-val badge-off">Off</span>`;
-
-  const bouncyVal = !!stateRef?.bouncyWalls;
-  const bouncyDisplay = bouncyVal
-    ? `<span class="config-val badge-on">On (+10% bullet, +50% tank)</span>`
-    : `<span class="config-val badge-off">Off</span>`;
-
-  const terrainClimbVal = !!stateRef?.terrainClimb;
-  const terrainClimbDisplay = terrainClimbVal
-    ? `<span class="config-val badge-on">On (Steep Slopes Allowed)</span>`
-    : `<span class="config-val badge-off">Off (Steep Slopes Blocked)</span>`;
-
-  const rows = [
-    {
-      label: 'Command Prefix',
-      value: `<span class="config-val">"${prefix}"</span>`,
-      cmd: `<span class="config-cmd">${prefix}prefix <span class="cmd-param">&lt;str&gt;</span></span>`,
-    },
-    {
-      label: 'Physics / Speed',
-      value: `<span class="config-val">${speedVal}x</span>`,
-      cmd: `<span class="config-cmd">${prefix}speed <span class="cmd-param">&lt;0.1 - 3.0&gt;</span></span>`,
-    },
-    {
-      label: 'Command Time',
-      value: `<span class="config-val">${roundDuration}s</span>`,
-      cmd: `<span class="config-cmd">${prefix}commandtime <span class="cmd-param">&lt;seconds&gt;</span></span>`,
-    },
-    {
-      label: 'Auto Round',
-      value: autoRoundDisplay,
-      cmd: `<span class="config-cmd">${prefix}autoround <span class="cmd-param">&lt;minutes|-1|off&gt;</span></span>`,
-    },
-    {
-      label: 'Idle Message',
-      value: idleMessageDisplay,
-      cmd: `<span class="config-cmd">${prefix}idlemessage <span class="cmd-param">&lt;on|off&gt;</span></span>`,
-    },
-    {
-      label: 'Bouncy Walls',
-      value: bouncyDisplay,
-      cmd: `<span class="config-cmd">${prefix}bouncywalls <span class="cmd-param">&lt;on|off&gt;</span></span>`,
-    },
-    {
-      label: 'Terrain Climb',
-      value: terrainClimbDisplay,
-      cmd: `<span class="config-cmd">${prefix}terrainclimb <span class="cmd-param">&lt;on|off&gt;</span></span>`,
-    },
-    {
-      label: 'Terrain Bounds',
-      value: `<span class="config-val">${stateRef?.terrainMin ?? 20}% - ${stateRef?.terrainMax ?? 75}%</span>`,
-      cmd: `<span class="config-cmd">${prefix}terrain <span class="cmd-param">&lt;min%&gt; &lt;max%&gt;</span></span>`,
-    },
-    {
-      label: 'Terrain Color',
-      value: `<span class="config-val" style="color: ${stateRef?.terrainColor ?? '#ff003c'}">${stateRef?.terrainColor ?? '#ff003c'}</span>`,
-      cmd: `<span class="config-cmd">${prefix}terraincolor <span class="cmd-param">&lt;hex|preset&gt;</span></span>`,
-    },
-    {
-      label: 'Tank Color',
-      value: `<span class="config-val" style="color: ${stateRef?.tankColor ?? '#ff003c'}">${stateRef?.tankColor ?? '#ff003c'}</span>`,
-      cmd: `<span class="config-cmd">${prefix}tankcolor <span class="cmd-param">&lt;hex|preset&gt;</span></span>`,
-    },
-    {
-      label: 'Start Game Perm',
-      value: `<span class="config-val badge-on">${stateRef?.startPerm ?? 'broadcaster'}</span>`,
-      cmd: `<span class="config-cmd">${prefix}startperm <span class="cmd-param">&lt;role&gt;</span></span>`,
-    },
-    {
-      label: 'Config Perm',
-      value: `<span class="config-val badge-on">${stateRef?.configPerm ?? 'broadcaster'}</span>`,
-      cmd: `<span class="config-cmd">${prefix}configperm <span class="cmd-param">&lt;role&gt;</span></span>`,
-    },
-    {
-      label: 'Min Players',
-      value: `<span class="config-val">${stateRef?.minPlayers ?? 5}</span>`,
-      cmd: `<span class="config-cmd">${prefix}minplayers <span class="cmd-param">&lt;2-20&gt;</span></span>`,
-    },
-    {
-      label: 'Bot Fill',
-      value: (stateRef?.botFill ?? true)
-        ? '<span class="config-val badge-on">ON</span>'
-        : '<span class="config-val badge-off">OFF</span>',
-      cmd: `<span class="config-cmd">${prefix}botfill <span class="cmd-param">&lt;on|off&gt;</span></span>`,
-    },
-    {
-      label: 'Bot Points',
-      value: `<span class="config-val">${stateRef?.botPoints ?? 1}</span>`,
-      cmd: `<span class="config-cmd">${prefix}botpoints <span class="cmd-param">&lt;0-10&gt;</span></span>`,
-    },
-    {
-      label: 'Clear Leaderboard',
-      value: `<span class="config-val badge-off">Wipe</span>`,
-      cmd: `<span class="config-cmd">${prefix}clearleaderboard</span>`,
-    },
-    {
-      label: 'Delete Player',
-      value: `<span class="config-val badge-off">Remove</span>`,
-      cmd: `<span class="config-cmd">${prefix}deleteplayer <span class="cmd-param">&lt;user&gt;</span></span>`,
-    },
-  ];
-
-  configTableBody.innerHTML = rows
-    .map(
-      (r) => `
-        <tr>
-            <td class="config-label">${r.label}</td>
-            <td>${r.value}</td>
-            <td>${r.cmd}</td>
-        </tr>
-    `
-    )
-    .join('');
-}
-
 function updateUI(): void {
   const prefix = stateRef?.prefix ?? '%';
 
@@ -610,10 +463,13 @@ function updateUI(): void {
       hudAvatar.style.display = 'none';
       hudAvatar.src = '';
     }
+    if (hudTop) hudTop.style.display = 'none';
     timerDisplay.style.display = 'none';
     celebrationDisplay.style.display = 'none';
-    if (leaderboardEl) leaderboardEl.style.display = 'block';
+    if (leaderboardEl) leaderboardEl.style.display = 'none';
   } else if (currentPhase === PhaseCelebration) {
+    if (hudTop) hudTop.style.display = 'flex';
+    if (leaderboardEl) leaderboardEl.style.display = 'block';
     if (phaseBadge) {
       phaseBadge.innerText = 'GAME OVER';
       phaseBadge.className = 'hud-badge celebration';
@@ -694,7 +550,6 @@ function updateUI(): void {
     debugInput.placeholder = `Type command (${prefix}startgame, ${prefix}fire 45 60, ${prefix}left, etc.)...`;
   }
 
-  renderConfigModal(prefix);
   previousPhase = currentPhase;
 }
 
@@ -748,22 +603,24 @@ net.onMessage((msg: WSMessage) => {
       updateLeaderboard(state.leaderboard);
     }
     
-    // Position leaderboard relative to Protractor (Base Offset: -210px X, -310px Y)
+    // Position and scale leaderboard
     if (leaderboardEl) {
-      const px = state.protractorX ?? 250;
-      const py = state.protractorY ?? 350;
-      
-      // Trigger Live Preview of the Protractor if it moved
-      if (px !== lastProtractorX || py !== lastProtractorY) {
-        lastProtractorX = px;
-        lastProtractorY = py;
-        protractorPreviewUntil = Date.now() + 2000;
-      }
+      const lbX = state.leaderboardX ?? 40;
+      const lbY = state.leaderboardY ?? 40;
+      const lbScale = state.leaderboardScale ?? 1.0;
+      leaderboardEl.style.left = `${lbX}px`;
+      leaderboardEl.style.top = `${lbY}px`;
+      leaderboardEl.style.transform = `scale(${lbScale})`;
+      leaderboardEl.style.transformOrigin = 'top left';
+    }
 
-      const leftX = Math.min(Math.max(10, px - 210), 1920 - 360);
-      const topY = Math.min(Math.max(10, py - 310), 1080 - 200);
-      leaderboardEl.style.left = `${leftX}px`;
-      leaderboardEl.style.top = `${topY}px`;
+    // Trigger Live Preview of the Protractor if it moved
+    const px = state.protractorX ?? 250;
+    const py = state.protractorY ?? 350;
+    if (px !== lastProtractorX || py !== lastProtractorY) {
+      lastProtractorX = px;
+      lastProtractorY = py;
+      protractorPreviewUntil = Date.now() + 2000;
     }
 
     if (Array.isArray(state.terrain) && state.terrain.length === WIDTH) {

@@ -102,11 +102,14 @@ func broadcastExcept(exceptConn *websocket.Conn, msgType string, payload any) {
 			MatchKills:     matchKillsCopy,
 			Projectiles:    projCopy,
 			Explosions:     expCopy,
-			ProtractorX:    gameState.ProtractorX,
-			ProtractorY:    gameState.ProtractorY,
-			CanStart:       canStart,
-			CanJoin:        canJoin,
-			JoinedPlayers:  joinedList,
+			ProtractorX:      gameState.ProtractorX,
+			ProtractorY:      gameState.ProtractorY,
+			LeaderboardX:     gameState.LeaderboardX,
+			LeaderboardY:     gameState.LeaderboardY,
+			LeaderboardScale: gameState.LeaderboardScale,
+			CanStart:         canStart,
+			CanJoin:          canJoin,
+			JoinedPlayers:    joinedList,
 		}
 		gameState.mu.Unlock()
 		payloadCopy = stateCopy
@@ -192,6 +195,17 @@ func handleWebSocket(ws *websocket.Conn) {
 				var cmdStr string
 				if err := json.Unmarshal(payloadBytes, &cmdStr); err == nil {
 					processCommand(getDebugUsername(), cmdStr, nil, nil)
+				}
+			}
+
+		case msgSettingsUpdate:
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				var update SettingsUpdate
+				if err := json.Unmarshal(payloadBytes, &update); err == nil {
+					applySettingsUpdate(update)
+				} else {
+					log.Printf("Failed to unmarshal SETTINGS_UPDATE payload: %v", err)
 				}
 			}
 		}
