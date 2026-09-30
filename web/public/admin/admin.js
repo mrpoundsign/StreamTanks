@@ -10,6 +10,12 @@
     let savedProtractorY = 350;
     let protractorDebounce = null;
 
+    let isLbDirty = false;
+    let savedLbX = 40;
+    let savedLbY = 40;
+    let savedLbScale = 1.0;
+    let lbDebounce = null;
+
     // DOM Elements
     const phaseBadge = document.getElementById('phase-badge');
     const connectionPill = document.getElementById('connection-pill');
@@ -62,9 +68,25 @@
     const btnResetTankColor = document.getElementById('btn-reset-tank-color');
     const tankColorSwatches = document.querySelectorAll('.btn-tank-swatch');
     let isTankColorDirty = false;
+
     const cfgProtractorX = document.getElementById('cfg-protractor-x');
     const cfgProtractorY = document.getElementById('cfg-protractor-y');
     const protractorPosVal = document.getElementById('protractor-pos-val');
+
+    // Leaderboard Layout Controls
+    const cfgLbX = document.getElementById('cfg-lb-x');
+    const cfgLbY = document.getElementById('cfg-lb-y');
+    const cfgLbScale = document.getElementById('cfg-lb-scale');
+    const lbPosVal = document.getElementById('lb-pos-val');
+    const btnApplyLb = document.getElementById('btn-apply-lb');
+    const btnCancelLb = document.getElementById('btn-cancel-lb');
+    const lbPresets = document.querySelectorAll('.btn-lb-preset');
+
+    // Bot Roster Elements
+    const botTableBody = document.getElementById('bot-table-body');
+    const botCountBadge = document.getElementById('bot-count-badge');
+    const inputAddBot = document.getElementById('input-add-bot');
+    const btnAddBot = document.getElementById('btn-add-bot');
 
     // Twitch Extension Elements
     const ccStatusBadge = document.getElementById('cc-status-badge');
@@ -80,7 +102,6 @@
     const playersTableBody = document.getElementById('players-table-body');
     const playerCountBadge = document.getElementById('player-count-badge');
     const leaderboardTableBody = document.getElementById('leaderboard-table-body');
-
 
     // Connect WebSocket
     function connectWS() {
@@ -132,7 +153,17 @@
         }
     }
 
-    // Send Command via WebSocket
+    // Send Settings Update via WebSocket
+    function sendSettingsUpdate(payload) {
+        if (!payload) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'SETTINGS_UPDATE', payload }));
+        } else {
+            console.warn('WebSocket not connected. Cannot send settings update:', payload);
+        }
+    }
+
+    // Send Chat / Match Command via WebSocket (for %startgame, %kick)
     function sendCommand(cmdStr) {
         if (!cmdStr) return;
         const prefix = stateRef?.prefix || '%';
@@ -171,7 +202,6 @@
         if (btnQuickStart) {
             btnQuickStart.disabled = !canStartGame;
         }
-
 
         const isBouncy = !!state.bouncyWalls;
         bouncyStatusText.innerText = isBouncy ? 'On (+10% bullet)' : 'Off';
@@ -294,6 +324,20 @@
             if (cfgProtractorX) cfgProtractorX.value = px;
             if (cfgProtractorY) cfgProtractorY.value = py;
             if (protractorPosVal) protractorPosVal.innerText = `X: ${px}, Y: ${py}`;
+        }
+
+        // Leaderboard Layout Sync
+        if (!isLbDirty) {
+            const lx = state.leaderboardX ?? 40;
+            const ly = state.leaderboardY ?? 40;
+            const ls = state.leaderboardScale ?? 1.0;
+            savedLbX = lx;
+            savedLbY = ly;
+            savedLbScale = ls;
+            if (cfgLbX) cfgLbX.value = lx;
+            if (cfgLbY) cfgLbY.value = ly;
+            if (cfgLbScale) cfgLbScale.value = ls;
+            if (lbPosVal) lbPosVal.innerText = `X: ${lx}, Y: ${ly} (${ls.toFixed(2)}x)`;
         }
 
         // Twitch Extension Integration UI Sync
@@ -437,6 +481,35 @@
                 }
             }
         }
+
+        // Render Bot Roster Table
+        const bots = state.botList || [];
+        if (botCountBadge) {
+            botCountBadge.innerText = bots.length.toString();
+        }
+        if (botTableBody) {
+            if (bots.length === 0) {
+                botTableBody.innerHTML = `
+                    <tr class="empty-row">
+                        <td colspan="2">No named bots in pool.</td>
+                    </tr>
+                `;
+            } else {
+                botTableBody.innerHTML = bots.map((botName) => `
+                    <tr>
+                        <td>
+                            <div class="player-cell">
+                                <span class="bot-badge">BOT</span>
+                                <span class="player-name">${escapeHtml(botName)}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn btn-tiny btn-danger btn-remove-bot" data-bot="${escapeHtml(botName)}">Remove</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
     }
 
     function escapeHtml(str) {
@@ -458,43 +531,39 @@
     });
 
     btnQuickBouncy.addEventListener('click', () => {
-        const nextVal = stateRef?.bouncyWalls ? 'off' : 'on';
-        sendCommand(`bouncywalls ${nextVal}`);
+        sendSettingsUpdate({ bouncy_walls: !stateRef?.bouncyWalls });
     });
 
     btnToggleIdle.addEventListener('click', () => {
-        const nextVal = stateRef?.idleMessage ? 'off' : 'on';
-        sendCommand(`idlemessage ${nextVal}`);
+        sendSettingsUpdate({ idle_message: stateRef?.idleMessage === false });
     });
 
     btnToggleBotfill.addEventListener('click', () => {
-        const nextVal = stateRef?.botFill ? 'off' : 'on';
-        sendCommand(`botfill ${nextVal}`);
+        sendSettingsUpdate({ bot_fill: stateRef?.botFill === false });
     });
 
     if (btnToggleTerrainclimb) {
         btnToggleTerrainclimb.addEventListener('click', () => {
-            const nextVal = stateRef?.terrainClimb ? 'off' : 'on';
-            sendCommand(`terrainclimb ${nextVal}`);
+            sendSettingsUpdate({ terrain_climb: !stateRef?.terrainClimb });
         });
     }
 
     btnResetTerrain.addEventListener('click', () => {
-        sendCommand('terrain reroll');
+        sendSettingsUpdate({ terrain_reroll: true });
     });
 
     btnClearLb.addEventListener('click', () => {
         if (confirm('Are you sure you want to CLEAR the entire leaderboard? This will wipe all statistics from SQLite.')) {
-            sendCommand('clearleaderboard');
+            sendSettingsUpdate({ clear_leaderboard: true });
         }
     });
 
     // Event Listeners: Auto Round Presets & Custom Input
     document.querySelectorAll('.btn-preset').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const ar = btn.dataset.ar;
-            if (ar !== undefined) {
-                sendCommand(`autoround ${ar}`);
+            const ar = parseInt(btn.dataset.ar, 10);
+            if (!isNaN(ar)) {
+                sendSettingsUpdate({ auto_round: ar });
             }
         });
     });
@@ -504,7 +573,7 @@
         btnApplyAutoRoundCustom.addEventListener('click', () => {
             const val = parseInt(cfgAutoroundCustom.value, 10);
             if (val >= 1 && val <= 60) {
-                sendCommand(`autoround ${val}`);
+                sendSettingsUpdate({ auto_round: val });
                 cfgAutoroundCustom.value = '';
             }
         });
@@ -534,10 +603,9 @@
             val = val.substring(1).trim();
         }
         if (val.toLowerCase().startsWith('channel ')) {
-            sendCommand(val);
-        } else {
-            sendCommand(`channel ${val || 'off'}`);
+            val = val.substring(8).trim();
         }
+        sendSettingsUpdate({ channel: val || 'off' });
         cancelEditChannel();
     }
 
@@ -564,19 +632,19 @@
 
     document.getElementById('btn-apply-prefix').addEventListener('click', () => {
         const val = cfgPrefix.value.trim();
-        if (val) sendCommand(`prefix ${val}`);
+        if (val) sendSettingsUpdate({ prefix: val });
     });
 
     document.getElementById('btn-apply-commandtime').addEventListener('click', () => {
         const val = parseInt(cfgCommandtime.value, 10);
-        if (val >= 5 && val <= 120) sendCommand(`roundtime ${val}`);
+        if (val >= 5 && val <= 120) sendSettingsUpdate({ command_time: val });
     });
 
     const btnApplyMinPlayers = document.getElementById('btn-apply-minplayers');
     if (btnApplyMinPlayers) {
         btnApplyMinPlayers.addEventListener('click', () => {
             const val = parseInt(cfgMinplayers.value, 10);
-            if (val >= 2 && val <= 20) sendCommand(`minplayers ${val}`);
+            if (val >= 2 && val <= 20) sendSettingsUpdate({ min_players: val });
         });
     }
 
@@ -584,23 +652,24 @@
     if (btnApplyBotPoints) {
         btnApplyBotPoints.addEventListener('click', () => {
             const val = parseInt(cfgBotpoints.value, 10);
-            if (val >= 0 && val <= 10) sendCommand(`botpoints ${val}`);
+            if (val >= 0 && val <= 10) sendSettingsUpdate({ bot_points: val });
         });
     }
 
     document.getElementById('btn-apply-speed').addEventListener('click', () => {
-        sendCommand(`speed ${cfgSpeed.value}`);
+        const val = parseFloat(cfgSpeed.value);
+        if (!isNaN(val)) sendSettingsUpdate({ physics_speed: val });
     });
 
     document.getElementById('btn-apply-startperm').addEventListener('click', () => {
-        sendCommand(`startperm ${cfgStartperm.value}`);
+        sendSettingsUpdate({ start_perm: cfgStartperm.value });
     });
 
     document.getElementById('btn-apply-configperm').addEventListener('click', () => {
-        sendCommand(`configperm ${cfgConfigperm.value}`);
+        sendSettingsUpdate({ config_perm: cfgConfigperm.value });
     });
 
-    // Real-time slider update
+    // Real-time terrain slider update
     function syncTerrainSliderLabel() {
         isTerrainDirty = true;
         let minVal = parseInt(cfgTerrainMin.value, 10);
@@ -627,7 +696,7 @@
         let minVal = parseInt(cfgTerrainMin.value, 10);
         let maxVal = parseInt(cfgTerrainMax.value, 10);
         if (minVal > maxVal - 10) minVal = maxVal - 10;
-        sendCommand(`terrain ${minVal} ${maxVal}`);
+        sendSettingsUpdate({ terrain_min: minVal, terrain_max: maxVal });
     });
 
     if (cfgTerrainColor) {
@@ -659,7 +728,7 @@
             terrainColorSwatches.forEach(s => s.classList.remove('active'));
             swatch.classList.add('active');
             isTerrainColorDirty = false;
-            sendCommand(`terraincolor ${color}`);
+            sendSettingsUpdate({ terrain_color: color });
         });
     });
 
@@ -667,7 +736,7 @@
         btnApplyTerrainColor.addEventListener('click', () => {
             isTerrainColorDirty = false;
             if (cfgTerrainColor) {
-                sendCommand(`terraincolor ${cfgTerrainColor.value}`);
+                sendSettingsUpdate({ terrain_color: cfgTerrainColor.value });
             }
         });
     }
@@ -675,7 +744,7 @@
     if (btnResetTerrainColor) {
         btnResetTerrainColor.addEventListener('click', () => {
             isTerrainColorDirty = false;
-            sendCommand('terraincolor reset');
+            sendSettingsUpdate({ terrain_color: '#ff003c' });
         });
     }
 
@@ -708,7 +777,7 @@
             tankColorSwatches.forEach(s => s.classList.remove('active'));
             swatch.classList.add('active');
             isTankColorDirty = false;
-            sendCommand(`tankcolor ${color}`);
+            sendSettingsUpdate({ tank_color: color });
         });
     });
 
@@ -716,7 +785,7 @@
         btnApplyTankColor.addEventListener('click', () => {
             isTankColorDirty = false;
             if (cfgTankColor) {
-                sendCommand(`tankcolor ${cfgTankColor.value}`);
+                sendSettingsUpdate({ tank_color: cfgTankColor.value });
             }
         });
     }
@@ -724,7 +793,7 @@
     if (btnResetTankColor) {
         btnResetTankColor.addEventListener('click', () => {
             isTankColorDirty = false;
-            sendCommand('tankcolor reset');
+            sendSettingsUpdate({ tank_color: '#ff003c' });
         });
     }
 
@@ -737,7 +806,7 @@
         
         if (protractorDebounce) clearTimeout(protractorDebounce);
         protractorDebounce = setTimeout(() => {
-            sendCommand(`protractor ${px} ${py} nosave`);
+            sendSettingsUpdate({ protractor_x: px, protractor_y: py, nosave: true });
         }, 50);
     }
     if (cfgProtractorX && cfgProtractorY) {
@@ -752,7 +821,7 @@
             if (protractorDebounce) clearTimeout(protractorDebounce);
             const px = parseInt(cfgProtractorX.value, 10);
             const py = parseInt(cfgProtractorY.value, 10);
-            sendCommand(`protractor ${px} ${py}`);
+            sendSettingsUpdate({ protractor_x: px, protractor_y: py, nosave: false });
         });
     }
 
@@ -764,28 +833,120 @@
             cfgProtractorX.value = savedProtractorX;
             cfgProtractorY.value = savedProtractorY;
             if (protractorPosVal) protractorPosVal.innerText = `X: ${savedProtractorX}, Y: ${savedProtractorY}`;
-            sendCommand(`protractor ${savedProtractorX} ${savedProtractorY}`);
+            sendSettingsUpdate({ protractor_x: savedProtractorX, protractor_y: savedProtractorY, nosave: false });
+        });
+    }
+
+    // Real-time Leaderboard Position & Scale slider update
+    function syncLbSliderLabel() {
+        isLbDirty = true;
+        const lx = parseInt(cfgLbX.value, 10);
+        const ly = parseInt(cfgLbY.value, 10);
+        const ls = parseFloat(cfgLbScale.value);
+        if (lbPosVal) lbPosVal.innerText = `X: ${lx}, Y: ${ly} (${ls.toFixed(2)}x)`;
+
+        if (lbDebounce) clearTimeout(lbDebounce);
+        lbDebounce = setTimeout(() => {
+            sendSettingsUpdate({ leaderboard_x: lx, leaderboard_y: ly, leaderboard_scale: ls, nosave: true });
+        }, 50);
+    }
+    if (cfgLbX && cfgLbY && cfgLbScale) {
+        cfgLbX.addEventListener('input', syncLbSliderLabel);
+        cfgLbY.addEventListener('input', syncLbSliderLabel);
+        cfgLbScale.addEventListener('input', syncLbSliderLabel);
+    }
+
+    // Leaderboard preset buttons
+    lbPresets.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            isLbDirty = false;
+            if (lbDebounce) clearTimeout(lbDebounce);
+
+            let lx = parseInt(cfgLbX.value, 10);
+            let ly = parseInt(cfgLbY.value, 10);
+            let ls = parseFloat(cfgLbScale.value);
+
+            if (btn.dataset.x !== undefined) lx = parseInt(btn.dataset.x, 10);
+            if (btn.dataset.y !== undefined) ly = parseInt(btn.dataset.y, 10);
+            if (btn.dataset.scale !== undefined) ls = parseFloat(btn.dataset.scale);
+
+            cfgLbX.value = lx;
+            cfgLbY.value = ly;
+            cfgLbScale.value = ls;
+            savedLbX = lx;
+            savedLbY = ly;
+            savedLbScale = ls;
+
+            if (lbPosVal) lbPosVal.innerText = `X: ${lx}, Y: ${ly} (${ls.toFixed(2)}x)`;
+            sendSettingsUpdate({ leaderboard_x: lx, leaderboard_y: ly, leaderboard_scale: ls, nosave: false });
+        });
+    });
+
+    if (btnApplyLb) {
+        btnApplyLb.addEventListener('click', () => {
+            isLbDirty = false;
+            if (lbDebounce) clearTimeout(lbDebounce);
+            const lx = parseInt(cfgLbX.value, 10);
+            const ly = parseInt(cfgLbY.value, 10);
+            const ls = parseFloat(cfgLbScale.value);
+            savedLbX = lx;
+            savedLbY = ly;
+            savedLbScale = ls;
+            sendSettingsUpdate({ leaderboard_x: lx, leaderboard_y: ly, leaderboard_scale: ls, nosave: false });
+        });
+    }
+
+    if (btnCancelLb) {
+        btnCancelLb.addEventListener('click', () => {
+            isLbDirty = false;
+            if (lbDebounce) clearTimeout(lbDebounce);
+            cfgLbX.value = savedLbX;
+            cfgLbY.value = savedLbY;
+            cfgLbScale.value = savedLbScale;
+            if (lbPosVal) lbPosVal.innerText = `X: ${savedLbX}, Y: ${savedLbY} (${savedLbScale.toFixed(2)}x)`;
+            sendSettingsUpdate({ leaderboard_x: savedLbX, leaderboard_y: savedLbY, leaderboard_scale: savedLbScale, nosave: false });
+        });
+    }
+
+    // Bot Roster Add Bot Handlers
+    function handleAddBot() {
+        if (!inputAddBot) return;
+        const name = inputAddBot.value.trim();
+        if (name) {
+            sendSettingsUpdate({ add_bot: name });
+            inputAddBot.value = '';
+            inputAddBot.focus();
+        }
+    }
+
+    if (btnAddBot) {
+        btnAddBot.addEventListener('click', handleAddBot);
+    }
+    if (inputAddBot) {
+        inputAddBot.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleAddBot();
+            }
         });
     }
 
     // Event Listeners: Twitch Extension
     if (btnToggleCc) {
         btnToggleCc.addEventListener('click', () => {
-            const nextVal = stateRef?.ccEnabled ? 'off' : 'on';
-            sendCommand(`cc ${nextVal}`);
+            sendSettingsUpdate({ cc_enabled: !stateRef?.ccEnabled });
         });
     }
 
     if (btnReconnectCc) {
         btnReconnectCc.addEventListener('click', () => {
-            sendCommand('cc on');
+            sendSettingsUpdate({ cc_enabled: true });
         });
     }
 
     if (btnResetCcKey) {
         btnResetCcKey.addEventListener('click', () => {
             if (confirm('Reset Twitch Extension authorization key? This will revoke the existing token and require a new %claim code in Twitch chat.')) {
-                sendCommand('cc reset');
+                sendSettingsUpdate({ reset_cc_key: true });
             }
         });
     }
@@ -806,13 +967,22 @@
         });
     }
 
-    // Event Delegation: Delete Player from Leaderboard & Kick
+    // Event Delegation: Delete Player from Leaderboard, Remove Bot, & Kick
     document.addEventListener('click', (e) => {
         const delBtn = e.target.closest('.btn-del-player');
         if (delBtn) {
             const player = delBtn.dataset.player;
             if (player && confirm(`Delete "${player}" from the persistent leaderboard?`)) {
-                sendCommand(`deleteplayer ${player}`);
+                sendSettingsUpdate({ delete_player: player });
+            }
+            return;
+        }
+
+        const remBotBtn = e.target.closest('.btn-remove-bot');
+        if (remBotBtn) {
+            const bot = remBotBtn.dataset.bot;
+            if (bot && confirm(`Remove "${bot}" from the bot roster?`)) {
+                sendSettingsUpdate({ remove_bot: bot });
             }
             return;
         }

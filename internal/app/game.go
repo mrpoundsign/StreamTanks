@@ -42,9 +42,12 @@ var gameState = GameState{
 	BotFill:       true,
 	BotPoints:     1,
 	BotList:       defaultBotList,
-	ProtractorX:   250,
-	ProtractorY:   270,
-	CCServerURL:   defaultCCServerURL,
+	ProtractorX:      250,
+	ProtractorY:      270,
+	LeaderboardX:     40,
+	LeaderboardY:     40,
+	LeaderboardScale: 1.0,
+	CCServerURL:      defaultCCServerURL,
 }
 
 func hasPermission(user *twitch.User, requiredRole string) bool {

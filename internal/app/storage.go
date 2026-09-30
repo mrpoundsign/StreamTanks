@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -225,6 +226,21 @@ func loadSettings() {
 					if _, err := fmt.Sscanf(v, "%d", &py); err == nil && py >= 100 && py <= 1000 {
 						gameState.ProtractorY = py
 					}
+				case "leaderboard_x":
+					var lx int
+					if _, err := fmt.Sscanf(v, "%d", &lx); err == nil && lx >= 0 && lx <= 1820 {
+						gameState.LeaderboardX = lx
+					}
+				case "leaderboard_y":
+					var ly int
+					if _, err := fmt.Sscanf(v, "%d", &ly); err == nil && ly >= 0 && ly <= 1000 {
+						gameState.LeaderboardY = ly
+					}
+				case "leaderboard_scale":
+					var ls float64
+					if _, err := fmt.Sscanf(v, "%f", &ls); err == nil && ls >= 0.5 && ls <= 2.0 {
+						gameState.LeaderboardScale = ls
+					}
 				}
 			}
 		}
@@ -254,6 +270,9 @@ func loadSettings() {
 	}
 	if gameState.TankColor == "" {
 		gameState.TankColor = defaultTankColor
+	}
+	if gameState.LeaderboardScale < 0.5 || gameState.LeaderboardScale > 2.0 {
+		gameState.LeaderboardScale = 1.0
 	}
 	gameState.BotList = loadBotList()
 	if gameState.Channel != "" {
@@ -445,5 +464,494 @@ func deletePlayerEmote(username string) {
 	if err != nil {
 		log.Println("DB deletePlayerEmote error:", err)
 	}
+}
+
+var colorPresets = map[string]string{
+	"default": "#ff003c",
+	"reset":   "#ff003c",
+	"red":     "#ff003c",
+	"cyan":    "#00ffcc",
+	"green":   "#00ff66",
+	"purple":  "#bf00ff",
+	"orange":  "#ff6600",
+	"yellow":  "#ffd700",
+	"white":   "#ffffff",
+}
+
+func isHexDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+func parseColor(input string) (string, bool) {
+	raw := strings.ToLower(strings.TrimSpace(input))
+	if raw == "" {
+		return "", false
+	}
+	if hexVal, ok := colorPresets[raw]; ok {
+		return hexVal, true
+	}
+
+	trimmed := strings.TrimPrefix(raw, "#")
+	if len(trimmed) == 3 {
+		for i := range 3 {
+			if !isHexDigit(trimmed[i]) {
+				return "", false
+			}
+		}
+		r, g, b := trimmed[0], trimmed[1], trimmed[2]
+		return fmt.Sprintf("#%c%c%c%c%c%c", r, r, g, g, b, b), true
+	} else if len(trimmed) == 6 {
+		for i := range 6 {
+			if !isHexDigit(trimmed[i]) {
+				return "", false
+			}
+		}
+		return "#" + trimmed, true
+	}
+
+	return "", false
+}
+
+func applySettingsUpdate(update SettingsUpdate) {
+	var (
+		terrainRegen           bool
+		botChannelToSet        *string
+		shouldCancelAutoRound  bool
+		shouldTriggerAutoRound bool
+		shouldStartCC          bool
+		shouldStopCC           bool
+		shouldResetCC          bool
+		ccTargetChannel        string
+	)
+
+	gameState.mu.Lock()
+
+	if update.Channel != nil {
+		clean := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(*update.Channel, "#")))
+		if clean == "off" || clean == "clear" || clean == "none" || clean == "0" {
+			clean = ""
+		}
+		gameState.Channel = clean
+		channelName = clean
+		if !update.NoSave {
+			if clean != "" {
+				saveSetting("channel", clean)
+			} else {
+				deleteSetting("channel")
+			}
+		}
+		botChannelToSet = &clean
+		if clean != "" {
+			shouldStartCC = true
+			ccTargetChannel = clean
+		} else {
+			shouldStopCC = true
+		}
+	}
+
+	if update.Prefix != nil {
+		clean := strings.TrimSpace(*update.Prefix)
+		if clean != "" {
+			gameState.Prefix = clean
+			if !update.NoSave {
+				saveSetting("prefix", clean)
+			}
+		}
+	}
+
+	if update.PhysicsSpeed != nil {
+		spd := *update.PhysicsSpeed
+		if spd < 0.1 {
+			spd = 0.1
+		} else if spd > 3.0 {
+			spd = 3.0
+		}
+		gameState.PhysicsSpeed = spd
+		if !update.NoSave {
+			saveSetting("physics_speed", fmt.Sprintf("%.2f", spd))
+		}
+	}
+
+	if update.CommandTime != nil {
+		dur := *update.CommandTime
+		if dur < 5 {
+			dur = 5
+		} else if dur > 120 {
+			dur = 120
+		}
+		gameState.InputDuration = dur
+		if !update.NoSave {
+			saveSetting("command_time", strconv.Itoa(dur))
+		}
+	}
+
+	if update.AutoRound != nil {
+		ar := *update.AutoRound
+		if ar < -1 {
+			ar = 0
+		} else if ar > 60 {
+			ar = 60
+		}
+		gameState.AutoRound = ar
+		if !update.NoSave {
+			saveSetting("auto_round", strconv.Itoa(ar))
+		}
+		if ar == 0 {
+			shouldCancelAutoRound = true
+		} else if gameState.Phase == phaseIdle {
+			shouldTriggerAutoRound = true
+		}
+	}
+
+	if update.IdleMessage != nil {
+		val := *update.IdleMessage
+		gameState.IdleMessage = val
+		if !update.NoSave {
+			dbVal := "0"
+			if val {
+				dbVal = "1"
+			}
+			saveSetting("idle_message", dbVal)
+		}
+	}
+
+	if update.BouncyWalls != nil {
+		val := *update.BouncyWalls
+		gameState.BouncyWalls = val
+		if !update.NoSave {
+			dbVal := "0"
+			if val {
+				dbVal = "1"
+			}
+			saveSetting("bouncy_walls", dbVal)
+		}
+	}
+
+	if update.TerrainClimb != nil {
+		val := *update.TerrainClimb
+		gameState.TerrainClimb = val
+		if !update.NoSave {
+			dbVal := "0"
+			if val {
+				dbVal = "1"
+			}
+			saveSetting("terrain_climb", dbVal)
+		}
+	}
+
+	if update.TerrainMin != nil || update.TerrainMax != nil {
+		tMin := gameState.TerrainMin
+		tMax := gameState.TerrainMax
+		if update.TerrainMin != nil {
+			tMin = *update.TerrainMin
+		}
+		if update.TerrainMax != nil {
+			tMax = *update.TerrainMax
+		}
+		if tMin < 10 {
+			tMin = 10
+		}
+		if tMax > 90 {
+			tMax = 90
+		}
+		if tMin > tMax-10 {
+			tMin = tMax - 10
+		}
+		gameState.TerrainMin = tMin
+		gameState.TerrainMax = tMax
+		if !update.NoSave {
+			saveSetting("terrain_min", strconv.Itoa(tMin))
+			saveSetting("terrain_max", strconv.Itoa(tMax))
+		}
+		maxY := max(int(math.Floor(float64(defaultTerrainHeight)*(1.0-float64(tMax)/100.0))), 100)
+		if gameState.ProtractorY > maxY {
+			gameState.ProtractorY = maxY
+			if !update.NoSave {
+				saveSetting("protractor_y", strconv.Itoa(maxY))
+			}
+		}
+		if gameState.Phase == phaseIdle {
+			gameState.Terrain = generateTerrain(tMin, tMax)
+			for _, p := range gameState.Players {
+				p.Y = getTerrainHeight(gameState.Terrain, p.X)
+			}
+			terrainRegen = true
+		}
+	}
+
+	if update.TerrainReroll {
+		if gameState.Phase == phaseIdle {
+			gameState.Terrain = generateTerrain(gameState.TerrainMin, gameState.TerrainMax)
+			for _, p := range gameState.Players {
+				p.Y = getTerrainHeight(gameState.Terrain, p.X)
+			}
+			terrainRegen = true
+		}
+	}
+
+	if update.TerrainColor != nil {
+		if col, ok := parseColor(*update.TerrainColor); ok {
+			gameState.TerrainColor = col
+			if !update.NoSave {
+				saveSetting("terrain_color", col)
+			}
+		}
+	}
+
+	if update.TankColor != nil {
+		if col, ok := parseColor(*update.TankColor); ok {
+			gameState.TankColor = col
+			if !update.NoSave {
+				saveSetting("tank_color", col)
+			}
+		}
+	}
+
+	if update.StartPerm != nil {
+		clean := strings.ToLower(*update.StartPerm)
+		if clean == "broadcaster" || clean == "mod" || clean == "vip" || clean == "sub" || clean == "all" {
+			gameState.StartPerm = clean
+			if !update.NoSave {
+				saveSetting("start_perm", clean)
+			}
+		}
+	}
+
+	if update.ConfigPerm != nil {
+		clean := strings.ToLower(*update.ConfigPerm)
+		if clean == "broadcaster" || clean == "mod" || clean == "vip" || clean == "sub" || clean == "all" {
+			gameState.ConfigPerm = clean
+			if !update.NoSave {
+				saveSetting("config_perm", clean)
+			}
+		}
+	}
+
+	if update.MinPlayers != nil {
+		mp := *update.MinPlayers
+		if mp < 2 {
+			mp = 2
+		} else if mp > 20 {
+			mp = 20
+		}
+		gameState.MinPlayers = mp
+		if !update.NoSave {
+			saveSetting("min_players", strconv.Itoa(mp))
+		}
+	}
+
+	if update.BotFill != nil {
+		val := *update.BotFill
+		gameState.BotFill = val
+		if !update.NoSave {
+			dbVal := "0"
+			if val {
+				dbVal = "1"
+			}
+			saveSetting("bot_fill", dbVal)
+		}
+	}
+
+	if update.BotPoints != nil {
+		bp := *update.BotPoints
+		if bp < 0 {
+			bp = 0
+		} else if bp > 10 {
+			bp = 10
+		}
+		gameState.BotPoints = bp
+		if !update.NoSave {
+			saveSetting("bot_points", strconv.Itoa(bp))
+		}
+	}
+
+	if update.CCEnabled != nil {
+		newVal := *update.CCEnabled
+		gameState.CCEnabled = newVal
+		if !update.NoSave {
+			dbVal := "0"
+			if newVal {
+				dbVal = "1"
+			}
+			saveSetting("cc_enabled", dbVal)
+		}
+		if newVal {
+			shouldStartCC = true
+			ccTargetChannel = channelName
+		} else {
+			shouldStopCC = true
+		}
+	}
+
+	if update.CCServerURL != nil {
+		newURL := strings.TrimSpace(*update.CCServerURL)
+		if newURL != "" {
+			gameState.CCServerURL = newURL
+			if !update.NoSave {
+				saveSetting("cc_url", newURL)
+			}
+			if gameState.CCEnabled {
+				shouldStartCC = true
+				ccTargetChannel = channelName
+			}
+		}
+	}
+
+	if update.ProtractorX != nil || update.ProtractorY != nil {
+		if update.ProtractorX != nil {
+			px := *update.ProtractorX
+			if px < 100 {
+				px = 100
+			} else if px > 1820 {
+				px = 1820
+			}
+			gameState.ProtractorX = px
+			if !update.NoSave {
+				saveSetting("protractor_x", strconv.Itoa(px))
+			}
+		}
+		if update.ProtractorY != nil {
+			py := *update.ProtractorY
+			maxY := max(int(math.Floor(float64(defaultTerrainHeight)*(1.0-float64(gameState.TerrainMax)/100.0))), 100)
+			if py < 100 {
+				py = 100
+			} else if py > maxY {
+				py = maxY
+			}
+			gameState.ProtractorY = py
+			if !update.NoSave {
+				saveSetting("protractor_y", strconv.Itoa(py))
+			}
+		}
+	}
+
+	if update.LeaderboardX != nil {
+		lx := *update.LeaderboardX
+		if lx < 0 {
+			lx = 0
+		} else if lx > 1820 {
+			lx = 1820
+		}
+		gameState.LeaderboardX = lx
+		if !update.NoSave {
+			saveSetting("leaderboard_x", strconv.Itoa(lx))
+		}
+	}
+
+	if update.LeaderboardY != nil {
+		ly := *update.LeaderboardY
+		if ly < 0 {
+			ly = 0
+		} else if ly > 1000 {
+			ly = 1000
+		}
+		gameState.LeaderboardY = ly
+		if !update.NoSave {
+			saveSetting("leaderboard_y", strconv.Itoa(ly))
+		}
+	}
+
+	if update.LeaderboardScale != nil {
+		ls := *update.LeaderboardScale
+		if ls < 0.5 {
+			ls = 0.5
+		} else if ls > 2.0 {
+			ls = 2.0
+		}
+		gameState.LeaderboardScale = ls
+		if !update.NoSave {
+			saveSetting("leaderboard_scale", fmt.Sprintf("%.2f", ls))
+		}
+	}
+
+	if update.ClearLeaderboard {
+		gameState.Leaderboard = make(map[string]int)
+		clearLeaderboardDB()
+	}
+
+	if update.DeletePlayer != "" {
+		target := strings.TrimPrefix(update.DeletePlayer, "@")
+		for key := range gameState.Leaderboard {
+			if strings.EqualFold(key, target) {
+				delete(gameState.Leaderboard, key)
+			}
+		}
+		var playerKey string
+		for k := range gameState.Players {
+			if strings.EqualFold(k, target) {
+				playerKey = k
+				break
+			}
+		}
+		if playerKey != "" {
+			removePlayerFromMatchLocked(playerKey)
+		}
+		deletePlayerDB(target)
+	}
+
+	if update.AddBot != "" {
+		botName := strings.TrimSpace(strings.TrimPrefix(update.AddBot, "@"))
+		if botName != "" {
+			alreadyExists := false
+			for _, b := range gameState.BotList {
+				if strings.EqualFold(b, botName) {
+					alreadyExists = true
+					break
+				}
+			}
+			if !alreadyExists {
+				gameState.BotList = append(gameState.BotList, botName)
+				addBotToList(botName)
+			}
+		}
+	}
+
+	if update.RemoveBot != "" {
+		botName := strings.TrimSpace(strings.TrimPrefix(update.RemoveBot, "@"))
+		if botName != "" {
+			updated := make([]string, 0, len(gameState.BotList))
+			for _, b := range gameState.BotList {
+				if !strings.EqualFold(b, botName) {
+					updated = append(updated, b)
+				}
+			}
+			gameState.BotList = updated
+			removeBotFromList(botName)
+		}
+	}
+
+	if update.ResetCCKey {
+		shouldResetCC = true
+		ccTargetChannel = channelName
+	}
+
+	gameState.mu.Unlock()
+
+	// External side effects outside gameState.mu to prevent deadlock
+	if botChannelToSet != nil {
+		setTwitchBotChannel(*botChannelToSet)
+	}
+	if shouldCancelAutoRound {
+		cancelAutoRoundTimer()
+	}
+	if shouldTriggerAutoRound {
+		triggerAutoRound()
+	}
+	switch {
+	case shouldResetCC:
+		ResetCCHostToken(ccTargetChannel)
+	case shouldStartCC:
+		StartCCClientManager(ccTargetChannel)
+	case shouldStopCC:
+		StopCCClient()
+	}
+
+	if terrainRegen {
+		broadcast(msgStateUpdate, &gameState)
+		broadcast(msgResetTerrain, nil)
+	} else {
+		broadcast(msgStateUpdate, &gameState)
+	}
+	BroadcastViewerState()
 }
 

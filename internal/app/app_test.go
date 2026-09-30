@@ -67,6 +67,9 @@ func resetGameStateForTest() {
 	gameState.BotList = []string{"TargetBot", "RustyTank", "IronClad", "CyberDrone", "MechaUnit"}
 	gameState.ProtractorX = 250
 	gameState.ProtractorY = 270
+	gameState.LeaderboardX = 40
+	gameState.LeaderboardY = 40
+	gameState.LeaderboardScale = 1.0
 
 	cancelAutoRoundTimer()
 	cancelFastForward()
@@ -277,7 +280,22 @@ func TestPrefixConfiguration(t *testing.T) {
 	resetGameStateForTest()
 
 	// Default prefix is %
+	gameState.mu.Lock()
+	if gameState.Prefix != "%" {
+		t.Errorf("expected default Prefix %%, got %s", gameState.Prefix)
+	}
+	gameState.mu.Unlock()
+
+	// Chat command is ignored
 	processCommand("Admin", "%prefix !", nil)
+	gameState.mu.Lock()
+	if gameState.Prefix != "%" {
+		t.Errorf("expected Prefix to remain %%, got %s", gameState.Prefix)
+	}
+	gameState.mu.Unlock()
+
+	// Update via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{Prefix: new("!")})
 	gameState.mu.Lock()
 	if gameState.Prefix != "!" {
 		t.Errorf("expected Prefix to be !, got %s", gameState.Prefix)
@@ -285,7 +303,7 @@ func TestPrefixConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Test multi-character prefix
-	processCommand("Admin", "!prefix tank!", nil)
+	applySettingsUpdate(SettingsUpdate{Prefix: new("tank!")})
 	gameState.mu.Lock()
 	if gameState.Prefix != "tank!" {
 		t.Errorf("expected Prefix to be tank!, got %s", gameState.Prefix)
@@ -312,24 +330,24 @@ func TestSpeedConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// Test %speed command
+	// Verify chat command is ignored
 	processCommand("Admin", "%speed 1.0", nil)
+	gameState.mu.Lock()
+	if gameState.PhysicsSpeed != 0.5 {
+		t.Errorf("expected PhysicsSpeed to remain 0.5 after chat command, got %f", gameState.PhysicsSpeed)
+	}
+	gameState.mu.Unlock()
+
+	// Test applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{PhysicsSpeed: new(1.0)})
 	gameState.mu.Lock()
 	if gameState.PhysicsSpeed != 1.0 {
 		t.Errorf("expected PhysicsSpeed 1.0, got %f", gameState.PhysicsSpeed)
 	}
 	gameState.mu.Unlock()
 
-	// Test %physicsspeed alias
-	processCommand("Admin", "%physicsspeed 0.25", nil)
-	gameState.mu.Lock()
-	if gameState.PhysicsSpeed != 0.25 {
-		t.Errorf("expected PhysicsSpeed 0.25, got %f", gameState.PhysicsSpeed)
-	}
-	gameState.mu.Unlock()
-
 	// Test clamping below minimum (0.1)
-	processCommand("Admin", "%speed 0.01", nil)
+	applySettingsUpdate(SettingsUpdate{PhysicsSpeed: new(0.01)})
 	gameState.mu.Lock()
 	if gameState.PhysicsSpeed != 0.1 {
 		t.Errorf("expected PhysicsSpeed clamped to 0.1, got %f", gameState.PhysicsSpeed)
@@ -337,7 +355,7 @@ func TestSpeedConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Test clamping above maximum (3.0)
-	processCommand("Admin", "%speed 99.0", nil)
+	applySettingsUpdate(SettingsUpdate{PhysicsSpeed: new(99.0)})
 	gameState.mu.Lock()
 	if gameState.PhysicsSpeed != 3.0 {
 		t.Errorf("expected PhysicsSpeed clamped to 3.0, got %f", gameState.PhysicsSpeed)
@@ -345,65 +363,52 @@ func TestSpeedConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 }
 
-func TestConfigCommand(t *testing.T) {
+func TestLeaderboardLayoutConfiguration(t *testing.T) {
 	resetGameStateForTest()
 
-	// Default ShowConfig should be false
+	// 1. Defaults
 	gameState.mu.Lock()
-	if gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to default to false")
+	if gameState.LeaderboardX != 40 || gameState.LeaderboardY != 40 || gameState.LeaderboardScale != 1.0 {
+		t.Errorf("expected defaults (40, 40, 1.0), got (%d, %d, %f)", gameState.LeaderboardX, gameState.LeaderboardY, gameState.LeaderboardScale)
 	}
 	gameState.mu.Unlock()
 
-	// %config toggles ShowConfig on
-	processCommand("Admin", "%config", nil)
+	// 2. applySettingsUpdate with valid positions and scale
+	applySettingsUpdate(SettingsUpdate{
+		LeaderboardX:     new(500),
+		LeaderboardY:     new(300),
+		LeaderboardScale: new(1.5),
+	})
 	gameState.mu.Lock()
-	if !gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to be true after %%config toggle")
+	if gameState.LeaderboardX != 500 || gameState.LeaderboardY != 300 || gameState.LeaderboardScale != 1.5 {
+		t.Errorf("expected (500, 300, 1.5), got (%d, %d, %f)", gameState.LeaderboardX, gameState.LeaderboardY, gameState.LeaderboardScale)
 	}
 	gameState.mu.Unlock()
 
-	// Repeating %config toggles ShowConfig off
-	processCommand("Admin", "%config", nil)
+	// 3. Test clamping (X: 0..1820, Y: 0..1000, Scale: 0.5..2.0)
+	applySettingsUpdate(SettingsUpdate{
+		LeaderboardX:     new(-100),
+		LeaderboardY:     new(-50),
+		LeaderboardScale: new(0.1),
+	})
 	gameState.mu.Lock()
-	if gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to be false after second %%config toggle")
+	if gameState.LeaderboardX != 0 || gameState.LeaderboardY != 0 || gameState.LeaderboardScale != 0.5 {
+		t.Errorf("expected clamped min (0, 0, 0.5), got (%d, %d, %f)", gameState.LeaderboardX, gameState.LeaderboardY, gameState.LeaderboardScale)
 	}
 	gameState.mu.Unlock()
 
-	// %config on explicitly turns it on
-	processCommand("Admin", "%config on", nil)
+	applySettingsUpdate(SettingsUpdate{
+		LeaderboardX:     new(5000),
+		LeaderboardY:     new(2500),
+		LeaderboardScale: new(10.0),
+	})
 	gameState.mu.Lock()
-	if !gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to be true after %%config on")
+	if gameState.LeaderboardX != 1820 || gameState.LeaderboardY != 1000 || gameState.LeaderboardScale != 2.0 {
+		t.Errorf("expected clamped max (1820, 1000, 2.0), got (%d, %d, %f)", gameState.LeaderboardX, gameState.LeaderboardY, gameState.LeaderboardScale)
 	}
 	gameState.mu.Unlock()
 
-	// %config off explicitly turns it off
-	processCommand("Admin", "%config off", nil)
-	gameState.mu.Lock()
-	if gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to be false after %%config off")
-	}
-	gameState.mu.Unlock()
-
-	// %settings alias works identically
-	processCommand("Admin", "%settings", nil)
-	gameState.mu.Lock()
-	if !gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to be true after %%settings toggle")
-	}
-	gameState.mu.Unlock()
-
-	processCommand("Admin", "%settings hide", nil)
-	gameState.mu.Lock()
-	if gameState.ShowConfig {
-		t.Errorf("expected ShowConfig to be false after %%settings hide")
-	}
-	gameState.mu.Unlock()
-
-	// Verify ShowConfig is copied when broadcasting STATE_UPDATE
-	processCommand("Admin", "%config on", nil)
+	// 4. Test WebSocket broadcasting
 	ts := httptest.NewServer(websocket.Handler(handleWebSocket))
 	defer ts.Close()
 
@@ -421,8 +426,8 @@ func TestConfigCommand(t *testing.T) {
 	if err := websocket.JSON.Receive(wsConn, &initMsg); err != nil {
 		t.Fatalf("failed to receive initial STATE_UPDATE: %v", err)
 	}
-	if !initMsg.Payload.ShowConfig {
-		t.Errorf("expected ShowConfig to be true in broadcasted STATE_UPDATE payload, got false")
+	if initMsg.Payload.LeaderboardX != 1820 || initMsg.Payload.LeaderboardY != 1000 || initMsg.Payload.LeaderboardScale != 2.0 {
+		t.Errorf("expected leaderboard fields in broadcasted state, got (%d, %d, %f)", initMsg.Payload.LeaderboardX, initMsg.Payload.LeaderboardY, initMsg.Payload.LeaderboardScale)
 	}
 }
 
@@ -436,8 +441,16 @@ func TestCommandtimeConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// Test %commandtime 30
+	// Chat command is ignored
 	processCommand("Admin", "%commandtime 30", nil)
+	gameState.mu.Lock()
+	if gameState.InputDuration != 2 {
+		t.Errorf("expected InputDuration to remain 2 after chat command, got %d", gameState.InputDuration)
+	}
+	gameState.mu.Unlock()
+
+	// Test applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{CommandTime: new(30)})
 	gameState.mu.Lock()
 	if gameState.InputDuration != 30 {
 		t.Errorf("expected InputDuration 30, got %d", gameState.InputDuration)
@@ -445,7 +458,7 @@ func TestCommandtimeConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Test clamping below minimum (5)
-	processCommand("Admin", "%commandtime 2", nil)
+	applySettingsUpdate(SettingsUpdate{CommandTime: new(2)})
 	gameState.mu.Lock()
 	if gameState.InputDuration != 5 {
 		t.Errorf("expected InputDuration clamped to 5, got %d", gameState.InputDuration)
@@ -453,7 +466,7 @@ func TestCommandtimeConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Test clamping above maximum (120)
-	processCommand("Admin", "%commandtime 500", nil)
+	applySettingsUpdate(SettingsUpdate{CommandTime: new(500)})
 	gameState.mu.Lock()
 	if gameState.InputDuration != 120 {
 		t.Errorf("expected InputDuration clamped to 120, got %d", gameState.InputDuration)
@@ -464,7 +477,6 @@ func TestCommandtimeConfiguration(t *testing.T) {
 func TestSettingsPersistence(t *testing.T) {
 	resetGameStateForTest()
 
-	// Create an in-memory SQLite database
 	testDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite db: %v", err)
@@ -480,19 +492,25 @@ func TestSettingsPersistence(t *testing.T) {
 	db = testDB
 	defer func() { db = oldDB }()
 
-	// Save settings via processCommand
-	processCommand("Admin", "%prefix !", nil)
-	processCommand("Admin", "!speed 0.8", nil)
-	processCommand("Admin", "!commandtime 25", nil)
-	processCommand("Admin", "!autoround -1", nil)
-	processCommand("Admin", "!idlemessage off", nil)
-	processCommand("Admin", "!bouncywalls on", nil)
-	processCommand("Admin", "!terrain 15 45", nil)
+	// Save settings via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{
+		Prefix:           new("!"),
+		PhysicsSpeed:     new(0.8),
+		CommandTime:      new(25),
+		AutoRound:        new(-1),
+		IdleMessage:      new(false),
+		BouncyWalls:      new(true),
+		TerrainMin:       new(15),
+		TerrainMax:       new(45),
+		LeaderboardX:     new(100),
+		LeaderboardY:     new(200),
+		LeaderboardScale: new(1.25),
+	})
 
 	// Reset in-memory gameState
 	resetGameStateForTest()
 	gameState.mu.Lock()
-	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage || gameState.BouncyWalls || gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
+	if gameState.Prefix != "%" || gameState.PhysicsSpeed != 0.5 || gameState.InputDuration != 2 || gameState.AutoRound != 0 || !gameState.IdleMessage || gameState.BouncyWalls || gameState.TerrainMin != 20 || gameState.TerrainMax != 75 || gameState.LeaderboardX != 40 || gameState.LeaderboardY != 40 || gameState.LeaderboardScale != 1.0 {
 		gameState.mu.Unlock()
 		t.Fatalf("expected reset state")
 	}
@@ -523,6 +541,28 @@ func TestSettingsPersistence(t *testing.T) {
 	if gameState.TerrainMin != 15 || gameState.TerrainMax != 45 {
 		t.Errorf("expected loaded TerrainMin=15, TerrainMax=45; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
 	}
+	if gameState.LeaderboardX != 100 || gameState.LeaderboardY != 200 || gameState.LeaderboardScale != 1.25 {
+		t.Errorf("expected loaded Leaderboard (100, 200, 1.25), got (%d, %d, %f)", gameState.LeaderboardX, gameState.LeaderboardY, gameState.LeaderboardScale)
+	}
+	gameState.mu.Unlock()
+
+	// Test NoSave: true live preview does not overwrite persisted DB values
+	applySettingsUpdate(SettingsUpdate{
+		LeaderboardX: new(999),
+		NoSave:       true,
+	})
+	gameState.mu.Lock()
+	if gameState.LeaderboardX != 999 {
+		t.Errorf("expected in-memory LeaderboardX to be 999, got %d", gameState.LeaderboardX)
+	}
+	gameState.mu.Unlock()
+
+	// Reload from DB: should still be 100
+	loadSettings()
+	gameState.mu.Lock()
+	if gameState.LeaderboardX != 100 {
+		t.Errorf("expected persisted LeaderboardX to remain 100 after NoSave update, got %d", gameState.LeaderboardX)
+	}
 	gameState.mu.Unlock()
 }
 
@@ -536,16 +576,16 @@ func TestAutoRoundConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// %autoround -1 (immediate)
+	// Verify chat command is ignored
 	processCommand("Admin", "%autoround -1", nil)
 	gameState.mu.Lock()
-	if gameState.AutoRound != -1 {
-		t.Errorf("expected AutoRound -1, got %d", gameState.AutoRound)
+	if gameState.AutoRound != 0 {
+		t.Errorf("expected AutoRound to remain 0 after chat command, got %d", gameState.AutoRound)
 	}
 	gameState.mu.Unlock()
 
-	// %autoround immediate keyword
-	processCommand("Admin", "%autoround immediate", nil)
+	// %autoround -1 (immediate)
+	applySettingsUpdate(SettingsUpdate{AutoRound: new(-1)})
 	gameState.mu.Lock()
 	if gameState.AutoRound != -1 {
 		t.Errorf("expected AutoRound -1, got %d", gameState.AutoRound)
@@ -553,7 +593,7 @@ func TestAutoRoundConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// %autoround 5 (5 minutes)
-	processCommand("Admin", "%autoround 5", nil)
+	applySettingsUpdate(SettingsUpdate{AutoRound: new(5)})
 	gameState.mu.Lock()
 	if gameState.AutoRound != 5 {
 		t.Errorf("expected AutoRound 5, got %d", gameState.AutoRound)
@@ -561,7 +601,7 @@ func TestAutoRoundConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// %autoround 0 / off disables
-	processCommand("Admin", "%autoround off", nil)
+	applySettingsUpdate(SettingsUpdate{AutoRound: new(0)})
 	gameState.mu.Lock()
 	if gameState.AutoRound != 0 {
 		t.Errorf("expected AutoRound 0, got %d", gameState.AutoRound)
@@ -569,7 +609,7 @@ func TestAutoRoundConfiguration(t *testing.T) {
 	gameState.mu.Unlock()
 
 	// Clamping max 60 minutes
-	processCommand("Admin", "%autoround 120", nil)
+	applySettingsUpdate(SettingsUpdate{AutoRound: new(120)})
 	gameState.mu.Lock()
 	if gameState.AutoRound != 60 {
 		t.Errorf("expected AutoRound clamped to 60, got %d", gameState.AutoRound)
@@ -587,35 +627,27 @@ func TestIdleMessageConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// %idlemessage off
+	// Verify chat command is ignored
 	processCommand("Admin", "%idlemessage off", nil)
 	gameState.mu.Lock()
-	if gameState.IdleMessage {
-		t.Errorf("expected IdleMessage false after %%idlemessage off")
-	}
-	gameState.mu.Unlock()
-
-	// %idlemessage on
-	processCommand("Admin", "%idlemessage on", nil)
-	gameState.mu.Lock()
 	if !gameState.IdleMessage {
-		t.Errorf("expected IdleMessage true after %%idlemessage on")
+		t.Errorf("expected IdleMessage to remain true after chat command")
 	}
 	gameState.mu.Unlock()
 
-	// %idlemessage toggle
-	processCommand("Admin", "%idlemessage", nil)
+	// applySettingsUpdate off
+	applySettingsUpdate(SettingsUpdate{IdleMessage: new(false)})
 	gameState.mu.Lock()
 	if gameState.IdleMessage {
-		t.Errorf("expected IdleMessage false after %%idlemessage toggle")
+		t.Errorf("expected IdleMessage false after settings update")
 	}
 	gameState.mu.Unlock()
 
-	// Second toggle
-	processCommand("Admin", "%idlemessage", nil)
+	// applySettingsUpdate on
+	applySettingsUpdate(SettingsUpdate{IdleMessage: new(true)})
 	gameState.mu.Lock()
 	if !gameState.IdleMessage {
-		t.Errorf("expected IdleMessage true after second %%idlemessage toggle")
+		t.Errorf("expected IdleMessage true after settings update")
 	}
 	gameState.mu.Unlock()
 }
@@ -840,35 +872,27 @@ func TestBouncyWallsConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// %bouncywalls on
+	// Chat command is ignored
 	processCommand("Admin", "%bouncywalls on", nil)
 	gameState.mu.Lock()
-	if !gameState.BouncyWalls {
-		t.Errorf("expected BouncyWalls true after %%bouncywalls on")
-	}
-	gameState.mu.Unlock()
-
-	// %bouncywalls off
-	processCommand("Admin", "%bouncywalls off", nil)
-	gameState.mu.Lock()
 	if gameState.BouncyWalls {
-		t.Errorf("expected BouncyWalls false after %%bouncywalls off")
+		t.Errorf("expected BouncyWalls to remain false after chat command")
 	}
 	gameState.mu.Unlock()
 
-	// %bouncy toggle
-	processCommand("Admin", "%bouncy", nil)
+	// applySettingsUpdate on
+	applySettingsUpdate(SettingsUpdate{BouncyWalls: new(true)})
 	gameState.mu.Lock()
 	if !gameState.BouncyWalls {
-		t.Errorf("expected BouncyWalls true after %%bouncy toggle")
+		t.Errorf("expected BouncyWalls true after applySettingsUpdate")
 	}
 	gameState.mu.Unlock()
 
-	// %bouncy toggle off
-	processCommand("Admin", "%bouncy", nil)
+	// applySettingsUpdate off
+	applySettingsUpdate(SettingsUpdate{BouncyWalls: new(false)})
 	gameState.mu.Lock()
 	if gameState.BouncyWalls {
-		t.Errorf("expected BouncyWalls false after second %%bouncy toggle")
+		t.Errorf("expected BouncyWalls false after applySettingsUpdate")
 	}
 	gameState.mu.Unlock()
 }
@@ -1015,32 +1039,32 @@ func TestTerrainCommand(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// %terrain 30 70
+	// Chat command is ignored
 	processCommand("Admin", "%terrain 30 70", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
+		t.Errorf("expected bounds to remain unchanged after chat command; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	}
+	gameState.mu.Unlock()
+
+	// applySettingsUpdate with 30 70
+	applySettingsUpdate(SettingsUpdate{TerrainMin: new(30), TerrainMax: new(70)})
 	gameState.mu.Lock()
 	if gameState.TerrainMin != 30 || gameState.TerrainMax != 70 {
 		t.Errorf("expected TerrainMin=30, TerrainMax=70; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
 	}
 	gameState.mu.Unlock()
 
-	// %terrain with percent signs: %terrain 40% 75%
-	processCommand("Admin", "%terrain 40% 75%", nil)
+	// Invalid range: min > max-10 should be clamped (min clamped to max-10)
+	applySettingsUpdate(SettingsUpdate{TerrainMin: new(80), TerrainMax: new(30)})
 	gameState.mu.Lock()
-	if gameState.TerrainMin != 40 || gameState.TerrainMax != 75 {
-		t.Errorf("expected TerrainMin=40, TerrainMax=75; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
+	if gameState.TerrainMin > gameState.TerrainMax-10 {
+		t.Errorf("expected min <= max-10, got min=%d, max=%d", gameState.TerrainMin, gameState.TerrainMax)
 	}
 	gameState.mu.Unlock()
 
-	// Invalid range: min > max-10 should be rejected
-	processCommand("Admin", "%terrain 80 30", nil)
-	gameState.mu.Lock()
-	if gameState.TerrainMin != 40 || gameState.TerrainMax != 75 {
-		t.Errorf("expected unchanged bounds after invalid command; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
-	}
-	gameState.mu.Unlock()
-
-	// %terrain reset
-	processCommand("Admin", "%terrain reset", nil)
+	// Reset
+	applySettingsUpdate(SettingsUpdate{TerrainMin: new(20), TerrainMax: new(75)})
 	gameState.mu.Lock()
 	if gameState.TerrainMin != 20 || gameState.TerrainMax != 75 {
 		t.Errorf("expected reset to 20 and 75; got %d, %d", gameState.TerrainMin, gameState.TerrainMax)
@@ -1073,119 +1097,80 @@ func TestTerrainColorConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
+	// Chat command is ignored
+	processCommand("Admin", "%terraincolor cyan", nil)
+	gameState.mu.Lock()
+	if gameState.TerrainColor != "#ff003c" {
+		t.Errorf("expected TerrainColor to remain #ff003c after chat command, got %s", gameState.TerrainColor)
+	}
+	gameState.mu.Unlock()
+
 	// Presets
 	presets := []struct {
-		cmd      string
+		input    string
 		expected string
 	}{
-		{"%terraincolor cyan", "#00ffcc"},
-		{"%terraincolor green", "#00ff66"},
-		{"%terraincolor purple", "#bf00ff"},
-		{"%terraincolor orange", "#ff6600"},
-		{"%terraincolor yellow", "#ffd700"},
-		{"%terraincolor white", "#ffffff"},
-		{"%terraincolor red", "#ff003c"},
-		{"%terraincolor default", "#ff003c"},
-		{"%terraincolor reset", "#ff003c"},
+		{"cyan", "#00ffcc"},
+		{"green", "#00ff66"},
+		{"purple", "#bf00ff"},
+		{"orange", "#ff6600"},
+		{"yellow", "#ffd700"},
+		{"white", "#ffffff"},
+		{"red", "#ff003c"},
+		{"default", "#ff003c"},
+		{"reset", "#ff003c"},
 	}
 
 	for _, tc := range presets {
-		processCommand("Admin", tc.cmd, nil)
+		applySettingsUpdate(SettingsUpdate{TerrainColor: new(tc.input)})
 		gameState.mu.Lock()
 		if gameState.TerrainColor != tc.expected {
-			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TerrainColor)
+			t.Errorf("input %s: expected %s, got %s", tc.input, tc.expected, gameState.TerrainColor)
 		}
 		gameState.mu.Unlock()
 	}
 
 	// Hex formats
 	hexTests := []struct {
-		cmd      string
+		input    string
 		expected string
 	}{
-		{"%terraincolor #bf00ff", "#bf00ff"},
-		{"%terraincolor 00ffcc", "#00ffcc"},
-		{"%terraincolor #AABBCC", "#aabbcc"},
-		{"%terraincolor #0fc", "#00ffcc"},
-		{"%terraincolor f00", "#ff0000"},
+		{"#bf00ff", "#bf00ff"},
+		{"00ffcc", "#00ffcc"},
+		{"#AABBCC", "#aabbcc"},
+		{"#0fc", "#00ffcc"},
+		{"f00", "#ff0000"},
 	}
 
 	for _, tc := range hexTests {
-		processCommand("Admin", tc.cmd, nil)
+		applySettingsUpdate(SettingsUpdate{TerrainColor: new(tc.input)})
 		gameState.mu.Lock()
 		if gameState.TerrainColor != tc.expected {
-			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TerrainColor)
+			t.Errorf("hex input %s: expected %s, got %s", tc.input, tc.expected, gameState.TerrainColor)
 		}
 		gameState.mu.Unlock()
 	}
-
-	// Subcommand aliases: %terrain color <hex>, %terraincolour <preset>
-	processCommand("Admin", "%terrain color #334455", nil)
-	gameState.mu.Lock()
-	if gameState.TerrainColor != "#334455" {
-		t.Errorf("%%terrain color #334455: expected #334455, got %s", gameState.TerrainColor)
-	}
-	gameState.mu.Unlock()
-
-	processCommand("Admin", "%terraincolour cyan", nil)
-	gameState.mu.Lock()
-	if gameState.TerrainColor != "#00ffcc" {
-		t.Errorf("%%terraincolour cyan: expected #00ffcc, got %s", gameState.TerrainColor)
-	}
-	gameState.mu.Unlock()
 
 	// Invalid inputs should be rejected and retain current color
 	invalids := []string{
-		"%terraincolor",
-		"%terraincolor invalidcolor",
-		"%terraincolor #1234",
-		"%terraincolor #1234567",
-		"%terrain color",
-		"%terrain color not_a_hex",
+		"",
+		"invalidcolor",
+		"#1234",
+		"#1234567",
+		"not_a_hex",
 	}
 
-	for _, cmd := range invalids {
-		processCommand("Admin", cmd, nil)
+	for _, tc := range invalids {
+		applySettingsUpdate(SettingsUpdate{TerrainColor: new(tc)})
 		gameState.mu.Lock()
-		if gameState.TerrainColor != "#00ffcc" {
-			t.Errorf("command %s: expected retained #00ffcc, got %s", cmd, gameState.TerrainColor)
+		if gameState.TerrainColor != "#ff0000" {
+			t.Errorf("invalid input %s: expected retained #ff0000, got %s", tc, gameState.TerrainColor)
 		}
 		gameState.mu.Unlock()
 	}
 
-	// Permissions check
-	nonAdmin := &twitch.User{Name: "RandomViewer"}
-	processCommand("RandomViewer", "%terraincolor #111111", nil, nonAdmin)
-	gameState.mu.Lock()
-	if gameState.TerrainColor != "#00ffcc" {
-		t.Errorf("expected viewer command to be ignored, got %s", gameState.TerrainColor)
-	}
-	gameState.mu.Unlock()
-
-	modUser := &twitch.User{
-		Name:   "ModUser",
-		IsMod:  true,
-		Badges: map[string]int{"moderator": 1},
-	}
-	// By default configPerm is broadcaster, so mod is rejected
-	processCommand("ModUser", "%terraincolor #222222", nil, modUser)
-	gameState.mu.Lock()
-	if gameState.TerrainColor != "#00ffcc" {
-		t.Errorf("expected mod command to be rejected when configPerm=broadcaster, got %s", gameState.TerrainColor)
-	}
-	gameState.mu.Unlock()
-
-	// Update configPerm to mod
-	processCommand("Admin", "%configperm mod", nil)
-	processCommand("ModUser", "%terraincolor #222222", nil, modUser)
-	gameState.mu.Lock()
-	if gameState.TerrainColor != "#222222" {
-		t.Errorf("expected mod command to succeed when configPerm=mod, got %s", gameState.TerrainColor)
-	}
-	gameState.mu.Unlock()
-
 	// SQLite persistence check
-	processCommand("Admin", "%terraincolor #445566", nil)
+	applySettingsUpdate(SettingsUpdate{TerrainColor: new("#445566")})
 	resetGameStateForTest()
 	gameState.mu.Lock()
 	if gameState.TerrainColor != "#ff003c" {
@@ -1226,119 +1211,80 @@ func TestTankColorConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
+	// Chat command is ignored
+	processCommand("Admin", "%tankcolor cyan", nil)
+	gameState.mu.Lock()
+	if gameState.TankColor != "#ff003c" {
+		t.Errorf("expected TankColor to remain #ff003c after chat command, got %s", gameState.TankColor)
+	}
+	gameState.mu.Unlock()
+
 	// Presets
 	presets := []struct {
-		cmd      string
+		input    string
 		expected string
 	}{
-		{"%tankcolor cyan", "#00ffcc"},
-		{"%tankcolor green", "#00ff66"},
-		{"%tankcolor purple", "#bf00ff"},
-		{"%tankcolor orange", "#ff6600"},
-		{"%tankcolor yellow", "#ffd700"},
-		{"%tankcolor white", "#ffffff"},
-		{"%tankcolor red", "#ff003c"},
-		{"%tankcolor default", "#ff003c"},
-		{"%tankcolor reset", "#ff003c"},
+		{"cyan", "#00ffcc"},
+		{"green", "#00ff66"},
+		{"purple", "#bf00ff"},
+		{"orange", "#ff6600"},
+		{"yellow", "#ffd700"},
+		{"white", "#ffffff"},
+		{"red", "#ff003c"},
+		{"default", "#ff003c"},
+		{"reset", "#ff003c"},
 	}
 
 	for _, tc := range presets {
-		processCommand("Admin", tc.cmd, nil)
+		applySettingsUpdate(SettingsUpdate{TankColor: new(tc.input)})
 		gameState.mu.Lock()
 		if gameState.TankColor != tc.expected {
-			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TankColor)
+			t.Errorf("input %s: expected %s, got %s", tc.input, tc.expected, gameState.TankColor)
 		}
 		gameState.mu.Unlock()
 	}
 
 	// Hex formats
 	hexTests := []struct {
-		cmd      string
+		input    string
 		expected string
 	}{
-		{"%tankcolor #bf00ff", "#bf00ff"},
-		{"%tankcolor 00ffcc", "#00ffcc"},
-		{"%tankcolor #AABBCC", "#aabbcc"},
-		{"%tankcolor #0fc", "#00ffcc"},
-		{"%tankcolor f00", "#ff0000"},
+		{"#bf00ff", "#bf00ff"},
+		{"00ffcc", "#00ffcc"},
+		{"#AABBCC", "#aabbcc"},
+		{"#0fc", "#00ffcc"},
+		{"f00", "#ff0000"},
 	}
 
 	for _, tc := range hexTests {
-		processCommand("Admin", tc.cmd, nil)
+		applySettingsUpdate(SettingsUpdate{TankColor: new(tc.input)})
 		gameState.mu.Lock()
 		if gameState.TankColor != tc.expected {
-			t.Errorf("command %s: expected %s, got %s", tc.cmd, tc.expected, gameState.TankColor)
+			t.Errorf("hex input %s: expected %s, got %s", tc.input, tc.expected, gameState.TankColor)
 		}
 		gameState.mu.Unlock()
 	}
-
-	// Subcommand aliases: %tank color <hex>, %tankcolour <preset>
-	processCommand("Admin", "%tank color #334455", nil)
-	gameState.mu.Lock()
-	if gameState.TankColor != "#334455" {
-		t.Errorf("%%tank color #334455: expected #334455, got %s", gameState.TankColor)
-	}
-	gameState.mu.Unlock()
-
-	processCommand("Admin", "%tankcolour cyan", nil)
-	gameState.mu.Lock()
-	if gameState.TankColor != "#00ffcc" {
-		t.Errorf("%%tankcolour cyan: expected #00ffcc, got %s", gameState.TankColor)
-	}
-	gameState.mu.Unlock()
 
 	// Invalid inputs should be rejected and retain current color
 	invalids := []string{
-		"%tankcolor",
-		"%tankcolor invalidcolor",
-		"%tankcolor #1234",
-		"%tankcolor #1234567",
-		"%tank color",
-		"%tank color not_a_hex",
+		"",
+		"invalidcolor",
+		"#1234",
+		"#1234567",
+		"not_a_hex",
 	}
 
-	for _, cmd := range invalids {
-		processCommand("Admin", cmd, nil)
+	for _, tc := range invalids {
+		applySettingsUpdate(SettingsUpdate{TankColor: new(tc)})
 		gameState.mu.Lock()
-		if gameState.TankColor != "#00ffcc" {
-			t.Errorf("command %s: expected retained #00ffcc, got %s", cmd, gameState.TankColor)
+		if gameState.TankColor != "#ff0000" {
+			t.Errorf("invalid input %s: expected retained #ff0000, got %s", tc, gameState.TankColor)
 		}
 		gameState.mu.Unlock()
 	}
 
-	// Permissions check
-	nonAdmin := &twitch.User{Name: "RandomViewer"}
-	processCommand("RandomViewer", "%tankcolor #111111", nil, nonAdmin)
-	gameState.mu.Lock()
-	if gameState.TankColor != "#00ffcc" {
-		t.Errorf("expected viewer command to be ignored, got %s", gameState.TankColor)
-	}
-	gameState.mu.Unlock()
-
-	modUser := &twitch.User{
-		Name:   "ModUser",
-		IsMod:  true,
-		Badges: map[string]int{"moderator": 1},
-	}
-	// By default configPerm is broadcaster, so mod is rejected
-	processCommand("ModUser", "%tankcolor #222222", nil, modUser)
-	gameState.mu.Lock()
-	if gameState.TankColor != "#00ffcc" {
-		t.Errorf("expected mod command to be rejected when configPerm=broadcaster, got %s", gameState.TankColor)
-	}
-	gameState.mu.Unlock()
-
-	// Update configPerm to mod
-	processCommand("Admin", "%configperm mod", nil)
-	processCommand("ModUser", "%tankcolor #222222", nil, modUser)
-	gameState.mu.Lock()
-	if gameState.TankColor != "#222222" {
-		t.Errorf("expected mod command to succeed when configPerm=mod, got %s", gameState.TankColor)
-	}
-	gameState.mu.Unlock()
-
 	// SQLite persistence check
-	processCommand("Admin", "%tankcolor #445566", nil)
+	applySettingsUpdate(SettingsUpdate{TankColor: new("#445566")})
 	resetGameStateForTest()
 	gameState.mu.Lock()
 	if gameState.TankColor != "#ff003c" {
@@ -1505,55 +1451,42 @@ func TestPermissionCommands(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 3. Regular viewer cannot change settings
+	// 3. Former permission and config chat commands are ignored
 	processCommand("RegularViewer", "%roundtime 45", nil, viewer)
 	gameState.mu.Lock()
 	if gameState.InputDuration == 45 {
-		t.Errorf("expected InputDuration to remain unchanged when regular viewer executes %%roundtime")
+		t.Errorf("expected InputDuration to remain unchanged when chat command executed")
 	}
 	gameState.mu.Unlock()
 
-	// 4. Regular viewer cannot change permissions
-	processCommand("RegularViewer", "%startperm all", nil, viewer)
+	processCommand("Streamer", "%startperm all", nil, broadcaster)
 	gameState.mu.Lock()
-	if gameState.StartPerm == "all" {
-		t.Errorf("expected StartPerm to remain unchanged when regular viewer executes %%startperm")
+	if gameState.StartPerm != "broadcaster" {
+		t.Errorf("expected StartPerm to remain unchanged after chat command")
 	}
 	gameState.mu.Unlock()
 
-	// 5. Mod cannot change permissions
-	processCommand("ModUser", "%configperm all", nil, mod)
-	gameState.mu.Lock()
-	if gameState.ConfigPerm == "all" {
-		t.Errorf("expected ConfigPerm to remain unchanged when mod executes %%configperm")
-	}
-	gameState.mu.Unlock()
-
-	// 6. Broadcaster can configure permissions
-	processCommand("Streamer", "%configperm mod", nil, broadcaster)
+	// 4. Update permissions via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{ConfigPerm: new("mod")})
 	gameState.mu.Lock()
 	if gameState.ConfigPerm != "mod" {
 		t.Errorf("expected ConfigPerm to be 'mod', got %s", gameState.ConfigPerm)
 	}
 	gameState.mu.Unlock()
 
-	// Now mod can change settings
-	processCommand("ModUser", "%roundtime 35", nil, mod)
+	// 5. Test StartPerm=mod allows mod to startgame
+	applySettingsUpdate(SettingsUpdate{StartPerm: new("mod")})
+	processCommand("ModUser", "%join Kappa", nil, mod)
+	processCommand("ModUser", "%startgame", nil, mod)
 	gameState.mu.Lock()
-	if gameState.InputDuration != 35 {
-		t.Errorf("expected InputDuration=35 after mod command, got %d", gameState.InputDuration)
+	if gameState.Phase != phaseInput {
+		t.Errorf("expected phase to be INPUT after mod %%startgame with startPerm=mod, got %s", gameState.Phase)
 	}
 	gameState.mu.Unlock()
 
-	// 7. Broadcaster configures %startperm via unified %perm command
-	processCommand("Streamer", "%perm start all", nil, broadcaster)
-	gameState.mu.Lock()
-	if gameState.StartPerm != "all" {
-		t.Errorf("expected StartPerm to be 'all', got %s", gameState.StartPerm)
-	}
-	gameState.mu.Unlock()
-
-	// Now regular viewer can start game
+	// 6. Now regular viewer can start game when startPerm=all
+	applySettingsUpdate(SettingsUpdate{StartPerm: new("all")})
+	gameState.Phase = phaseIdle
 	processCommand("RegularViewer", "%startgame", nil, viewer)
 	gameState.mu.Lock()
 	if gameState.Phase != phaseInput {
@@ -1775,37 +1708,25 @@ func TestClearLeaderboard(t *testing.T) {
 	gameState.mu.Lock()
 	gameState.Leaderboard["Alice"] = 2
 	gameState.Leaderboard["Bob"] = 1
-	gameState.ConfigPerm = "broadcaster"
 	gameState.mu.Unlock()
 
-	regularUser := &twitch.User{Name: "Charlie", Badges: map[string]int{}}
-	modUser := &twitch.User{Name: "ModUser", IsMod: true}
 	broadcasterUser := &twitch.User{Name: "Streamer", IsBroadcaster: true}
 
-	// 1. Regular user cannot clear leaderboard when ConfigPerm is broadcaster
-	processCommand("Charlie", "%clearleaderboard", nil, regularUser)
-	gameState.mu.Lock()
-	if len(gameState.Leaderboard) != 2 {
-		gameState.mu.Unlock()
-		t.Fatalf("expected leaderboard not to be cleared by regular user, got len %d", len(gameState.Leaderboard))
-	}
-	gameState.mu.Unlock()
-
-	// 2. Mod user cannot clear leaderboard when ConfigPerm is broadcaster
-	processCommand("ModUser", "%clearleaderboard", nil, modUser)
-	gameState.mu.Lock()
-	if len(gameState.Leaderboard) != 2 {
-		gameState.mu.Unlock()
-		t.Fatalf("expected leaderboard not to be cleared by mod when ConfigPerm=broadcaster, got len %d", len(gameState.Leaderboard))
-	}
-	gameState.mu.Unlock()
-
-	// 3. Broadcaster clears leaderboard
+	// 1. Former chat command is ignored
 	processCommand("Streamer", "%clearleaderboard", nil, broadcasterUser)
 	gameState.mu.Lock()
+	if len(gameState.Leaderboard) != 2 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected leaderboard not to be cleared by chat command, got len %d", len(gameState.Leaderboard))
+	}
+	gameState.mu.Unlock()
+
+	// 2. Clear leaderboard via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{ClearLeaderboard: true})
+	gameState.mu.Lock()
 	if len(gameState.Leaderboard) != 0 {
 		gameState.mu.Unlock()
-		t.Fatalf("expected leaderboard to be empty after %%clearleaderboard, got %v", gameState.Leaderboard)
+		t.Fatalf("expected leaderboard to be empty after applySettingsUpdate, got %v", gameState.Leaderboard)
 	}
 	gameState.mu.Unlock()
 
@@ -1814,31 +1735,7 @@ func TestClearLeaderboard(t *testing.T) {
 	gameState.mu.Lock()
 	if len(gameState.Leaderboard) != 0 {
 		gameState.mu.Unlock()
-		t.Fatalf("expected SQLite leaderboard table to be empty after %%clearleaderboard, got %v", gameState.Leaderboard)
-	}
-	gameState.mu.Unlock()
-
-	// 4. Test alias %resetleaderboard works when ConfigPerm allows it
-	incrementWin("David")
-	gameState.mu.Lock()
-	gameState.Leaderboard["David"] = 1
-	gameState.ConfigPerm = "mod"
-	gameState.mu.Unlock()
-
-	processCommand("ModUser", "%resetleaderboard", nil, modUser)
-	gameState.mu.Lock()
-	if len(gameState.Leaderboard) != 0 {
-		gameState.mu.Unlock()
-		t.Fatalf("expected leaderboard to be empty after %%resetleaderboard, got %v", gameState.Leaderboard)
-	}
-	gameState.mu.Unlock()
-
-	// Verify SQLite database was also cleared
-	loadLeaderboard()
-	gameState.mu.Lock()
-	if len(gameState.Leaderboard) != 0 {
-		gameState.mu.Unlock()
-		t.Fatalf("expected SQLite leaderboard table to be empty after %%resetleaderboard, got %v", gameState.Leaderboard)
+		t.Fatalf("expected SQLite leaderboard table to be empty after clear, got %v", gameState.Leaderboard)
 	}
 	gameState.mu.Unlock()
 }
@@ -1858,37 +1755,25 @@ func TestDeletePlayer(t *testing.T) {
 	gameState.Leaderboard["Alice"] = 2
 	gameState.Leaderboard["Bob"] = 1
 	gameState.Leaderboard["Charlie"] = 1
-	gameState.ConfigPerm = "broadcaster"
 	gameState.mu.Unlock()
 
-	regularUser := &twitch.User{Name: "David", Badges: map[string]int{}}
-	modUser := &twitch.User{Name: "ModUser", IsMod: true}
 	broadcasterUser := &twitch.User{Name: "Streamer", IsBroadcaster: true}
 
-	// 1. Regular user cannot delete player
-	processCommand("David", "%deleteplayer Alice", nil, regularUser)
+	// 1. Former chat command is ignored
+	processCommand("Streamer", "%deleteplayer Alice", nil, broadcasterUser)
 	gameState.mu.Lock()
 	if _, exists := gameState.Leaderboard["Alice"]; !exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected Alice not to be deleted by regular user")
+		t.Fatalf("expected Alice not to be deleted by chat command")
 	}
 	gameState.mu.Unlock()
 
-	// 2. Mod user cannot delete player when ConfigPerm is broadcaster
-	processCommand("ModUser", "%deleteplayer Alice", nil, modUser)
-	gameState.mu.Lock()
-	if _, exists := gameState.Leaderboard["Alice"]; !exists {
-		gameState.mu.Unlock()
-		t.Fatalf("expected Alice not to be deleted by mod when ConfigPerm is broadcaster")
-	}
-	gameState.mu.Unlock()
-
-	// 3. Broadcaster deletes player case-insensitively ("alice" removes "Alice")
-	processCommand("Streamer", "%deleteplayer alice", nil, broadcasterUser)
+	// 2. Delete player case-insensitively via applySettingsUpdate ("alice" removes "Alice")
+	applySettingsUpdate(SettingsUpdate{DeletePlayer: "alice"})
 	gameState.mu.Lock()
 	if _, exists := gameState.Leaderboard["Alice"]; exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected Alice to be removed by broadcaster case-insensitively")
+		t.Fatalf("expected Alice to be removed case-insensitively")
 	}
 	if len(gameState.Leaderboard) != 2 {
 		gameState.mu.Unlock()
@@ -1905,16 +1790,12 @@ func TestDeletePlayer(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 4. Test leading @ prefix and alias %removeplayer when ConfigPerm is mod
-	gameState.mu.Lock()
-	gameState.ConfigPerm = "mod"
-	gameState.mu.Unlock()
-
-	processCommand("ModUser", "%removeplayer @Bob", nil, modUser)
+	// 3. Test leading @ prefix
+	applySettingsUpdate(SettingsUpdate{DeletePlayer: "@Bob"})
 	gameState.mu.Lock()
 	if _, exists := gameState.Leaderboard["Bob"]; exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected Bob to be removed via %%removeplayer with @ prefix")
+		t.Fatalf("expected Bob to be removed with @ prefix")
 	}
 	if len(gameState.Leaderboard) != 1 || gameState.Leaderboard["Charlie"] != 1 {
 		gameState.mu.Unlock()
@@ -1935,20 +1816,20 @@ func TestDeletePlayer(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 5. Verify %deleteplayer removes player from active match as well
+	// 4. Verify deletePlayer removes player from active match as well
 	gameState.mu.Lock()
 	gameState.Players["Charlie"] = &Player{Name: "Charlie", Joined: true}
 	gameState.mu.Unlock()
 
-	processCommand("ModUser", "%deleteplayer Charlie", nil, modUser)
+	applySettingsUpdate(SettingsUpdate{DeletePlayer: "Charlie"})
 	gameState.mu.Lock()
 	if _, exists := gameState.Players["Charlie"]; exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected Charlie to be removed from active gameState.Players by %%deleteplayer")
+		t.Fatalf("expected Charlie to be removed from active gameState.Players")
 	}
 	if _, exists := gameState.Leaderboard["Charlie"]; exists {
 		gameState.mu.Unlock()
-		t.Fatalf("expected Charlie to be removed from leaderboard by %%deleteplayer")
+		t.Fatalf("expected Charlie to be removed from leaderboard")
 	}
 	gameState.mu.Unlock()
 }
@@ -2291,8 +2172,20 @@ func TestBotConfigurationCommands(t *testing.T) {
 
 	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
 
-	// 1. %minplayers
+	// Former chat commands are ignored
 	processCommand("Streamer", "%minplayers 8", nil, broadcaster)
+	processCommand("Streamer", "%botfill off", nil, broadcaster)
+	processCommand("Streamer", "%botpoints 5", nil, broadcaster)
+	processCommand("Streamer", "%botlist add EliteSniper", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.MinPlayers != 5 || !gameState.BotFill || gameState.BotPoints != 1 || slices.Contains(gameState.BotList, "EliteSniper") {
+		gameState.mu.Unlock()
+		t.Fatalf("expected bot settings to remain defaults after chat commands")
+	}
+	gameState.mu.Unlock()
+
+	// 1. MinPlayers via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{MinPlayers: new(8)})
 	gameState.mu.Lock()
 	if gameState.MinPlayers != 8 {
 		gameState.mu.Unlock()
@@ -2309,8 +2202,8 @@ func TestBotConfigurationCommands(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. %botfill
-	processCommand("Streamer", "%botfill off", nil, broadcaster)
+	// 2. BotFill via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{BotFill: new(false)})
 	gameState.mu.Lock()
 	if gameState.BotFill != false {
 		gameState.mu.Unlock()
@@ -2326,8 +2219,8 @@ func TestBotConfigurationCommands(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 3. %botpoints
-	processCommand("Streamer", "%botpoints 5", nil, broadcaster)
+	// 3. BotPoints via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{BotPoints: new(5)})
 	gameState.mu.Lock()
 	if gameState.BotPoints != 5 {
 		gameState.mu.Unlock()
@@ -2343,8 +2236,8 @@ func TestBotConfigurationCommands(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 4. %botlist add / remove
-	processCommand("Streamer", "%botlist add EliteSniper", nil, broadcaster)
+	// 4. BotList add / remove via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{AddBot: "EliteSniper"})
 	gameState.mu.Lock()
 	found := slices.Contains(gameState.BotList, "EliteSniper")
 	if !found {
@@ -2353,7 +2246,7 @@ func TestBotConfigurationCommands(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	processCommand("Streamer", "%botlist remove EliteSniper", nil, broadcaster)
+	applySettingsUpdate(SettingsUpdate{RemoveBot: "EliteSniper"})
 	gameState.mu.Lock()
 	for _, b := range gameState.BotList {
 		if b == "EliteSniper" {
@@ -2371,7 +2264,17 @@ func TestAutoRoundCustomMinutes(t *testing.T) {
 
 	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
 
+	// Chat command is ignored
 	processCommand("Streamer", "%autoround 12", nil, broadcaster)
+	gameState.mu.Lock()
+	if gameState.AutoRound != 0 {
+		gameState.mu.Unlock()
+		t.Fatalf("expected AutoRound to remain 0 after chat command")
+	}
+	gameState.mu.Unlock()
+
+	// applySettingsUpdate with 12
+	applySettingsUpdate(SettingsUpdate{AutoRound: new(12)})
 	gameState.mu.Lock()
 	if gameState.AutoRound != 12 {
 		gameState.mu.Unlock()
@@ -2678,20 +2581,28 @@ func TestCCCommandsAndStorage(t *testing.T) {
 	gameState.CCServerURL = "wss://st-cc.poundsigndesign.com"
 	gameState.mu.Unlock()
 
-	// 2. Test %cc on
+	// 2. Chat command is ignored
 	processCommand("AdminUser", "%cc on", nil, adminUser)
 	gameState.mu.Lock()
+	if gameState.CCEnabled {
+		t.Errorf("expected CCEnabled to remain false after chat command")
+	}
+	gameState.mu.Unlock()
+
+	// 3. Test applySettingsUpdate CCEnabled
+	applySettingsUpdate(SettingsUpdate{CCEnabled: new(true)})
+	gameState.mu.Lock()
 	if !gameState.CCEnabled {
-		t.Errorf("expected CCEnabled to be true after %%cc on")
+		t.Errorf("expected CCEnabled to be true after applySettingsUpdate")
 	}
 	gameState.mu.Unlock()
 	if getSetting("cc_enabled") != "1" {
 		t.Errorf("expected cc_enabled setting to be '1', got '%s'", getSetting("cc_enabled"))
 	}
 
-	// 3. Test %cc url
+	// 4. Test applySettingsUpdate CCServerURL
 	testURL := "wss://custom-cc.example.com"
-	processCommand("AdminUser", "%cc url "+testURL, nil, adminUser)
+	applySettingsUpdate(SettingsUpdate{CCServerURL: new(testURL)})
 	gameState.mu.Lock()
 	if gameState.CCServerURL != testURL {
 		t.Errorf("expected CCServerURL to be '%s', got '%s'", testURL, gameState.CCServerURL)
@@ -2701,24 +2612,24 @@ func TestCCCommandsAndStorage(t *testing.T) {
 		t.Errorf("expected cc_url setting to be '%s', got '%s'", testURL, getSetting("cc_url"))
 	}
 
-	// 4. Test %config cc off
-	processCommand("AdminUser", "%config cc off", nil, adminUser)
+	// 5. Test applySettingsUpdate CCEnabled off
+	applySettingsUpdate(SettingsUpdate{CCEnabled: new(false)})
 	gameState.mu.Lock()
 	if gameState.CCEnabled {
-		t.Errorf("expected CCEnabled to be false after %%config cc off")
+		t.Errorf("expected CCEnabled to be false after applySettingsUpdate")
 	}
 	gameState.mu.Unlock()
 	if getSetting("cc_enabled") != "0" {
 		t.Errorf("expected cc_enabled setting to be '0', got '%s'", getSetting("cc_enabled"))
 	}
 
-	// 5. Test saving and retrieving token
+	// 6. Test saving and retrieving token
 	saveSetting("cc_host_token", "sample.token.12345")
 	if token := getSetting("cc_host_token"); token != "sample.token.12345" {
 		t.Errorf("expected saved token 'sample.token.12345', got '%s'", token)
 	}
 
-	// 6. Test loadSettings reloading persisted C&C configuration
+	// 7. Test loadSettings reloading persisted C&C configuration
 	saveSetting("cc_enabled", "1")
 	saveSetting("cc_url", "wss://reloaded-cc.example.com")
 	loadSettings()
@@ -2732,11 +2643,11 @@ func TestCCCommandsAndStorage(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 7. Test %cc reset deletes token
+	// 8. Test ResetCCKey clears host token
 	saveSetting("cc_host_token", "sample.token.to.reset")
-	processCommand("AdminUser", "%cc reset", nil, adminUser)
+	applySettingsUpdate(SettingsUpdate{ResetCCKey: true})
 	if token := getSetting("cc_host_token"); token != "" {
-		t.Errorf("expected cc_host_token to be cleared after %%cc reset, got '%s'", token)
+		t.Errorf("expected cc_host_token to be cleared after ResetCCKey, got '%s'", token)
 	}
 
 	// Clean up
@@ -3139,22 +3050,40 @@ func TestProtractorCommand(t *testing.T) {
 
 	// 1. Check default
 	gameState.mu.Lock()
-	if gameState.ProtractorX != 250 || gameState.ProtractorY != 270 {
-		t.Fatalf("expected defaults 250, 270, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
-	}
+	px := gameState.ProtractorX
+	py := gameState.ProtractorY
 	gameState.mu.Unlock()
+	if px != 250 || py != 270 {
+		t.Fatalf("expected defaults 250, 270, got %d, %d", px, py)
+	}
 
-	// 2. Run command via processCommand with terrainMax=50 (maxY = 1080 * 0.5 = 540)
-	processCommand("Admin", "%terrain 20 50", nil, nil)
+	// 2. Chat command is ignored
 	processCommand("Admin", "%protractor 1500 500", nil, nil)
+	gameState.mu.Lock()
+	px = gameState.ProtractorX
+	py = gameState.ProtractorY
+	gameState.mu.Unlock()
+	if px != 250 || py != 270 {
+		t.Fatalf("expected 250, 270 after ignored chat command, got %d, %d", px, py)
+	}
+
+	// 3. Update via applySettingsUpdate with terrainMax=50 (maxY = 1080 * 0.5 = 540)
+	applySettingsUpdate(SettingsUpdate{
+		TerrainMin:  new(20),
+		TerrainMax:  new(50),
+		ProtractorX: new(1500),
+		ProtractorY: new(500),
+	})
 
 	gameState.mu.Lock()
-	if gameState.ProtractorX != 1500 || gameState.ProtractorY != 500 {
-		t.Fatalf("expected 1500, 500 after command, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
-	}
+	px = gameState.ProtractorX
+	py = gameState.ProtractorY
 	gameState.mu.Unlock()
+	if px != 1500 || py != 500 {
+		t.Fatalf("expected 1500, 500 after settings update, got %d, %d", px, py)
+	}
 
-	// 3. Verify saved to DB
+	// 4. Verify saved to DB
 	if xVal := getSetting("protractor_x"); xVal != "1500" {
 		t.Fatalf("expected db protractor_x to be 1500, got %s", xVal)
 	}
@@ -3162,42 +3091,63 @@ func TestProtractorCommand(t *testing.T) {
 		t.Fatalf("expected db protractor_y to be 500, got %s", yVal)
 	}
 
-	// 4. Test maxY clamping: TerrainMax=75 -> maxY = 1080 * 0.25 = 270
-	processCommand("Admin", "%terrain 20 75", nil, nil)
+	// 5. Test maxY clamping: TerrainMax=75 -> maxY = 1080 * 0.25 = 270
+	applySettingsUpdate(SettingsUpdate{
+		TerrainMin: new(20),
+		TerrainMax: new(75),
+	})
 	gameState.mu.Lock()
-	if gameState.ProtractorY != 270 {
-		t.Fatalf("expected protractorY to be clamped to 270 after terrain change, got %d", gameState.ProtractorY)
-	}
+	py = gameState.ProtractorY
 	gameState.mu.Unlock()
+	if py != 270 {
+		t.Fatalf("expected protractorY to be clamped to 270 after terrain change, got %d", py)
+	}
 
 	// Trying to set Y above 270 clamps it to 270
-	processCommand("Admin", "%protractor 1000 600", nil, nil)
+	applySettingsUpdate(SettingsUpdate{
+		ProtractorX: new(1000),
+		ProtractorY: new(600),
+	})
 	gameState.mu.Lock()
-	if gameState.ProtractorX != 1000 || gameState.ProtractorY != 270 {
-		t.Fatalf("expected 1000, 270 due to maxY clamping, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
-	}
+	px = gameState.ProtractorX
+	py = gameState.ProtractorY
 	gameState.mu.Unlock()
+	if px != 1000 || py != 270 {
+		t.Fatalf("expected 1000, 270 due to maxY clamping, got %d, %d", px, py)
+	}
 
-	// 5. Test nosave
-	processCommand("Admin", "%protractor 300 200 nosave", nil, nil)
+	// 6. Test nosave
+	applySettingsUpdate(SettingsUpdate{
+		ProtractorX: new(300),
+		ProtractorY: new(200),
+		NoSave:      true,
+	})
 	gameState.mu.Lock()
-	if gameState.ProtractorX != 300 || gameState.ProtractorY != 200 {
-		t.Fatalf("expected 300, 200 after nosave, got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
-	}
+	px = gameState.ProtractorX
+	py = gameState.ProtractorY
 	gameState.mu.Unlock()
+	if px != 300 || py != 200 {
+		t.Fatalf("expected 300, 200 after nosave, got %d, %d", px, py)
+	}
 	if xVal := getSetting("protractor_x"); xVal != "1000" {
 		t.Fatalf("expected db protractor_x to remain 1000 after nosave, got %s", xVal)
 	}
 
-	// 6. Test reset
-	processCommand("Admin", "%protractor reset", nil, nil)
+	// 7. Test reset
+	applySettingsUpdate(SettingsUpdate{
+		ProtractorX: new(250),
+		ProtractorY: new(270),
+	})
 	gameState.mu.Lock()
-	if gameState.ProtractorX != 250 || gameState.ProtractorY != 270 {
-		t.Fatalf("expected 250, 270 after reset (clamped to maxY 270), got %d, %d", gameState.ProtractorX, gameState.ProtractorY)
-	}
-	// 7. Test JSON marshaling of GameState
+	px = gameState.ProtractorX
+	py = gameState.ProtractorY
 	data, err := json.Marshal(&gameState)
 	gameState.mu.Unlock()
+	if px != 250 || py != 270 {
+		t.Fatalf("expected 250, 270 after reset, got %d, %d", px, py)
+	}
+
+	// 8. Test JSON marshaling of GameState
 	if err != nil {
 		t.Fatalf("failed to marshal gameState: %v", err)
 	}
@@ -3209,7 +3159,7 @@ func TestProtractorCommand(t *testing.T) {
 		t.Fatalf("expected JSON keys protractorX=250, protractorY=270, got protractorX=%v, protractorY=%v", rawMap["protractorX"], rawMap["protractorY"])
 	}
 
-	// 8. Test broadcastExcept deep copy of GameState preserves ProtractorX and ProtractorY
+	// 9. Test broadcast deep copy of GameState preserves ProtractorX and ProtractorY
 	broadcast(msgStateUpdate, &gameState)
 }
 
@@ -3736,8 +3686,6 @@ func TestAutoRound_CommandUpdateWhileIdle(t *testing.T) {
 	resetGameStateForTest()
 	mock := useMockClock()
 
-	broadcaster := &twitch.User{Name: "Streamer", IsBroadcaster: true}
-
 	// Alice joins while AutoRound is 0 (off)
 	processCommand("Alice", "%join Kappa", nil)
 
@@ -3745,11 +3693,11 @@ func TestAutoRound_CommandUpdateWhileIdle(t *testing.T) {
 		t.Fatalf("expected auto-round timer NOT to be running when AutoRound is 0")
 	}
 
-	// Broadcaster enables %autoround -1
-	processCommand("Streamer", "%autoround -1", nil, broadcaster)
+	// Broadcaster enables autoround -1 via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{AutoRound: new(-1)})
 
 	if !isAutoRoundTimerRunning() {
-		t.Fatalf("expected auto-round timer to be running after setting %%autoround -1 while idle")
+		t.Fatalf("expected auto-round timer to be running after setting autoround -1 while idle")
 	}
 
 	mock.Add(600 * time.Millisecond)
@@ -4347,24 +4295,21 @@ func TestChannelConfigurationAndPersistence(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. Unauthorized user cannot set channel
-	unauthUser := &twitch.User{
-		Name: "viewer123",
-	}
-	processCommand("viewer123", "%channel hackerchannel", nil, unauthUser)
-	gameState.mu.Lock()
-	if gameState.Channel != "" {
-		gameState.mu.Unlock()
-		t.Fatalf("expected unauthorized channel command to be rejected")
-	}
-	gameState.mu.Unlock()
-
-	// 3. Authorized broadcaster can set channel
+	// 2. Chat command is ignored
 	broadcasterUser := &twitch.User{
 		Name:          "streamer",
 		IsBroadcaster: true,
 	}
 	processCommand("streamer", "%channel #TestStreamer", nil, broadcasterUser)
+	gameState.mu.Lock()
+	if gameState.Channel != "" {
+		gameState.mu.Unlock()
+		t.Fatalf("expected chat command %%channel to be ignored")
+	}
+	gameState.mu.Unlock()
+
+	// 3. Set channel via applySettingsUpdate
+	applySettingsUpdate(SettingsUpdate{Channel: new("#TestStreamer")})
 	gameState.mu.Lock()
 	if gameState.Channel != "teststreamer" {
 		gameState.mu.Unlock()
@@ -4430,8 +4375,8 @@ func TestChannelConfigurationAndPersistence(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 6. Test clearing channel via %channel off
-	processCommand("streamer", "%channel off", nil, broadcasterUser)
+	// 7. Test clearing channel via applySettingsUpdate with 'off'
+	applySettingsUpdate(SettingsUpdate{Channel: new("off")})
 	gameState.mu.Lock()
 	if gameState.Channel != "" {
 		gameState.mu.Unlock()
@@ -4527,15 +4472,14 @@ func TestPlayerEmotePersistence(t *testing.T) {
 	}
 
 	// 6. Test clearLeaderboard preserves player emote
-	broadcaster := &twitch.User{Name: "broadcaster", IsBroadcaster: true}
-	processCommand("broadcaster", "%clearleaderboard", nil, broadcaster)
+	applySettingsUpdate(SettingsUpdate{ClearLeaderboard: true})
 	savedEmote3, _, ok3 := getPlayerEmote("emotetester")
 	if !ok3 || savedEmote3 != "PogChamp" {
 		t.Fatalf("expected clearleaderboard to preserve emote, got %q", savedEmote3)
 	}
 
 	// 7. Test deleteplayer removes saved emote
-	processCommand("broadcaster", "%deleteplayer emotetester", nil, broadcaster)
+	applySettingsUpdate(SettingsUpdate{DeletePlayer: "emotetester"})
 	_, _, ok4 := getPlayerEmote("emotetester")
 	if ok4 {
 		t.Fatalf("expected deleteplayer to remove saved emote")
@@ -4560,7 +4504,6 @@ func TestTerrainClimbConfiguration(t *testing.T) {
 	resetGameStateForTest()
 
 	broadcaster := &twitch.User{Name: "streamer", IsBroadcaster: true}
-	viewer := &twitch.User{Name: "regular_viewer"}
 
 	// 1. Default value is false
 	gameState.mu.Lock()
@@ -4569,68 +4512,42 @@ func TestTerrainClimbConfiguration(t *testing.T) {
 	}
 	gameState.mu.Unlock()
 
-	// 2. Viewer cannot change %terrainclimb
-	processCommand("regular_viewer", "%terrainclimb on", nil, viewer)
+	// 2. Chat command is ignored
+	processCommand("streamer", "%terrainclimb on", nil, broadcaster)
 	gameState.mu.Lock()
 	if gameState.TerrainClimb {
-		t.Errorf("expected viewer to not be able to enable %%terrainclimb")
+		t.Errorf("expected TerrainClimb to remain false after chat command")
 	}
 	gameState.mu.Unlock()
 
-	// 3. Broadcaster turns %terrainclimb on
-	processCommand("streamer", "%terrainclimb on", nil, broadcaster)
+	// 3. applySettingsUpdate turns TerrainClimb on
+	applySettingsUpdate(SettingsUpdate{TerrainClimb: new(true)})
 	gameState.mu.Lock()
 	if !gameState.TerrainClimb {
-		t.Errorf("expected TerrainClimb to be true after %%terrainclimb on")
+		t.Errorf("expected TerrainClimb to be true after applySettingsUpdate")
 	}
 	gameState.mu.Unlock()
 	if getSetting("terrain_climb") != "1" {
 		t.Errorf("expected terrain_climb setting '1', got %q", getSetting("terrain_climb"))
 	}
 
-	// 4. Broadcaster turns %terrainclimb off
-	processCommand("streamer", "%terrainclimb off", nil, broadcaster)
+	// 4. applySettingsUpdate turns TerrainClimb off
+	applySettingsUpdate(SettingsUpdate{TerrainClimb: new(false)})
 	gameState.mu.Lock()
 	if gameState.TerrainClimb {
-		t.Errorf("expected TerrainClimb to be false after %%terrainclimb off")
+		t.Errorf("expected TerrainClimb to be false after applySettingsUpdate")
 	}
 	gameState.mu.Unlock()
 	if getSetting("terrain_climb") != "0" {
 		t.Errorf("expected terrain_climb setting '0', got %q", getSetting("terrain_climb"))
 	}
 
-	// 5. Broadcaster toggles via %terrainclimb (no args)
-	processCommand("streamer", "%terrainclimb", nil, broadcaster)
-	gameState.mu.Lock()
-	if !gameState.TerrainClimb {
-		t.Errorf("expected TerrainClimb to toggle to true")
-	}
-	gameState.mu.Unlock()
-
-	// 6. Subcommand %terrain climb off / on
-	processCommand("streamer", "%terrain climb off", nil, broadcaster)
-	gameState.mu.Lock()
-	if gameState.TerrainClimb {
-		t.Errorf("expected TerrainClimb to be false after %%terrain climb off")
-	}
-	gameState.mu.Unlock()
-
-	processCommand("streamer", "%terrain climb on", nil, broadcaster)
-	gameState.mu.Lock()
-	if !gameState.TerrainClimb {
-		t.Errorf("expected TerrainClimb to be true after %%terrain climb on")
-	}
-	gameState.mu.Unlock()
-
-	// 7. Verify loadSettings restores terrain_climb
-	saveSetting("terrain_climb", "0")
-	gameState.mu.Lock()
-	gameState.TerrainClimb = true
-	gameState.mu.Unlock()
+	// 5. Verify loadSettings restores terrain_climb
+	saveSetting("terrain_climb", "1")
 	loadSettings()
 	gameState.mu.Lock()
-	if gameState.TerrainClimb {
-		t.Errorf("expected loadSettings to restore TerrainClimb=false from DB")
+	if !gameState.TerrainClimb {
+		t.Errorf("expected loadSettings to restore TerrainClimb=true from DB")
 	}
 	gameState.mu.Unlock()
 }

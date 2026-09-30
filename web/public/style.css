@@ -204,6 +204,7 @@ canvas {
     width: 350px;
     box-shadow: 0 0 15px rgba(255, 0, 60, 0.6);
     backdrop-filter: blur(8px);
+    transform-origin: top left;
 }
 
 #leaderboard h3 {

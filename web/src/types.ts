@@ -30,6 +30,7 @@ export const MsgCelebrationComplete = 'CELEBRATION_COMPLETE';
 export const MsgChatCommand = 'CHAT_COMMAND';
 export const MsgDebugCommand = 'DEBUG_COMMAND';
 export const MsgTerrainCrater = 'TERRAIN_CRATER';
+export const MsgSettingsUpdate = 'SETTINGS_UPDATE';
 
 // Player Actions
 export const ActionFire = 'FIRE';
@@ -100,6 +101,9 @@ export interface GameState {
   explosions?: Explosion[];
   protractorX?: number;
   protractorY?: number;
+  leaderboardX?: number;
+  leaderboardY?: number;
+  leaderboardScale?: number;
   canStart?: boolean;
   canJoin?: boolean;
   joinedPlayers?: string[];

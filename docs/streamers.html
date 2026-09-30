@@ -71,7 +71,7 @@
         <a href="#obs" class="sub-nav-link">🎥 OBS Setup</a>
         <a href="#claim" class="sub-nav-link">🔗 Channel Claim</a>
         <a href="#admin" class="sub-nav-link">🎛️ Admin Console</a>
-        <a href="#commands" class="sub-nav-link">🛠️ Streamer Commands</a>
+        <a href="#commands" class="sub-nav-link">🛠️ Admin &amp; Commands</a>
         <a href="#extension" class="sub-nav-link">☁️ Twitch Extension</a>
         <a href="#faq" class="sub-nav-link">❓ FAQ</a>
       </nav>
@@ -89,7 +89,7 @@
         Host StreamTanks on Your <br><span class="gradient-text">Twitch Stream</span>
       </h1>
       <p class="hero-subtitle">
-        Everything you need to broadcast StreamTanks: single-binary installation, transparent OBS Studio configuration, channel claim authorization, the Commander Admin Console, and full streamer settings commands.
+        Everything you need to broadcast StreamTanks: single-binary installation, transparent OBS Studio configuration, channel claim authorization, and complete game administration via the Commander Admin Console.
       </p>
 
       <div class="subpage-toc">
@@ -97,7 +97,7 @@
         <a href="#obs" class="toc-link">🎥 2. OBS Studio Setup</a>
         <a href="#claim" class="toc-link">🔗 3. Twitch Channel Claim</a>
         <a href="#admin" class="toc-link">🎛️ 4. Admin Console</a>
-        <a href="#commands" class="toc-link">🛠️ 5. Streamer Commands</a>
+        <a href="#commands" class="toc-link">🛠️ 5. Admin &amp; Commands Codex</a>
         <a href="#extension" class="toc-link">☁️ 6. Twitch Extension</a>
         <a href="#faq" class="toc-link">❓ 7. Streamer FAQ</a>
       </div>
@@ -276,7 +276,7 @@
       <div class="admin-showcase-grid">
         <div class="admin-content">
           <span class="section-tag">COMMAND CENTER</span>
-          <h2 class="section-title">Commander Admin Console <span class="gradient-text">(`/admin`)</span></h2>
+          <h2 class="section-title">Commander Admin Console <span class="gradient-text">(/admin)</span></h2>
           <p class="section-desc">
             StreamTanks includes a dedicated web dashboard accessible at <code class="code-inline">http://localhost:8102/admin</code>. Control every aspect of your game without typing in Twitch chat.
           </p>
@@ -301,7 +301,39 @@
             <div class="admin-feature-item">
               <span class="check-icon">✓</span>
               <div>
-                <strong>Active Player & Roster Management</strong>
+                <strong>Leaderboard Positioning &amp; Scaling</strong>
+                <p>Freely reposition and resize the stream leaderboard overlay with real-time X/Y sliders (0–1920 / 0–1080) and scale factor (0.5x–2.0x), plus one-click corner presets (Top-Left, Top-Right, Bottom-Left, Bottom-Right).</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Persistent Bot Roster &amp; AI Filling</strong>
+                <p>Dedicated Bot Manager card to add and remove custom bot names from SQLite, toggle auto-fill bots, and configure point bounties for bot eliminations.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Leaderboard Player Management</strong>
+                <p>Inspect all-time player rankings, delete individual records, or clear the entire leaderboard database with one click.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Visual Theming &amp; Physics Rules</strong>
+                <p>Customize neon terrain and tank tread glow colors with presets or hex codes, toggle steep terrain climbing restrictions, adjust simulation speeds, and configure round timers.</p>
+              </div>
+            </div>
+
+            <div class="admin-feature-item">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Active Player &amp; Roster Management</strong>
                 <p>View live players, their chosen emote crowns, and health. Kick disruptive players with one click directly from the dashboard table.</p>
               </div>
             </div>
@@ -339,26 +371,38 @@
     </div>
   </section>
 
-  <!-- Streamer Chat Commands Codex -->
+  <!-- Streamer Administration & Commands Codex -->
   <section class="section commands-section" id="commands">
     <div class="container">
       <div class="section-header text-center">
-        <span class="section-tag">STREAMER COMMAND CODEX</span>
-        <h2 class="section-title">Streamer &amp; Moderator <span class="gradient-text">Chat Commands</span></h2>
-        <p class="section-desc">All commands default to the <code>%</code> prefix (customizable via <code>%prefix</code>). Streamers can also run all of these commands from the Admin Console terminal.</p>
+        <span class="section-tag">ADMINISTRATION &amp; COMMAND CODEX</span>
+        <h2 class="section-title">Streamer &amp; Moderator <span class="gradient-text">Administration Guide</span></h2>
+        <p class="section-desc">StreamTanks provides quick chat triggers for live match flow, while centralizing all game customization inside the visual Commander Admin Console.</p>
+      </div>
+
+      <!-- Migration & Admin Notice Box -->
+      <div style="margin-bottom: 28px; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: 12px; padding: 22px 26px;">
+        <h4 style="color: var(--color-cyan); margin: 0 0 10px 0; font-size: 1.15rem; display: flex; align-items: center; gap: 10px;">
+          <span>🎛️</span> Game Configuration Has Moved to the Admin Console
+        </h4>
+        <p style="margin: 0; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6;">
+          To keep your Twitch chat clean and prevent accidental or unauthorized command clutter, all settings that previously required chat commands (e.g. <code>%roundtime</code>, <code>%bouncywalls</code>, <code>%terraincolor</code>, <code>%botfill</code>, and <code>%clearleaderboard</code>) are now configured exclusively in the visual <a href="#admin" style="color: var(--color-cyan); text-decoration: underline;">Commander Admin Console (<code>http://localhost:8102/admin</code>)</a>. Streamers and mods only need chat commands for starting matches and moderating players.
+        </p>
       </div>
 
       <!-- Controls & Filter Toolbar -->
       <div class="command-toolbar">
         <div class="filter-tabs" id="commandFilters">
-          <button class="filter-btn active" data-filter="all">All Commands</button>
-          <button class="filter-btn" data-filter="match">🎮 Match Flow</button>
-          <button class="filter-btn" data-filter="physics">⚡ Physics &amp; Visuals</button>
+          <button class="filter-btn active" data-filter="all">All Settings &amp; Commands</button>
+          <button class="filter-btn" data-filter="chat">💬 Chat Commands</button>
+          <button class="filter-btn" data-filter="match">🎮 Match &amp; Timing</button>
+          <button class="filter-btn" data-filter="physics">⚡ Physics &amp; Terrain</button>
+          <button class="filter-btn" data-filter="visuals">🎨 Theming &amp; Layout</button>
           <button class="filter-btn" data-filter="bots">🤖 Bot Management</button>
-          <button class="filter-btn" data-filter="admin">🛡️ Moderation &amp; Admin</button>
+          <button class="filter-btn" data-filter="admin">🛡️ Moderation &amp; Data</button>
         </div>
         <div class="search-box">
-          <input type="text" id="commandSearch" placeholder="Search streamer commands (e.g. bouncy, bot, perm)..." aria-label="Search chat commands">
+          <input type="text" id="commandSearch" placeholder="Search settings &amp; commands (e.g. kick, layout, bouncy)..." aria-label="Search settings and commands">
         </div>
       </div>
 
@@ -367,167 +411,178 @@
         <table class="command-table" id="commandTable">
           <thead>
             <tr>
-              <th>Command</th>
-              <th>Arguments</th>
+              <th>Setting / Trigger</th>
+              <th>Interface</th>
               <th>Role</th>
-              <th>Description</th>
+              <th>Description &amp; Admin Console Location</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            <!-- Match Flow -->
-            <tr data-category="match">
+            <!-- Chat Commands -->
+            <tr data-category="chat">
               <td><code class="cmd-name">%startgame</code></td>
-              <td><span class="arg-pill none">-</span></td>
+              <td><span class="role-pill role-all">Twitch Chat</span></td>
               <td><span class="role-pill role-streamer">Streamer</span></td>
-              <td>Starts an artillery match from the IDLE waiting phase. (Streamer by default; permission configurable via <code>%perm start &lt;role&gt;</code>).</td>
+              <td>Starts an artillery match from the IDLE waiting phase. (Streamer by default; permission configurable in Admin Console). Alias: <code>%start</code>.</td>
               <td><button class="btn-copy-cmd" data-cmd="%startgame">Copy</button></td>
             </tr>
-            <tr data-category="match">
-              <td><code class="cmd-name">%roundtime</code></td>
-              <td><span class="arg-pill">&lt;seconds&gt;</span></td>
+            <tr data-category="chat">
+              <td><code class="cmd-name">%kick</code></td>
+              <td><span class="role-pill role-all">Twitch Chat</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Configures the input phase countdown duration (range: 5s to 120s, default: 20s).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%roundtime 15">Copy</button></td>
-            </tr>
-            <tr data-category="match">
-              <td><code class="cmd-name">%autoround</code></td>
-              <td><span class="arg-pill">&lt;minutes|-1|off&gt;</span></td>
-              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Automates round starts: <code>-1</code> for immediate new round, <code>&gt;0</code> for scheduled minutes, or <code>off</code>.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%autoround 3">Copy</button></td>
-            </tr>
-            <tr data-category="match">
-              <td><code class="cmd-name">%idlemessage</code></td>
-              <td><span class="arg-pill">[on|off]</span></td>
-              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Toggles visibility of the idle countdown message and persistent leaderboard during waiting phase.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%idlemessage off">Copy</button></td>
+              <td>Immediately removes a player from the active match, despawning their tank and projectiles. Usage: <code>%kick &lt;username&gt;</code>. (Also available via 1-click Kick button in Admin Console).</td>
+              <td><button class="btn-copy-cmd" data-cmd="%kick ">Copy</button></td>
             </tr>
 
-            <!-- Physics & Visuals -->
-            <tr data-category="physics">
-              <td><code class="cmd-name">%speed</code></td>
-              <td><span class="arg-pill">&lt;0.1 - 3.0&gt;</span></td>
+            <!-- Match & Timing -->
+            <tr data-category="match">
+              <td><code class="cmd-name">Round Timer</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Adjusts physics and projectile simulation speed (default: <code>0.5x</code>).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%speed 0.8">Copy</button></td>
+              <td>Configures the input phase countdown duration (range: 5s to 120s, default: 20s). Located in <strong>Match Rules &amp; Timers</strong> (formerly <code>%roundtime</code>).</td>
+              <td><span class="arg-pill">Slider 5–120s</span></td>
+            </tr>
+            <tr data-category="match">
+              <td><code class="cmd-name">Auto-Round</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Automates round starts: immediate continuous matches, scheduled interval in minutes, or disabled. Located in <strong>Match Rules &amp; Timers</strong> (formerly <code>%autoround</code>).</td>
+              <td><span class="arg-pill">Select / Input</span></td>
+            </tr>
+            <tr data-category="match">
+              <td><code class="cmd-name">Idle HUD Toggle</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Toggles visibility of the idle countdown message and leaderboard during waiting phase. Located in <strong>General Settings</strong> (formerly <code>%idlemessage</code>).</td>
+              <td><span class="arg-pill">Toggle On/Off</span></td>
+            </tr>
+
+            <!-- Physics & Terrain -->
+            <tr data-category="physics">
+              <td><code class="cmd-name">Simulation Speed</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Adjusts projectile physics and simulation speed multiplier (range: 0.1x to 3.0x, default: 0.5x). Located in <strong>Physics &amp; Mechanics</strong> (formerly <code>%speed</code>).</td>
+              <td><span class="arg-pill">Slider 0.1–3.0x</span></td>
             </tr>
             <tr data-category="physics">
-              <td><code class="cmd-name">%bouncywalls</code></td>
-              <td><span class="arg-pill">[on|off]</span></td>
+              <td><code class="cmd-name">Bouncy Walls</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Toggles screen-edge bouncy walls (+10% bullet speed, +50% tank speed).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%bouncywalls on">Copy</button></td>
+              <td>Toggles screen-edge bouncy walls (+10% bullet speed, +50% tank bounce boost). Located in <strong>Physics &amp; Mechanics</strong> (formerly <code>%bouncywalls</code>).</td>
+              <td><span class="arg-pill">Toggle On/Off</span></td>
             </tr>
             <tr data-category="physics">
-              <td><code class="cmd-name">%terrain</code></td>
-              <td><span class="arg-pill">&lt;min%&gt; &lt;max%&gt;</span></td>
+              <td><code class="cmd-name">Terrain Climbing</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Sets vertical screen height percentage bounds for procedural hills, or <code>%terrain reset</code>.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%terrain 30 80">Copy</button></td>
+              <td>Controls whether tanks can scale steep cliffs and crater walls. When off, steep slopes block tank movement. Located in <strong>Physics &amp; Mechanics</strong> (formerly <code>%terrainclimb</code>).</td>
+              <td><span class="arg-pill">Toggle On/Off</span></td>
             </tr>
             <tr data-category="physics">
-              <td><code class="cmd-name">%terraincolor</code></td>
-              <td><span class="arg-pill">&lt;hex|preset&gt;</span></td>
+              <td><code class="cmd-name">Terrain Height Bounds</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Customizes neon terrain outline glow and subtle ground fill (presets: red, cyan, green, purple, orange, yellow, white, or hex e.g. <code>#00ffcc</code>; <code>%terraincolor reset</code> for default).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%terraincolor cyan">Copy</button></td>
+              <td>Configures vertical screen height percentage bounds for procedural terrain generation. Located in <strong>Physics &amp; Mechanics</strong> (formerly <code>%terrain</code>).</td>
+              <td><span class="arg-pill">Min/Max %</span></td>
             </tr>
-            <tr data-category="physics">
-              <td><code class="cmd-name">%terrainclimb</code></td>
-              <td><span class="arg-pill">[on|off]</span></td>
-              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Toggles whether tanks can scale steep cliffs and crater walls (default: <code>off</code> / blocked).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%terrainclimb on">Copy</button></td>
+
+            <!-- Theming & Layout -->
+            <tr data-category="visuals">
+              <td><code class="cmd-name">Leaderboard Layout</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
+              <td><span class="role-pill role-streamer">Streamer</span></td>
+              <td>Live positioning (X: 0–1920px, Y: 0–1080px) and scale (0.5x–2.0x) of the stream leaderboard overlay with real-time live preview and 4 corner presets. Located in <strong>Leaderboard Layout &amp; Scale</strong>.</td>
+              <td><span class="arg-pill">Sliders &amp; Presets</span></td>
             </tr>
-            <tr data-category="physics">
-              <td><code class="cmd-name">%tankcolor</code></td>
-              <td><span class="arg-pill">&lt;hex|preset&gt;</span></td>
+            <tr data-category="visuals">
+              <td><code class="cmd-name">Terrain Color</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Customizes neon tank tread outline glow (presets: red, cyan, green, purple, orange, yellow, white, or hex e.g. <code>#00ffcc</code>; <code>%tankcolor reset</code> for default).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%tankcolor purple">Copy</button></td>
+              <td>Customizes neon terrain outline glow and ambient ground fill using presets (cyan, red, green, purple, orange, yellow, white) or custom hex codes. Located in <strong>Visuals &amp; Theming</strong> (formerly <code>%terraincolor</code>).</td>
+              <td><span class="arg-pill">Color Picker / Hex</span></td>
+            </tr>
+            <tr data-category="visuals">
+              <td><code class="cmd-name">Tank Tread Color</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Customizes neon tank tread outline glow using presets or hex codes. Located in <strong>Visuals &amp; Theming</strong> (formerly <code>%tankcolor</code>).</td>
+              <td><span class="arg-pill">Color Picker / Hex</span></td>
+            </tr>
+            <tr data-category="visuals">
+              <td><code class="cmd-name">Aiming Protractor Pos</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
+              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
+              <td>Configures pixel coordinates of the giant on-screen aiming protractor with 2-second live preview. Located in <strong>Visuals &amp; Theming</strong> (formerly <code>%protractor</code>).</td>
+              <td><span class="arg-pill">X &amp; Y Inputs</span></td>
             </tr>
 
             <!-- Bot Management -->
             <tr data-category="bots">
-              <td><code class="cmd-name">%minplayers</code></td>
-              <td><span class="arg-pill">&lt;2 - 20&gt;</span></td>
+              <td><code class="cmd-name">Bot Pool Roster</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Sets minimum player threshold to auto-fill with bot combatants (default: <code>5</code>).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%minplayers 6">Copy</button></td>
+              <td>Manage named AI bot combatants saved in SQLite. Add custom bots or remove existing bots directly with 1-click buttons. Located in the dedicated <strong>Bot Pool Management</strong> card (formerly <code>%botlist</code>).</td>
+              <td><span class="arg-pill">Add / Remove UI</span></td>
             </tr>
             <tr data-category="bots">
-              <td><code class="cmd-name">%botfill</code></td>
-              <td><span class="arg-pill">[on|off]</span></td>
+              <td><code class="cmd-name">Bot Auto-Fill</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Toggles automatic bot filling up to the minimum player threshold (default: <code>on</code>).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%botfill on">Copy</button></td>
+              <td>Toggles whether AI bot combatants automatically spawn up to the minimum player threshold. Located in <strong>AI Bot Fill System</strong> (formerly <code>%botfill</code>).</td>
+              <td><span class="arg-pill">Toggle On/Off</span></td>
             </tr>
             <tr data-category="bots">
-              <td><code class="cmd-name">%botpoints</code></td>
-              <td><span class="arg-pill">&lt;0 - 10&gt;</span></td>
+              <td><code class="cmd-name">Min Player Threshold</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Configures leaderboard points awarded to human players for destroying an AI bot (default: <code>1</code>).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%botpoints 2">Copy</button></td>
+              <td>Sets the minimum player count (2 to 20) to fill with bots on match start (default: 5). Located in <strong>AI Bot Fill System</strong> (formerly <code>%minplayers</code>).</td>
+              <td><span class="arg-pill">Number Input</span></td>
             </tr>
             <tr data-category="bots">
-              <td><code class="cmd-name">%botlist</code></td>
-              <td><span class="arg-pill">&lt;add|remove|list&gt; [name]</span></td>
+              <td><code class="cmd-name">Bot Kill Points</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Manages the custom pool of named AI bot combatants stored in SQLite.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%botlist list">Copy</button></td>
+              <td>Configures leaderboard points awarded to human players for destroying an AI bot (0 to 10, default: 1). Located in <strong>AI Bot Fill System</strong> (formerly <code>%botpoints</code>).</td>
+              <td><span class="arg-pill">Number Input</span></td>
             </tr>
 
-            <!-- Moderation & Admin -->
+            <!-- Moderation & Data -->
             <tr data-category="admin">
-              <td><code class="cmd-name">%channel</code></td>
-              <td><span class="arg-pill">&lt;name|off&gt;</span></td>
+              <td><code class="cmd-name">Channel Link</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-streamer">Streamer</span></td>
-              <td>Sets the target Twitch channel, or switches to offline mode with <code>off</code>.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%channel ">Copy</button></td>
+              <td>Configures target Twitch channel for IRC chat and C&amp;C relay, or switches to local offline testing mode. Located in <strong>Twitch Channel Setup</strong> (formerly <code>%channel</code>).</td>
+              <td><span class="arg-pill">Text Input</span></td>
             </tr>
             <tr data-category="admin">
-              <td><code class="cmd-name">%claim</code></td>
-              <td><span class="arg-pill">&lt;code&gt;</span></td>
+              <td><code class="cmd-name">Command Prefix</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-streamer">Streamer</span></td>
-              <td>Authorizes and links your local game host to your Twitch channel via one-time challenge code.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%claim ">Copy</button></td>
+              <td>Customizes the chat command prefix (e.g. <code>!</code>, <code>$</code>, or <code>%</code>). Located in <strong>General Settings</strong> (formerly <code>%prefix</code>).</td>
+              <td><span class="arg-pill">Text Input</span></td>
             </tr>
             <tr data-category="admin">
-              <td><code class="cmd-name">%prefix</code></td>
-              <td><span class="arg-pill">&lt;str&gt;</span></td>
+              <td><code class="cmd-name">Role Permissions</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-streamer">Streamer</span></td>
-              <td>Customizes the command prefix for all chat triggers (e.g. <code>!</code> or <code>$</code>).</td>
-              <td><button class="btn-copy-cmd" data-cmd="%prefix !">Copy</button></td>
+              <td>Configures required roles for starting games and editing settings (broadcaster, mod, vip, sub, all). Located in <strong>General Settings</strong> (formerly <code>%perm</code>).</td>
+              <td><span class="arg-pill">Dropdown Select</span></td>
             </tr>
             <tr data-category="admin">
-              <td><code class="cmd-name">%perm</code></td>
-              <td><span class="arg-pill">&lt;start|config&gt; &lt;role&gt;</span></td>
-              <td><span class="role-pill role-streamer">Streamer</span></td>
-              <td>Configures role permissions for starting games or modifying settings. Accepted role parameters: <code>broadcaster</code> (streamer), <code>mod</code>, <code>vip</code>, <code>sub</code>, or <code>all</code>.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%perm start mod">Copy</button></td>
-            </tr>
-            <tr data-category="admin">
-              <td><code class="cmd-name">%kick</code></td>
-              <td><span class="arg-pill">&lt;username&gt;</span></td>
+              <td><code class="cmd-name">Delete Player Record</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Immediately removes a player from the active match, despawning their tank and projectiles.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%kick ">Copy</button></td>
+              <td>Removes an individual player entirely from the SQLite database and connected overlays via the red trash icon in the <strong>Stream Leaderboard</strong> table (formerly <code>%deleteplayer</code>).</td>
+              <td><span class="arg-pill">1-Click Delete</span></td>
             </tr>
             <tr data-category="admin">
-              <td><code class="cmd-name">%deleteplayer</code></td>
-              <td><span class="arg-pill">&lt;username&gt;</span></td>
-              <td><span class="role-pill role-mod">Streamer/Mod</span></td>
-              <td>Removes player entirely from the persistent SQLite leaderboard and active match.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%deleteplayer ">Copy</button></td>
-            </tr>
-            <tr data-category="admin">
-              <td><code class="cmd-name">%clearleaderboard</code></td>
-              <td><span class="arg-pill none">-</span></td>
+              <td><code class="cmd-name">Clear Leaderboard</code></td>
+              <td><span class="badge-admin-ui">Admin Console</span></td>
               <td><span class="role-pill role-streamer">Streamer</span></td>
-              <td>Resets all player win stats in the SQLite database and connected overlays.</td>
-              <td><button class="btn-copy-cmd" data-cmd="%clearleaderboard">Copy</button></td>
+              <td>Wipes all player win statistics and points in the SQLite database and connected overlays via the <strong>Clear All</strong> button with confirmation in <strong>Stream Leaderboard</strong> (formerly <code>%clearleaderboard</code>).</td>
+              <td><span class="arg-pill">1-Click Wipe</span></td>
             </tr>
           </tbody>
         </table>
