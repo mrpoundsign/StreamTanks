@@ -27,6 +27,12 @@ try {
     Remove-Item env:\GOOS -ErrorAction SilentlyContinue
     Remove-Item env:\GOARCH -ErrorAction SilentlyContinue
 
+    # Ensure CGo compiler is set for Fyne if zig is available
+    if (-not $env:CC -and (Get-Command "zig" -ErrorAction SilentlyContinue)) {
+        $env:CC = "zig cc"
+        $env:CGO_ENABLED = "1"
+    }
+
     # 1. Test & Build TypeScript Frontend
     if (-not $SkipFrontend) {
         Write-Step "Testing TypeScript frontend..."
@@ -82,6 +88,12 @@ try {
     & go build -o streamtanks.exe ./cmd/streamtanks
     if ($LASTEXITCODE -ne 0) { throw "Go build failed." }
     Write-Success "StreamTanks binary compiled: streamtanks.exe"
+
+    Write-Step "Compiling StreamTanks Client binary..."
+    & go build -o stclient.exe ./cmd/stclient
+    if ($LASTEXITCODE -ne 0) { throw "StreamTanks Client build failed." }
+    Write-Success "StreamTanks Client binary compiled: stclient.exe"
+
 
     Write-Host "`n==================================================" -ForegroundColor Green
     Write-Host " All build, test, and lint steps completed cleanly! " -ForegroundColor Green
