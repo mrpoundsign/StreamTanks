@@ -55,9 +55,15 @@ func main() {
 	http.Handle("/ws/host", hub.HandleHost(auth, claimMgr))
 	http.Handle("/ws/viewer", HandleViewer(hub, *twitchSecret, twitchClient))
 
+	deviceAuthMgr := NewDeviceAuthManager()
+
 	// Standalone client API endpoints
 	http.HandleFunc("/api/hosts", HandleGetHosts(hub))
 	http.HandleFunc("/api/auth/client", HandleClientAuth(secretBytes, twitchClient))
+	http.HandleFunc("/api/auth/device/code", HandleDeviceCode(deviceAuthMgr, ""))
+	http.HandleFunc("/api/auth/device/poll", HandleDevicePoll(deviceAuthMgr))
+	http.HandleFunc("/api/auth/device/approve", HandleDeviceApprove(deviceAuthMgr, secretBytes, twitchClient))
+	http.HandleFunc("/link", HandleLinkPage(*clientID))
 
 
 	// Serve the Twitch Extension frontend files on /ext/ with permissive CORS headers
