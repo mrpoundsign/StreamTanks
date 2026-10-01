@@ -57,6 +57,17 @@ func NewHub() *Hub {
 	}
 }
 
+// GetActiveHosts returns a list of all channels currently actively hosted
+func (h *Hub) GetActiveHosts() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	activeHosts := make([]string, 0, len(h.hosts))
+	for channel := range h.hosts {
+		activeHosts = append(activeHosts, channel)
+	}
+	return activeHosts
+}
+
 // RegisterHost registers the host connection for a channel.
 // If an existing host connection exists (e.g. from an abrupt disconnect or reconnect),
 // it is gracefully closed and replaced by the newly authenticated host connection.

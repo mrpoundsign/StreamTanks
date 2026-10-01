@@ -55,6 +55,11 @@ func main() {
 	http.Handle("/ws/host", hub.HandleHost(auth, claimMgr))
 	http.Handle("/ws/viewer", HandleViewer(hub, *twitchSecret, twitchClient))
 
+	// Standalone client API endpoints
+	http.HandleFunc("/api/hosts", HandleGetHosts(hub))
+	http.HandleFunc("/api/auth/client", HandleClientAuth(secretBytes, twitchClient))
+
+
 	// Serve the Twitch Extension frontend files on /ext/ with permissive CORS headers
 	var extFs http.FileSystem
 	if _, err := os.Stat("./ext-web/public"); err == nil {

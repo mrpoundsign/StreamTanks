@@ -164,3 +164,83 @@ func (c *TwitchAPIClient) GetUsername(userID string) (string, error) {
 
 	return username, nil
 }
+
+// TwitchTokenValidation represents the response payload from Twitch's token validation endpoint.
+type TwitchTokenValidation struct {
+	ClientID  string   `json:"client_id"`
+	Login     string   `json:"login"`
+	Scopes    []string `json:"scopes"`
+	UserID    string   `json:"user_id"`
+	ExpiresIn int      `json:"expires_in"`
+}
+
+// ValidateTwitchToken validates a Twitch User Access Token against the Twitch OAuth validation endpoint.
+func ValidateTwitchToken(accessToken string, validateURL string, client *http.Client) (*TwitchTokenValidation, error) {
+	if strings.TrimSpace(accessToken) == "" {
+		return nil, errors.New("access token cannot be empty")
+	}
+
+	if validateURL == "" {
+		validateURL = "https://id.twitch.tv/oauth2/validate"
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+
+	req, err := http.NewRequest("GET", validateURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "OAuth "+accessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query Twitch validation endpoint: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read validation response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("twitch token validation failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var val TwitchTokenValidation
+	if err := json.Unmarshal(bodyBytes, &val); err != nil {
+		return nil, fmt.Errorf("failed to parse validation response: %w", err)
+	}
+
+	if val.UserID == "" {
+		return nil, errors.New("validation response missing user_id")
+	}
+
+	return &val, nil
+}
+
+// SetCachedUsername manually stores a user ID to username mapping in the cache.
+func (c *TwitchAPIClient) SetCachedUsername(userID, username string) {
+	if c == nil {
+		return
+	}
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.usernameCache[userID] = username
+}
+
+// ValidateUserToken validates an access token and updates the internal username cache on success.
+func (c *TwitchAPIClient) ValidateUserToken(accessToken string) (*TwitchTokenValidation, error) {
+	val, err := ValidateTwitchToken(accessToken, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	if c != nil && val.UserID != "" && val.Login != "" {
+		c.SetCachedUsername(val.UserID, val.Login)
+	}
+	return val, nil
+}
+

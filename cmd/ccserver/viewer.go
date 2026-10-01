@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/net/websocket"
@@ -113,12 +114,26 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 			}
 
 			channelID := claims.ChannelID
-			if twitchClient != nil {
-				if name, err := twitchClient.GetUsername(channelID); err == nil {
-					channelID = name
-				} else {
-					log.Printf("Failed to resolve channel username for %s: %v", channelID, err)
+			if channelID == "" || channelID == "*" {
+				if req != nil {
+					channelID = strings.TrimSpace(req.URL.Query().Get("channel"))
 				}
+			}
+			if channelID == "" {
+				log.Printf("Viewer connection rejected: no channel specified in token or query param")
+				return
+			}
+
+			if isNumeric(channelID) {
+				if twitchClient != nil {
+					if name, err := twitchClient.GetUsername(channelID); err == nil {
+						channelID = name
+					} else {
+						log.Printf("Failed to resolve channel username for %s: %v", channelID, err)
+					}
+				}
+			} else {
+				channelID = strings.ToLower(channelID)
 			}
 
 			log.Printf("Viewer (twitch_id: %s, opaque: %s, name: %s, proto: %v) connected for channel %s", twitchUserID, claims.OpaqueUserID, viewerUsername, isProto, channelID)
@@ -237,3 +252,16 @@ func HandleViewer(hub *Hub, twitchSecret string, twitchClient *TwitchAPIClient) 
 		},
 	}
 }
+
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
