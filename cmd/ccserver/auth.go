@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // HostAuthenticator defines how a streamer's local instance proves they own a channel.
@@ -140,4 +142,19 @@ func (a *HMACAuthenticator) Authenticate(r *http.Request) (string, error) {
 	}
 
 	return channel, nil
+}
+
+// GenerateViewerToken generates a signed StreamTanks JWT for a viewer using the shared Twitch secret.
+func GenerateViewerToken(userID, username string, secretBytes []byte, expiration time.Duration) (string, error) {
+	now := time.Now()
+	claims := &ViewerClaims{
+		OpaqueUserID: "U" + userID,
+		UserID:       userID,
+		ChannelID:    "*",
+		Role:         "viewer",
+		ExpiresAt:    jwt.NewNumericDate(now.Add(expiration)),
+		IssuedAt:     jwt.NewNumericDate(now),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(secretBytes)
 }
