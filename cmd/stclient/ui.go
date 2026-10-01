@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	PrefJWT      = "jwt"
-	PrefUsername = "username"
-	PrefUserID   = "user_id"
-	PrefCCURL    = "cc_url"
+	PrefJWT         = "jwt"
+	PrefUsername    = "username"
+	PrefUserID      = "user_id"
+	PrefCCURL       = "cc_url"
+	PrefLastChannel = "last_channel"
 )
 
 // AppContext holds shared client state and window navigation
@@ -148,27 +149,82 @@ func (ctx *AppContext) makeDashboardView() fyne.CanvasObject {
 	userInfo := widget.NewLabelWithStyle("Twitch User ID: "+ctx.UserID, fyne.TextAlignCenter, fyne.TextStyle{})
 
 	hostsStatus := widget.NewLabel("Checking live channels...")
+	channelListContainer := container.NewVBox()
 
-	// Fetch active hosts in background
-	go func() {
-		hosts, err := ctx.CCClient.GetActiveHosts()
-		fyne.Do(func() {
-			if err != nil {
-				hostsStatus.SetText("C&C Relay: Unable to fetch live channels")
-				return
-			}
-			if len(hosts) == 0 {
-				hostsStatus.SetText("Live Channels: None currently active")
-			} else {
-				hostsStatus.SetText(fmt.Sprintf("Live Channels (%d): %s", len(hosts), strings.Join(hosts, ", ")))
-			}
-		})
-	}()
+	connectToChannel := func(ch string) {
+		clean := strings.ToLower(strings.TrimSpace(ch))
+		if clean == "" {
+			return
+		}
+		ctx.App.Preferences().SetString(PrefLastChannel, clean)
+		ctx.ShowGame(clean)
+	}
 
-	placeholderCard := widget.NewCard(
-		"Channel Lobby & Game Controller",
-		"Phase 3: Interactive Minimap & Protractor Aiming",
-		widget.NewLabel("You are successfully authenticated!\nPhase 3 will render the interactive game controls here."),
+	refreshChannels := func() {
+		hostsStatus.SetText("Refreshing live channels...")
+		channelListContainer.Objects = []fyne.CanvasObject{}
+		channelListContainer.Refresh()
+
+		go func() {
+			hosts, err := ctx.CCClient.GetActiveHosts()
+			fyne.Do(func() {
+				if err != nil {
+					hostsStatus.SetText("C&C Relay: Unable to fetch live channels")
+					return
+				}
+				if len(hosts) == 0 {
+					hostsStatus.SetText("Live Channels: None currently broadcasting")
+				} else {
+					hostsStatus.SetText(fmt.Sprintf("Live Channels Broadcasting (%d):", len(hosts)))
+					for _, h := range hosts {
+						targetHost := h
+						joinHostBtn := widget.NewButton("Join "+targetHost, func() {
+							connectToChannel(targetHost)
+						})
+						joinHostBtn.Importance = widget.HighImportance
+						channelListContainer.Add(joinHostBtn)
+					}
+					channelListContainer.Refresh()
+				}
+			})
+		}()
+	}
+
+	// Initial fetch
+	refreshChannels()
+
+	refreshBtn := widget.NewButton("Refresh Live Channels", refreshChannels)
+
+	// Direct channel input
+	channelEntry := widget.NewEntry()
+	channelEntry.SetPlaceHolder("Enter Twitch channel (e.g. octothorpebot)")
+	channelEntry.SetText(ctx.App.Preferences().String(PrefLastChannel))
+	channelEntry.OnSubmitted = func(text string) {
+		connectToChannel(text)
+	}
+
+	connectDirectBtn := widget.NewButton("Connect to Stream", func() {
+		connectToChannel(channelEntry.Text)
+	})
+	connectDirectBtn.Importance = widget.HighImportance
+
+	directCard := widget.NewCard(
+		"Watch & Play",
+		"Connect to the stream you are currently watching:",
+		container.NewVBox(
+			channelEntry,
+			connectDirectBtn,
+		),
+	)
+
+	liveCard := widget.NewCard(
+		"Broadcasting Channels",
+		"Active StreamTanks streams available now:",
+		container.NewVBox(
+			hostsStatus,
+			channelListContainer,
+			refreshBtn,
+		),
 	)
 
 	logoutBtn := widget.NewButton("Log Out", func() {
@@ -190,8 +246,8 @@ func (ctx *AppContext) makeDashboardView() fyne.CanvasObject {
 		welcome,
 		userInfo,
 		widget.NewSeparator(),
-		hostsStatus,
-		placeholderCard,
+		directCard,
+		liveCard,
 		layout.NewSpacer(),
 		logoutBtn,
 	)
