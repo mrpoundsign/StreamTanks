@@ -52,9 +52,91 @@ jobs:
           version: '~> v2'
           args: check
 
-  release:
-    name: Release Binaries (GoReleaser)
+  build-gui:
+    name: Build Desktop GUI (${{ matrix.target }})
     needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows
+            os: ubuntu-latest
+          - target: linux
+            os: ubuntu-latest
+          - target: macos
+            os: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - name: Cache fyne-cross binary
+        if: matrix.target != 'macos'
+        id: cache-fyne-cross
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/fyne-cross
+          key: ${{ runner.os }}-fyne-cross-bin-v2
+
+      - name: Install fyne-cross
+        if: matrix.target != 'macos' && steps.cache-fyne-cross.outputs.cache-hit != 'true'
+        run: go install github.com/fyne-io/fyne-cross@latest
+
+      - name: Cache fyne-cross build cache
+        if: matrix.target != 'macos'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fyne-cross
+          key: ${{ runner.os }}-fyne-cross-build-${{ matrix.target }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-fyne-cross-build-${{ matrix.target }}-
+
+      - name: Cross-Compile Desktop GUI for ${{ matrix.target }}
+        if: matrix.target != 'macos'
+        run: |
+          ~/go/bin/fyne-cross ${{ matrix.target }} -arch=amd64,arm64 -app-id=com.poundsigndesign.streamtanks.client -name=StreamTanksGameClient -icon=./assets/icon.png ./cmd/stclient
+
+      - name: Install fyne (macOS)
+        if: matrix.target == 'macos'
+        run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Build macOS GUI
+        if: matrix.target == 'macos'
+        run: |
+          ~/go/bin/fyne package -os darwin -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon ./assets/icon.png -src ./cmd/stclient
+
+      - name: Prepare GUI Packages
+        run: |
+          mkdir -p gui-dist
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [[ ! "$TAG" =~ ^v ]]; then
+            TAG="snapshot"
+          fi
+          if [ "${{ matrix.target }}" = "windows" ]; then
+            cp fyne-cross/dist/windows-amd64/StreamTanksGameClient.exe.zip "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.zip"
+            cp fyne-cross/dist/windows-arm64/StreamTanksGameClient.exe.zip "gui-dist/StreamTanksGameClient_${TAG}_windows_arm64.zip"
+          elif [ "${{ matrix.target }}" = "linux" ]; then
+            cp fyne-cross/dist/linux-amd64/StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
+            cp fyne-cross/dist/linux-arm64/StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_arm64.tar.xz"
+          elif [ "${{ matrix.target }}" = "macos" ]; then
+            zip -r "gui-dist/StreamTanksGameClient_${TAG}_darwin_all.zip" StreamTanksGameClient.app
+          fi
+
+      - name: Upload GUI Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-dist-${{ matrix.target }}
+          path: gui-dist/
+
+  release:
+    name: Release Binaries (GoReleaser + Client)
+    needs: [test, build-gui]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -83,6 +165,13 @@ jobs:
         run: |
           cd ext-web/public && zip -r ../../extension.zip *
 
+      - name: Download GUI Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gui-dist-*
+          path: gui-dist
+          merge-multiple: true
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -91,3 +180,14 @@ jobs:
           args: ${{ startsWith(github.ref, 'refs/tags/v') && 'release --clean' || 'release --clean --snapshot' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Checksums and Attach GUI to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd gui-dist
+          sha256sum * >> ../dist/checksums.txt
+          cd ..
+          sort -k2 -o dist/checksums.txt dist/checksums.txt
+          gh release upload ${{ github.ref_name }} gui-dist/* dist/checksums.txt --clobber

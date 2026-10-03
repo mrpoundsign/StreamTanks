@@ -4,6 +4,8 @@ import (
 	"flag"
 	"strings"
 
+	"streamtanks/assets"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 )
@@ -12,7 +14,9 @@ func main() {
 	ccURLFlag := flag.String("cc", "", "StreamTanks C&C Relay Server URL")
 	flag.Parse()
 
-	myApp := app.NewWithID("com.streamtanks.client")
+	myApp := app.NewWithID("com.poundsigndesign.streamtanks.client")
+	icon := assets.AppIcon()
+	myApp.SetIcon(icon)
 	myApp.Settings().SetTheme(&CyberpunkTheme{})
 
 	prefs := myApp.Preferences()
@@ -26,7 +30,8 @@ func main() {
 	ccClient := NewCCClient(ccURL)
 	authFlow := NewDeviceAuthFlow(ccClient)
 
-	win := myApp.NewWindow("StreamTanks")
+	win := myApp.NewWindow("StreamTanks Game Client")
+	win.SetIcon(icon)
 	win.Resize(fyne.NewSize(420, 680))
 
 	ctx := &AppContext{

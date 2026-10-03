@@ -35,12 +35,23 @@ StreamTanks/
 ├── cmd/
 │   ├── streamtanks/
 │   │   └── main.go       # CLI entrypoint, flag parsing, server bootstrap
-│   └── ccserver/         # Twitch Extension Command & Control (C&C) relay server
-│       ├── main.go       # C&C HTTP/WS entrypoint, static file server, health check
-│       ├── hub.go        # Broadcaster host connection pool, viewer hub & JSON/Protobuf bridge
-│       ├── auth.go       # Twitch extension HMAC/JWT authentication
-│       ├── claim.go      # Streamer claim & host registration manager
-│       └── viewer.go     # Viewer WebSocket handler & Twitch chat command dispatcher
+│   ├── ccserver/         # Twitch Extension Command & Control (C&C) relay server
+│   │   ├── main.go       # C&C HTTP/WS entrypoint, static file server, health check
+│   │   ├── hub.go        # Broadcaster host connection pool, viewer hub & Protobuf bridge
+│   │   ├── auth.go       # Twitch extension HMAC/JWT authentication
+│   │   ├── claim.go      # Streamer claim & host registration manager
+│   │   └── viewer.go     # Viewer WebSocket handler & Twitch chat command dispatcher
+│   └── stclient/         # StreamTanks Game Client (Fyne native desktop & mobile app)
+│       ├── main.go       # App entrypoint, window setup, theme and auth bootstrap
+│       ├── ui.go         # Dashboard, server browser, connection lifecycle
+│       ├── ui_game.go    # Game controller screen (minimap, protractor, firing controls)
+│       ├── minimap.go    # Terrain minimap canvas rendering & tank markers
+│       ├── protractor.go # Interactive angle aiming protractor widget
+│       ├── power_gauge.go# Interactive power adjustment gauge widget
+│       ├── theme.go      # Custom cyberpunk neon Fyne theme
+│       ├── api.go        # C&C REST API client (hosts list, Twitch OAuth device code flow)
+│       ├── auth.go       # Twitch device code auth flow & token persistence
+│       └── game_ws.go    # Viewer WebSocket Protobuf client & action dispatcher
 ├── internal/
 │   ├── proto/            # Generated Go Protobuf structs (internal/proto/streamtanks/v1/)
 │   └── app/              # Core backend engine & services
@@ -207,5 +218,30 @@ For the complete networking architecture, claim flow, and schema specifications,
   Packages `ext-web/public/*` into `dist/extension.zip`.
 - **Zip Structure**: All extension files (`video_overlay.html`, `mobile.html`, `config.html`, `ext.js`, `ext.css`) must reside directly at the **root of the `.zip`** (no enclosing directory).
 - **Twitch Review Human-Readability Requirement**: Twitch Extension review strictly forbids obfuscated code and requires readable JavaScript. Therefore, `npm run build` (without `--minify`) is used when bundling `ext.js` for extension review uploads.
+
+---
+
+## 8. StreamTanks Game Client & Multi-Platform Distribution
+
+### Overview
+`StreamTanks Game Client` (`cmd/stclient`) is a cross-platform native client built with [Fyne v2](https://fyne.io). It allows viewers and streamers to interact directly with StreamTanks matches without an open browser or Twitch chat tab.
+
+- **App ID**: `com.poundsigndesign.streamtanks.client`
+- **Icon**: Rounded cyberpunk neon squircle tile featuring a 45° angled rocket (`assets/icon.png`, `assets/icon.svg`).
+
+### Multi-Platform CI/CD Pipeline (`.github/workflows/release.yml`)
+Because Fyne requires `CGO_ENABLED=1` for OpenGL and OS windowing bindings, multi-platform builds run via a dedicated matrix job alongside GoReleaser:
+1. **Windows & Linux** (`ubuntu-latest`): Cross-compiled with `fyne-cross` using containerized MinGW / GCC toolchains (`amd64` and `arm64`).
+2. **macOS** (`macos-latest`): Built natively using `fyne package` for Universal Apple Silicon / Intel apps (`StreamTanksGameClient.app`).
+3. **Artifact Attachments**: Packaged archives (`.zip` for Windows/macOS, `.tar.xz` for Linux) are SHA-256 hashed into `dist/checksums.txt` and uploaded alongside the server binaries via `gh release upload`.
+
+### Client Configuration & Session Storage
+The client persists Twitch session tokens, usernames, and recent settings using Fyne preferences stored per App ID (`com.poundsigndesign.streamtanks.client`):
+- **Windows**: `%APPDATA%\fyne\com.poundsigndesign.streamtanks.client\preferences.json`
+- **macOS**: `~/Library/Application Support/fyne/com.poundsigndesign.streamtanks.client/preferences.json`
+- **Linux**: `~/.config/fyne/com.poundsigndesign.streamtanks.client/preferences.json`
+- **Android**: Android SharedPreferences private storage.
+
+
 
 

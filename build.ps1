@@ -90,9 +90,10 @@ try {
     Write-Success "StreamTanks binary compiled: streamtanks.exe"
 
     Write-Step "Compiling StreamTanks Client binary..."
-    & go build -o stclient.exe ./cmd/stclient
+    & go build -o StreamTanksGameClient.exe ./cmd/stclient
     if ($LASTEXITCODE -ne 0) { throw "StreamTanks Client build failed." }
-    Write-Success "StreamTanks Client binary compiled: stclient.exe"
+    Copy-Item StreamTanksGameClient.exe stclient.exe -Force
+    Write-Success "StreamTanks Client binary compiled: StreamTanksGameClient.exe (stclient.exe)"
 
 
     Write-Host "`n==================================================" -ForegroundColor Green
