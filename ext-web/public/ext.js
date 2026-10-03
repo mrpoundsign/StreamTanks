@@ -3312,9 +3312,10 @@
   }
 
   // ext-web/src/proto/streamtanks/v1/game_pb.ts
-  var file_streamtanks_v1_game = /* @__PURE__ */ fileDesc("ChlzdHJlYW10YW5rcy92MS9nYW1lLnByb3RvEg5zdHJlYW10YW5rcy52MSKnAQoJVGFua1N0YXRlEgoKAmlkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEgkKAXgYAyABKAISCQoBeRgEIAEoAhINCgVhbmdsZRgFIAEoAhIOCgZoZWFsdGgYBiABKAUSDgoGaXNfYm90GAcgASgIEg0KBWNvbG9yGAggASgJEhMKC2lzX3NoaWVsZGVkGAkgASgIEhMKC3NoaWVsZF91c2VkGAogASgIIvcCCgtWaWV3ZXJTdGF0ZRINCgVwaGFzZRgBIAEoCRIXCg90aW1lcl9yZW1haW5pbmcYAiABKAUSEAoIcm91bmRfaWQYAyABKAMSDgoGd2lubmVyGAQgASgJEhUKDXBsYXllcnNfY291bnQYBSABKAUSDwoHcGxheWVycxgGIAMoCRIUCgxwcm90cmFjdG9yX3gYByABKAUSFAoMcHJvdHJhY3Rvcl95GAggASgFEhEKCWNhbl9zdGFydBgJIAEoCBIQCghjYW5fam9pbhgKIAEoCBIWCg5qb2luZWRfcGxheWVycxgLIAMoCRIXCg9sZWF2aW5nX3BsYXllcnMYDCADKAkSGwoTc2hpZWxkX3VzZWRfcGxheWVycxgNIAMoCRIYChBzaGllbGRlZF9wbGF5ZXJzGA4gAygJEhMKB3RlcnJhaW4YDyADKAVCAhABEigKBXRhbmtzGBAgAygLMhkuc3RyZWFtdGFua3MudjEuVGFua1N0YXRlImUKDVZpZXdlckNvbnRleHQSEAoIdXNlcm5hbWUYASABKAkSEgoKY2hhbm5lbF9pZBgCIAEoCRIWCg5vcGFxdWVfdXNlcl9pZBgDIAEoCRIWCg50d2l0Y2hfdXNlcl9pZBgEIAEoCSKAAQoTVmlld2VyU2VydmVyTWVzc2FnZRIsCgVzdGF0ZRgBIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlZpZXdlclN0YXRlSAASMAoHY29udGV4dBgCIAEoCzIdLnN0cmVhbXRhbmtzLnYxLlZpZXdlckNvbnRleHRIAEIJCgdwYXlsb2FkIiAKEVZpZXdlckF1dGhNZXNzYWdlEgsKA2p3dBgBIAEoCSIqCgpGaXJlQWN0aW9uEg0KBWFuZ2xlGAEgASgCEg0KBXBvd2VyGAIgASgCIpYBCgpNb3ZlQWN0aW9uEjcKCWRpcmVjdGlvbhgBIAEoDjIkLnN0cmVhbXRhbmtzLnYxLk1vdmVBY3Rpb24uRGlyZWN0aW9uIk8KCURpcmVjdGlvbhIZChVESVJFQ1RJT05fVU5TUEVDSUZJRUQQABISCg5ESVJFQ1RJT05fTEVGVBABEhMKD0RJUkVDVElPTl9SSUdIVBACIg4KDFNoaWVsZEFjdGlvbiIbCgpKb2luQWN0aW9uEg0KBWVtb3RlGAEgASgJIg0KC0xlYXZlQWN0aW9uIhIKEFN0YXJ0TWF0Y2hBY3Rpb24iugIKE1ZpZXdlckFjdGlvbk1lc3NhZ2USKgoEZmlyZRgBIAEoCzIaLnN0cmVhbXRhbmtzLnYxLkZpcmVBY3Rpb25IABIqCgRtb3ZlGAIgASgLMhouc3RyZWFtdGFua3MudjEuTW92ZUFjdGlvbkgAEi4KBnNoaWVsZBgDIAEoCzIcLnN0cmVhbXRhbmtzLnYxLlNoaWVsZEFjdGlvbkgAEioKBGpvaW4YBCABKAsyGi5zdHJlYW10YW5rcy52MS5Kb2luQWN0aW9uSAASLAoFbGVhdmUYBSABKAsyGy5zdHJlYW10YW5rcy52MS5MZWF2ZUFjdGlvbkgAEjcKC3N0YXJ0X21hdGNoGAYgASgLMiAuc3RyZWFtdGFua3MudjEuU3RhcnRNYXRjaEFjdGlvbkgAQggKBmFjdGlvbkI7WjlzdHJlYW10YW5rcy9pbnRlcm5hbC9wcm90by9zdHJlYW10YW5rcy92MTtzdHJlYW10YW5rc3BidjFiBnByb3RvMw");
-  var ViewerServerMessageSchema = /* @__PURE__ */ messageDesc(file_streamtanks_v1_game, 3);
-  var ViewerActionMessageSchema = /* @__PURE__ */ messageDesc(file_streamtanks_v1_game, 11);
+  var file_streamtanks_v1_game = /* @__PURE__ */ fileDesc("ChlzdHJlYW10YW5rcy92MS9nYW1lLnByb3RvEg5zdHJlYW10YW5rcy52MSKnAQoJVGFua1N0YXRlEgoKAmlkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEgkKAXgYAyABKAISCQoBeRgEIAEoAhINCgVhbmdsZRgFIAEoAhIOCgZoZWFsdGgYBiABKAUSDgoGaXNfYm90GAcgASgIEg0KBWNvbG9yGAggASgJEhMKC2lzX3NoaWVsZGVkGAkgASgIEhMKC3NoaWVsZF91c2VkGAogASgIIvcCCgtWaWV3ZXJTdGF0ZRINCgVwaGFzZRgBIAEoCRIXCg90aW1lcl9yZW1haW5pbmcYAiABKAUSEAoIcm91bmRfaWQYAyABKAMSDgoGd2lubmVyGAQgASgJEhUKDXBsYXllcnNfY291bnQYBSABKAUSDwoHcGxheWVycxgGIAMoCRIUCgxwcm90cmFjdG9yX3gYByABKAUSFAoMcHJvdHJhY3Rvcl95GAggASgFEhEKCWNhbl9zdGFydBgJIAEoCBIQCghjYW5fam9pbhgKIAEoCBIWCg5qb2luZWRfcGxheWVycxgLIAMoCRIXCg9sZWF2aW5nX3BsYXllcnMYDCADKAkSGwoTc2hpZWxkX3VzZWRfcGxheWVycxgNIAMoCRIYChBzaGllbGRlZF9wbGF5ZXJzGA4gAygJEhMKB3RlcnJhaW4YDyADKAVCAhABEigKBXRhbmtzGBAgAygLMhkuc3RyZWFtdGFua3MudjEuVGFua1N0YXRlIiAKC1BpbmdNZXNzYWdlEhEKCXRpbWVzdGFtcBgBIAEoAyIgCgtQb25nTWVzc2FnZRIRCgl0aW1lc3RhbXAYASABKAMicwoNVmlld2VyQ29udGV4dBIQCgh1c2VybmFtZRgBIAEoCRISCgpjaGFubmVsX2lkGAIgASgJEhYKDm9wYXF1ZV91c2VyX2lkGAMgASgJEhYKDnR3aXRjaF91c2VyX2lkGAQgASgJEgwKBHJvbGUYBSABKAki2gEKE1ZpZXdlclNlcnZlck1lc3NhZ2USLAoFc3RhdGUYASABKAsyGy5zdHJlYW10YW5rcy52MS5WaWV3ZXJTdGF0ZUgAEjAKB2NvbnRleHQYAiABKAsyHS5zdHJlYW10YW5rcy52MS5WaWV3ZXJDb250ZXh0SAASKwoEcGluZxgDIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBpbmdNZXNzYWdlSAASKwoEcG9uZxgEIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBvbmdNZXNzYWdlSABCCQoHcGF5bG9hZCIgChFWaWV3ZXJBdXRoTWVzc2FnZRILCgNqd3QYASABKAkiKgoKRmlyZUFjdGlvbhINCgVhbmdsZRgBIAEoAhINCgVwb3dlchgCIAEoAiKWAQoKTW92ZUFjdGlvbhI3CglkaXJlY3Rpb24YASABKA4yJC5zdHJlYW10YW5rcy52MS5Nb3ZlQWN0aW9uLkRpcmVjdGlvbiJPCglEaXJlY3Rpb24SGQoVRElSRUNUSU9OX1VOU1BFQ0lGSUVEEAASEgoORElSRUNUSU9OX0xFRlQQARITCg9ESVJFQ1RJT05fUklHSFQQAiIOCgxTaGllbGRBY3Rpb24iGwoKSm9pbkFjdGlvbhINCgVlbW90ZRgBIAEoCSINCgtMZWF2ZUFjdGlvbiISChBTdGFydE1hdGNoQWN0aW9uIpQDChNWaWV3ZXJBY3Rpb25NZXNzYWdlEioKBGZpcmUYASABKAsyGi5zdHJlYW10YW5rcy52MS5GaXJlQWN0aW9uSAASKgoEbW92ZRgCIAEoCzIaLnN0cmVhbXRhbmtzLnYxLk1vdmVBY3Rpb25IABIuCgZzaGllbGQYAyABKAsyHC5zdHJlYW10YW5rcy52MS5TaGllbGRBY3Rpb25IABIqCgRqb2luGAQgASgLMhouc3RyZWFtdGFua3MudjEuSm9pbkFjdGlvbkgAEiwKBWxlYXZlGAUgASgLMhsuc3RyZWFtdGFua3MudjEuTGVhdmVBY3Rpb25IABI3CgtzdGFydF9tYXRjaBgGIAEoCzIgLnN0cmVhbXRhbmtzLnYxLlN0YXJ0TWF0Y2hBY3Rpb25IABIrCgRwaW5nGAcgASgLMhsuc3RyZWFtdGFua3MudjEuUGluZ01lc3NhZ2VIABIrCgRwb25nGAggASgLMhsuc3RyZWFtdGFua3MudjEuUG9uZ01lc3NhZ2VIAEIICgZhY3Rpb24iVwoRSG9zdEF1dGhDaGFsbGVuZ2USDwoHY2hhbm5lbBgBIAEoCRIMCgRjb2RlGAIgASgJEg8KB2NvbW1hbmQYAyABKAkSEgoKZXhwaXJlc19pbhgEIAEoBSIxCg9Ib3N0QXV0aFN1Y2Nlc3MSDwoHY2hhbm5lbBgBIAEoCRINCgV0b2tlbhgCIAEoCSI+CgtIb3N0V2FybmluZxINCgVldmVudBgBIAEoCRIPCgdjaGFubmVsGAIgASgJEg8KB21lc3NhZ2UYAyABKAkiIAoNSG9zdEF1dGhFcnJvchIPCgdtZXNzYWdlGAEgASgJInkKC0hvc3RDb21tYW5kEgwKBHVzZXIYASABKAkSFgoOdHdpdGNoX3VzZXJfaWQYAiABKAkSDwoHY29tbWFuZBgDIAEoCRIzCgZhY3Rpb24YBCABKAsyIy5zdHJlYW10YW5rcy52MS5WaWV3ZXJBY3Rpb25NZXNzYWdlIvQCChFIb3N0U2VydmVyTWVzc2FnZRI2CgljaGFsbGVuZ2UYASABKAsyIS5zdHJlYW10YW5rcy52MS5Ib3N0QXV0aENoYWxsZW5nZUgAEjIKB3N1Y2Nlc3MYAiABKAsyHy5zdHJlYW10YW5rcy52MS5Ib3N0QXV0aFN1Y2Nlc3NIABIuCgd3YXJuaW5nGAMgASgLMhsuc3RyZWFtdGFua3MudjEuSG9zdFdhcm5pbmdIABIuCgVlcnJvchgEIAEoCzIdLnN0cmVhbXRhbmtzLnYxLkhvc3RBdXRoRXJyb3JIABIuCgdjb21tYW5kGAUgASgLMhsuc3RyZWFtdGFua3MudjEuSG9zdENvbW1hbmRIABIrCgRwaW5nGAYgASgLMhsuc3RyZWFtdGFua3MudjEuUGluZ01lc3NhZ2VIABIrCgRwb25nGAcgASgLMhsuc3RyZWFtdGFua3MudjEuUG9uZ01lc3NhZ2VIAEIJCgdwYXlsb2FkIqYBChFIb3N0Q2xpZW50TWVzc2FnZRIsCgVzdGF0ZRgBIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlZpZXdlclN0YXRlSAASKwoEcGluZxgCIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBpbmdNZXNzYWdlSAASKwoEcG9uZxgDIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBvbmdNZXNzYWdlSABCCQoHcGF5bG9hZEI7WjlzdHJlYW10YW5rcy9pbnRlcm5hbC9wcm90by9zdHJlYW10YW5rcy92MTtzdHJlYW10YW5rc3BidjFiBnByb3RvMw");
+  var ViewerServerMessageSchema = /* @__PURE__ */ messageDesc(file_streamtanks_v1_game, 5);
+  var ViewerAuthMessageSchema = /* @__PURE__ */ messageDesc(file_streamtanks_v1_game, 6);
+  var ViewerActionMessageSchema = /* @__PURE__ */ messageDesc(file_streamtanks_v1_game, 13);
 
   // ext-web/src/ext.ts
   var CC_SERVER_URL = "wss://st-cc.poundsigndesign.com/ws/viewer";
@@ -4112,12 +4113,18 @@
     ws.onopen = () => {
       logMessage("Connected!");
       if (!isLocalDev2) {
-        ws.send(JSON.stringify({ jwt: viewerToken }));
+        const authMsg = create(ViewerAuthMessageSchema, { jwt: viewerToken });
+        const authBytes = toBinary(ViewerAuthMessageSchema, authMsg);
+        ws.send(authBytes);
       }
       if (pingInterval) clearInterval(pingInterval);
       pingInterval = window.setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "PING" }));
+        if (ws && ws.readyState === WebSocket.OPEN && !isLocalDev2) {
+          const pingMsg = create(ViewerActionMessageSchema, {
+            action: { case: "ping", value: { timestamp: BigInt(Date.now()) } }
+          });
+          const bytes = toBinary(ViewerActionMessageSchema, pingMsg);
+          ws.send(bytes);
         }
       }, 45e3);
       updateUIForPhase("IDLE");
@@ -4143,6 +4150,12 @@
             updateUIForPhase(currentPhaseStr, localTimerRemaining);
           } else if (serverMsg.payload.case === "state") {
             handleViewerStateUpdate(serverMsg.payload.value);
+          } else if (serverMsg.payload.case === "ping") {
+            const pongMsg = create(ViewerActionMessageSchema, {
+              action: { case: "pong", value: { timestamp: serverMsg.payload.value.timestamp } }
+            });
+            const pongBytes = toBinary(ViewerActionMessageSchema, pongMsg);
+            ws?.send(pongBytes);
           }
           return;
         }

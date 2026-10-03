@@ -5,6 +5,7 @@ import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
     ViewerServerMessageSchema,
     ViewerActionMessageSchema,
+    ViewerAuthMessageSchema,
     MoveAction_Direction,
     type TankState
 } from "./proto/streamtanks/v1/game_pb";
@@ -903,14 +904,20 @@ function connectWebSocket() {
 
         // Send the initial auth payload expected by the server
         if (!isLocalDev) {
-            ws!.send(JSON.stringify({ jwt: viewerToken }));
+            const authMsg = create(ViewerAuthMessageSchema, { jwt: viewerToken });
+            const authBytes = toBinary(ViewerAuthMessageSchema, authMsg);
+            ws!.send(authBytes);
         }
 
         // Start heartbeat ping
         if (pingInterval) clearInterval(pingInterval);
         pingInterval = window.setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "PING" }));
+            if (ws && ws.readyState === WebSocket.OPEN && !isLocalDev) {
+                const pingMsg = create(ViewerActionMessageSchema, {
+                    action: { case: "ping", value: { timestamp: BigInt(Date.now()) } }
+                });
+                const bytes = toBinary(ViewerActionMessageSchema, pingMsg);
+                ws.send(bytes);
             }
         }, 45000);
 
@@ -941,6 +948,12 @@ function connectWebSocket() {
                     updateUIForPhase(currentPhaseStr, localTimerRemaining);
                 } else if (serverMsg.payload.case === "state") {
                     handleViewerStateUpdate(serverMsg.payload.value);
+                } else if (serverMsg.payload.case === "ping") {
+                    const pongMsg = create(ViewerActionMessageSchema, {
+                        action: { case: "pong", value: { timestamp: serverMsg.payload.value.timestamp } }
+                    });
+                    const pongBytes = toBinary(ViewerActionMessageSchema, pongMsg);
+                    ws?.send(pongBytes);
                 }
                 return;
             }

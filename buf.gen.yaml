@@ -3,6 +3,8 @@ plugins:
   - local: protoc-gen-go
     out: internal/proto
     opt: paths=source_relative
-  - local: node_modules/.bin/protoc-gen-es
+  - local:
+      - node
+      - node_modules/@bufbuild/protoc-gen-es/bin/protoc-gen-es
     out: ext-web/src/proto
     opt: target=ts

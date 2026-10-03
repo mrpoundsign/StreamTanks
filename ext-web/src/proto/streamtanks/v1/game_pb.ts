@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file streamtanks/v1/game.proto.
  */
 export const file_streamtanks_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChlzdHJlYW10YW5rcy92MS9nYW1lLnByb3RvEg5zdHJlYW10YW5rcy52MSKnAQoJVGFua1N0YXRlEgoKAmlkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEgkKAXgYAyABKAISCQoBeRgEIAEoAhINCgVhbmdsZRgFIAEoAhIOCgZoZWFsdGgYBiABKAUSDgoGaXNfYm90GAcgASgIEg0KBWNvbG9yGAggASgJEhMKC2lzX3NoaWVsZGVkGAkgASgIEhMKC3NoaWVsZF91c2VkGAogASgIIvcCCgtWaWV3ZXJTdGF0ZRINCgVwaGFzZRgBIAEoCRIXCg90aW1lcl9yZW1haW5pbmcYAiABKAUSEAoIcm91bmRfaWQYAyABKAMSDgoGd2lubmVyGAQgASgJEhUKDXBsYXllcnNfY291bnQYBSABKAUSDwoHcGxheWVycxgGIAMoCRIUCgxwcm90cmFjdG9yX3gYByABKAUSFAoMcHJvdHJhY3Rvcl95GAggASgFEhEKCWNhbl9zdGFydBgJIAEoCBIQCghjYW5fam9pbhgKIAEoCBIWCg5qb2luZWRfcGxheWVycxgLIAMoCRIXCg9sZWF2aW5nX3BsYXllcnMYDCADKAkSGwoTc2hpZWxkX3VzZWRfcGxheWVycxgNIAMoCRIYChBzaGllbGRlZF9wbGF5ZXJzGA4gAygJEhMKB3RlcnJhaW4YDyADKAVCAhABEigKBXRhbmtzGBAgAygLMhkuc3RyZWFtdGFua3MudjEuVGFua1N0YXRlImUKDVZpZXdlckNvbnRleHQSEAoIdXNlcm5hbWUYASABKAkSEgoKY2hhbm5lbF9pZBgCIAEoCRIWCg5vcGFxdWVfdXNlcl9pZBgDIAEoCRIWCg50d2l0Y2hfdXNlcl9pZBgEIAEoCSKAAQoTVmlld2VyU2VydmVyTWVzc2FnZRIsCgVzdGF0ZRgBIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlZpZXdlclN0YXRlSAASMAoHY29udGV4dBgCIAEoCzIdLnN0cmVhbXRhbmtzLnYxLlZpZXdlckNvbnRleHRIAEIJCgdwYXlsb2FkIiAKEVZpZXdlckF1dGhNZXNzYWdlEgsKA2p3dBgBIAEoCSIqCgpGaXJlQWN0aW9uEg0KBWFuZ2xlGAEgASgCEg0KBXBvd2VyGAIgASgCIpYBCgpNb3ZlQWN0aW9uEjcKCWRpcmVjdGlvbhgBIAEoDjIkLnN0cmVhbXRhbmtzLnYxLk1vdmVBY3Rpb24uRGlyZWN0aW9uIk8KCURpcmVjdGlvbhIZChVESVJFQ1RJT05fVU5TUEVDSUZJRUQQABISCg5ESVJFQ1RJT05fTEVGVBABEhMKD0RJUkVDVElPTl9SSUdIVBACIg4KDFNoaWVsZEFjdGlvbiIbCgpKb2luQWN0aW9uEg0KBWVtb3RlGAEgASgJIg0KC0xlYXZlQWN0aW9uIhIKEFN0YXJ0TWF0Y2hBY3Rpb24iugIKE1ZpZXdlckFjdGlvbk1lc3NhZ2USKgoEZmlyZRgBIAEoCzIaLnN0cmVhbXRhbmtzLnYxLkZpcmVBY3Rpb25IABIqCgRtb3ZlGAIgASgLMhouc3RyZWFtdGFua3MudjEuTW92ZUFjdGlvbkgAEi4KBnNoaWVsZBgDIAEoCzIcLnN0cmVhbXRhbmtzLnYxLlNoaWVsZEFjdGlvbkgAEioKBGpvaW4YBCABKAsyGi5zdHJlYW10YW5rcy52MS5Kb2luQWN0aW9uSAASLAoFbGVhdmUYBSABKAsyGy5zdHJlYW10YW5rcy52MS5MZWF2ZUFjdGlvbkgAEjcKC3N0YXJ0X21hdGNoGAYgASgLMiAuc3RyZWFtdGFua3MudjEuU3RhcnRNYXRjaEFjdGlvbkgAQggKBmFjdGlvbkI7WjlzdHJlYW10YW5rcy9pbnRlcm5hbC9wcm90by9zdHJlYW10YW5rcy92MTtzdHJlYW10YW5rc3BidjFiBnByb3RvMw");
+  fileDesc("ChlzdHJlYW10YW5rcy92MS9nYW1lLnByb3RvEg5zdHJlYW10YW5rcy52MSKnAQoJVGFua1N0YXRlEgoKAmlkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEgkKAXgYAyABKAISCQoBeRgEIAEoAhINCgVhbmdsZRgFIAEoAhIOCgZoZWFsdGgYBiABKAUSDgoGaXNfYm90GAcgASgIEg0KBWNvbG9yGAggASgJEhMKC2lzX3NoaWVsZGVkGAkgASgIEhMKC3NoaWVsZF91c2VkGAogASgIIvcCCgtWaWV3ZXJTdGF0ZRINCgVwaGFzZRgBIAEoCRIXCg90aW1lcl9yZW1haW5pbmcYAiABKAUSEAoIcm91bmRfaWQYAyABKAMSDgoGd2lubmVyGAQgASgJEhUKDXBsYXllcnNfY291bnQYBSABKAUSDwoHcGxheWVycxgGIAMoCRIUCgxwcm90cmFjdG9yX3gYByABKAUSFAoMcHJvdHJhY3Rvcl95GAggASgFEhEKCWNhbl9zdGFydBgJIAEoCBIQCghjYW5fam9pbhgKIAEoCBIWCg5qb2luZWRfcGxheWVycxgLIAMoCRIXCg9sZWF2aW5nX3BsYXllcnMYDCADKAkSGwoTc2hpZWxkX3VzZWRfcGxheWVycxgNIAMoCRIYChBzaGllbGRlZF9wbGF5ZXJzGA4gAygJEhMKB3RlcnJhaW4YDyADKAVCAhABEigKBXRhbmtzGBAgAygLMhkuc3RyZWFtdGFua3MudjEuVGFua1N0YXRlIiAKC1BpbmdNZXNzYWdlEhEKCXRpbWVzdGFtcBgBIAEoAyIgCgtQb25nTWVzc2FnZRIRCgl0aW1lc3RhbXAYASABKAMicwoNVmlld2VyQ29udGV4dBIQCgh1c2VybmFtZRgBIAEoCRISCgpjaGFubmVsX2lkGAIgASgJEhYKDm9wYXF1ZV91c2VyX2lkGAMgASgJEhYKDnR3aXRjaF91c2VyX2lkGAQgASgJEgwKBHJvbGUYBSABKAki2gEKE1ZpZXdlclNlcnZlck1lc3NhZ2USLAoFc3RhdGUYASABKAsyGy5zdHJlYW10YW5rcy52MS5WaWV3ZXJTdGF0ZUgAEjAKB2NvbnRleHQYAiABKAsyHS5zdHJlYW10YW5rcy52MS5WaWV3ZXJDb250ZXh0SAASKwoEcGluZxgDIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBpbmdNZXNzYWdlSAASKwoEcG9uZxgEIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBvbmdNZXNzYWdlSABCCQoHcGF5bG9hZCIgChFWaWV3ZXJBdXRoTWVzc2FnZRILCgNqd3QYASABKAkiKgoKRmlyZUFjdGlvbhINCgVhbmdsZRgBIAEoAhINCgVwb3dlchgCIAEoAiKWAQoKTW92ZUFjdGlvbhI3CglkaXJlY3Rpb24YASABKA4yJC5zdHJlYW10YW5rcy52MS5Nb3ZlQWN0aW9uLkRpcmVjdGlvbiJPCglEaXJlY3Rpb24SGQoVRElSRUNUSU9OX1VOU1BFQ0lGSUVEEAASEgoORElSRUNUSU9OX0xFRlQQARITCg9ESVJFQ1RJT05fUklHSFQQAiIOCgxTaGllbGRBY3Rpb24iGwoKSm9pbkFjdGlvbhINCgVlbW90ZRgBIAEoCSINCgtMZWF2ZUFjdGlvbiISChBTdGFydE1hdGNoQWN0aW9uIpQDChNWaWV3ZXJBY3Rpb25NZXNzYWdlEioKBGZpcmUYASABKAsyGi5zdHJlYW10YW5rcy52MS5GaXJlQWN0aW9uSAASKgoEbW92ZRgCIAEoCzIaLnN0cmVhbXRhbmtzLnYxLk1vdmVBY3Rpb25IABIuCgZzaGllbGQYAyABKAsyHC5zdHJlYW10YW5rcy52MS5TaGllbGRBY3Rpb25IABIqCgRqb2luGAQgASgLMhouc3RyZWFtdGFua3MudjEuSm9pbkFjdGlvbkgAEiwKBWxlYXZlGAUgASgLMhsuc3RyZWFtdGFua3MudjEuTGVhdmVBY3Rpb25IABI3CgtzdGFydF9tYXRjaBgGIAEoCzIgLnN0cmVhbXRhbmtzLnYxLlN0YXJ0TWF0Y2hBY3Rpb25IABIrCgRwaW5nGAcgASgLMhsuc3RyZWFtdGFua3MudjEuUGluZ01lc3NhZ2VIABIrCgRwb25nGAggASgLMhsuc3RyZWFtdGFua3MudjEuUG9uZ01lc3NhZ2VIAEIICgZhY3Rpb24iVwoRSG9zdEF1dGhDaGFsbGVuZ2USDwoHY2hhbm5lbBgBIAEoCRIMCgRjb2RlGAIgASgJEg8KB2NvbW1hbmQYAyABKAkSEgoKZXhwaXJlc19pbhgEIAEoBSIxCg9Ib3N0QXV0aFN1Y2Nlc3MSDwoHY2hhbm5lbBgBIAEoCRINCgV0b2tlbhgCIAEoCSI+CgtIb3N0V2FybmluZxINCgVldmVudBgBIAEoCRIPCgdjaGFubmVsGAIgASgJEg8KB21lc3NhZ2UYAyABKAkiIAoNSG9zdEF1dGhFcnJvchIPCgdtZXNzYWdlGAEgASgJInkKC0hvc3RDb21tYW5kEgwKBHVzZXIYASABKAkSFgoOdHdpdGNoX3VzZXJfaWQYAiABKAkSDwoHY29tbWFuZBgDIAEoCRIzCgZhY3Rpb24YBCABKAsyIy5zdHJlYW10YW5rcy52MS5WaWV3ZXJBY3Rpb25NZXNzYWdlIvQCChFIb3N0U2VydmVyTWVzc2FnZRI2CgljaGFsbGVuZ2UYASABKAsyIS5zdHJlYW10YW5rcy52MS5Ib3N0QXV0aENoYWxsZW5nZUgAEjIKB3N1Y2Nlc3MYAiABKAsyHy5zdHJlYW10YW5rcy52MS5Ib3N0QXV0aFN1Y2Nlc3NIABIuCgd3YXJuaW5nGAMgASgLMhsuc3RyZWFtdGFua3MudjEuSG9zdFdhcm5pbmdIABIuCgVlcnJvchgEIAEoCzIdLnN0cmVhbXRhbmtzLnYxLkhvc3RBdXRoRXJyb3JIABIuCgdjb21tYW5kGAUgASgLMhsuc3RyZWFtdGFua3MudjEuSG9zdENvbW1hbmRIABIrCgRwaW5nGAYgASgLMhsuc3RyZWFtdGFua3MudjEuUGluZ01lc3NhZ2VIABIrCgRwb25nGAcgASgLMhsuc3RyZWFtdGFua3MudjEuUG9uZ01lc3NhZ2VIAEIJCgdwYXlsb2FkIqYBChFIb3N0Q2xpZW50TWVzc2FnZRIsCgVzdGF0ZRgBIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlZpZXdlclN0YXRlSAASKwoEcGluZxgCIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBpbmdNZXNzYWdlSAASKwoEcG9uZxgDIAEoCzIbLnN0cmVhbXRhbmtzLnYxLlBvbmdNZXNzYWdlSABCCQoHcGF5bG9hZEI7WjlzdHJlYW10YW5rcy9pbnRlcm5hbC9wcm90by9zdHJlYW10YW5rcy92MTtzdHJlYW10YW5rc3BidjFiBnByb3RvMw");
 
 /**
  * TankState represents the visual and gameplay state of an individual tank.
@@ -173,6 +173,44 @@ export const ViewerStateSchema: GenMessage<ViewerState> = /*@__PURE__*/
   messageDesc(file_streamtanks_v1_game, 1);
 
 /**
+ * PingMessage is sent as a heartbeat keepalive frame.
+ *
+ * @generated from message streamtanks.v1.PingMessage
+ */
+export type PingMessage = Message<"streamtanks.v1.PingMessage"> & {
+  /**
+   * @generated from field: int64 timestamp = 1;
+   */
+  timestamp: bigint;
+};
+
+/**
+ * Describes the message streamtanks.v1.PingMessage.
+ * Use `create(PingMessageSchema)` to create a new message.
+ */
+export const PingMessageSchema: GenMessage<PingMessage> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 2);
+
+/**
+ * PongMessage is sent in response to a PingMessage.
+ *
+ * @generated from message streamtanks.v1.PongMessage
+ */
+export type PongMessage = Message<"streamtanks.v1.PongMessage"> & {
+  /**
+   * @generated from field: int64 timestamp = 1;
+   */
+  timestamp: bigint;
+};
+
+/**
+ * Describes the message streamtanks.v1.PongMessage.
+ * Use `create(PongMessageSchema)` to create a new message.
+ */
+export const PongMessageSchema: GenMessage<PongMessage> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 3);
+
+/**
  * ViewerContext provides viewer identity metadata returned upon authentication.
  *
  * @generated from message streamtanks.v1.ViewerContext
@@ -197,6 +235,11 @@ export type ViewerContext = Message<"streamtanks.v1.ViewerContext"> & {
    * @generated from field: string twitch_user_id = 4;
    */
   twitchUserId: string;
+
+  /**
+   * @generated from field: string role = 5;
+   */
+  role: string;
 };
 
 /**
@@ -204,7 +247,7 @@ export type ViewerContext = Message<"streamtanks.v1.ViewerContext"> & {
  * Use `create(ViewerContextSchema)` to create a new message.
  */
 export const ViewerContextSchema: GenMessage<ViewerContext> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 2);
+  messageDesc(file_streamtanks_v1_game, 4);
 
 /**
  * ViewerServerMessage is the top-level envelope sent from server to viewer.
@@ -227,6 +270,18 @@ export type ViewerServerMessage = Message<"streamtanks.v1.ViewerServerMessage"> 
      */
     value: ViewerContext;
     case: "context";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PingMessage ping = 3;
+     */
+    value: PingMessage;
+    case: "ping";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PongMessage pong = 4;
+     */
+    value: PongMessage;
+    case: "pong";
   } | { case: undefined; value?: undefined };
 };
 
@@ -235,7 +290,7 @@ export type ViewerServerMessage = Message<"streamtanks.v1.ViewerServerMessage"> 
  * Use `create(ViewerServerMessageSchema)` to create a new message.
  */
 export const ViewerServerMessageSchema: GenMessage<ViewerServerMessage> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 3);
+  messageDesc(file_streamtanks_v1_game, 5);
 
 /**
  * ViewerAuthMessage sends authentication credentials from client to server.
@@ -254,7 +309,7 @@ export type ViewerAuthMessage = Message<"streamtanks.v1.ViewerAuthMessage"> & {
  * Use `create(ViewerAuthMessageSchema)` to create a new message.
  */
 export const ViewerAuthMessageSchema: GenMessage<ViewerAuthMessage> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 4);
+  messageDesc(file_streamtanks_v1_game, 6);
 
 /**
  * FireAction parameters.
@@ -278,7 +333,7 @@ export type FireAction = Message<"streamtanks.v1.FireAction"> & {
  * Use `create(FireActionSchema)` to create a new message.
  */
 export const FireActionSchema: GenMessage<FireAction> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 5);
+  messageDesc(file_streamtanks_v1_game, 7);
 
 /**
  * MoveAction parameters.
@@ -297,7 +352,7 @@ export type MoveAction = Message<"streamtanks.v1.MoveAction"> & {
  * Use `create(MoveActionSchema)` to create a new message.
  */
 export const MoveActionSchema: GenMessage<MoveAction> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 6);
+  messageDesc(file_streamtanks_v1_game, 8);
 
 /**
  * @generated from enum streamtanks.v1.MoveAction.Direction
@@ -323,7 +378,7 @@ export enum MoveAction_Direction {
  * Describes the enum streamtanks.v1.MoveAction.Direction.
  */
 export const MoveAction_DirectionSchema: GenEnum<MoveAction_Direction> = /*@__PURE__*/
-  enumDesc(file_streamtanks_v1_game, 6, 0);
+  enumDesc(file_streamtanks_v1_game, 8, 0);
 
 /**
  * ShieldAction parameters.
@@ -338,7 +393,7 @@ export type ShieldAction = Message<"streamtanks.v1.ShieldAction"> & {
  * Use `create(ShieldActionSchema)` to create a new message.
  */
 export const ShieldActionSchema: GenMessage<ShieldAction> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 7);
+  messageDesc(file_streamtanks_v1_game, 9);
 
 /**
  * JoinAction parameters.
@@ -357,7 +412,7 @@ export type JoinAction = Message<"streamtanks.v1.JoinAction"> & {
  * Use `create(JoinActionSchema)` to create a new message.
  */
 export const JoinActionSchema: GenMessage<JoinAction> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 8);
+  messageDesc(file_streamtanks_v1_game, 10);
 
 /**
  * LeaveAction parameters.
@@ -372,7 +427,7 @@ export type LeaveAction = Message<"streamtanks.v1.LeaveAction"> & {
  * Use `create(LeaveActionSchema)` to create a new message.
  */
 export const LeaveActionSchema: GenMessage<LeaveAction> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 9);
+  messageDesc(file_streamtanks_v1_game, 11);
 
 /**
  * StartMatchAction parameters.
@@ -387,7 +442,7 @@ export type StartMatchAction = Message<"streamtanks.v1.StartMatchAction"> & {
  * Use `create(StartMatchActionSchema)` to create a new message.
  */
 export const StartMatchActionSchema: GenMessage<StartMatchAction> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 10);
+  messageDesc(file_streamtanks_v1_game, 12);
 
 /**
  * ViewerActionMessage is the top-level envelope for actions submitted by viewers.
@@ -434,6 +489,18 @@ export type ViewerActionMessage = Message<"streamtanks.v1.ViewerActionMessage"> 
      */
     value: StartMatchAction;
     case: "startMatch";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PingMessage ping = 7;
+     */
+    value: PingMessage;
+    case: "ping";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PongMessage pong = 8;
+     */
+    value: PongMessage;
+    case: "pong";
   } | { case: undefined; value?: undefined };
 };
 
@@ -442,5 +509,243 @@ export type ViewerActionMessage = Message<"streamtanks.v1.ViewerActionMessage"> 
  * Use `create(ViewerActionMessageSchema)` to create a new message.
  */
 export const ViewerActionMessageSchema: GenMessage<ViewerActionMessage> = /*@__PURE__*/
-  messageDesc(file_streamtanks_v1_game, 11);
+  messageDesc(file_streamtanks_v1_game, 13);
+
+/**
+ * HostAuthChallenge initiates in-chat channel claim verification.
+ *
+ * @generated from message streamtanks.v1.HostAuthChallenge
+ */
+export type HostAuthChallenge = Message<"streamtanks.v1.HostAuthChallenge"> & {
+  /**
+   * @generated from field: string channel = 1;
+   */
+  channel: string;
+
+  /**
+   * @generated from field: string code = 2;
+   */
+  code: string;
+
+  /**
+   * @generated from field: string command = 3;
+   */
+  command: string;
+
+  /**
+   * @generated from field: int32 expires_in = 4;
+   */
+  expiresIn: number;
+};
+
+/**
+ * Describes the message streamtanks.v1.HostAuthChallenge.
+ * Use `create(HostAuthChallengeSchema)` to create a new message.
+ */
+export const HostAuthChallengeSchema: GenMessage<HostAuthChallenge> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 14);
+
+/**
+ * HostAuthSuccess confirms channel authorization and optionally provides a persistent host token.
+ *
+ * @generated from message streamtanks.v1.HostAuthSuccess
+ */
+export type HostAuthSuccess = Message<"streamtanks.v1.HostAuthSuccess"> & {
+  /**
+   * @generated from field: string channel = 1;
+   */
+  channel: string;
+
+  /**
+   * @generated from field: string token = 2;
+   */
+  token: string;
+};
+
+/**
+ * Describes the message streamtanks.v1.HostAuthSuccess.
+ * Use `create(HostAuthSuccessSchema)` to create a new message.
+ */
+export const HostAuthSuccessSchema: GenMessage<HostAuthSuccess> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 15);
+
+/**
+ * HostWarning notifies the host of security alerts or conflicting claims.
+ *
+ * @generated from message streamtanks.v1.HostWarning
+ */
+export type HostWarning = Message<"streamtanks.v1.HostWarning"> & {
+  /**
+   * @generated from field: string event = 1;
+   */
+  event: string;
+
+  /**
+   * @generated from field: string channel = 2;
+   */
+  channel: string;
+
+  /**
+   * @generated from field: string message = 3;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message streamtanks.v1.HostWarning.
+ * Use `create(HostWarningSchema)` to create a new message.
+ */
+export const HostWarningSchema: GenMessage<HostWarning> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 16);
+
+/**
+ * HostAuthError notifies the host of authentication or connection rejection.
+ *
+ * @generated from message streamtanks.v1.HostAuthError
+ */
+export type HostAuthError = Message<"streamtanks.v1.HostAuthError"> & {
+  /**
+   * @generated from field: string message = 1;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message streamtanks.v1.HostAuthError.
+ * Use `create(HostAuthErrorSchema)` to create a new message.
+ */
+export const HostAuthErrorSchema: GenMessage<HostAuthError> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 17);
+
+/**
+ * HostCommand forwards viewer actions as canonical chat commands to the host engine.
+ *
+ * @generated from message streamtanks.v1.HostCommand
+ */
+export type HostCommand = Message<"streamtanks.v1.HostCommand"> & {
+  /**
+   * @generated from field: string user = 1;
+   */
+  user: string;
+
+  /**
+   * @generated from field: string twitch_user_id = 2;
+   */
+  twitchUserId: string;
+
+  /**
+   * @generated from field: string command = 3;
+   */
+  command: string;
+
+  /**
+   * @generated from field: streamtanks.v1.ViewerActionMessage action = 4;
+   */
+  action?: ViewerActionMessage | undefined;
+};
+
+/**
+ * Describes the message streamtanks.v1.HostCommand.
+ * Use `create(HostCommandSchema)` to create a new message.
+ */
+export const HostCommandSchema: GenMessage<HostCommand> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 18);
+
+/**
+ * HostServerMessage is the envelope sent from C&C Relay to Local Game Host.
+ *
+ * @generated from message streamtanks.v1.HostServerMessage
+ */
+export type HostServerMessage = Message<"streamtanks.v1.HostServerMessage"> & {
+  /**
+   * @generated from oneof streamtanks.v1.HostServerMessage.payload
+   */
+  payload: {
+    /**
+     * @generated from field: streamtanks.v1.HostAuthChallenge challenge = 1;
+     */
+    value: HostAuthChallenge;
+    case: "challenge";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.HostAuthSuccess success = 2;
+     */
+    value: HostAuthSuccess;
+    case: "success";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.HostWarning warning = 3;
+     */
+    value: HostWarning;
+    case: "warning";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.HostAuthError error = 4;
+     */
+    value: HostAuthError;
+    case: "error";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.HostCommand command = 5;
+     */
+    value: HostCommand;
+    case: "command";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PingMessage ping = 6;
+     */
+    value: PingMessage;
+    case: "ping";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PongMessage pong = 7;
+     */
+    value: PongMessage;
+    case: "pong";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message streamtanks.v1.HostServerMessage.
+ * Use `create(HostServerMessageSchema)` to create a new message.
+ */
+export const HostServerMessageSchema: GenMessage<HostServerMessage> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 19);
+
+/**
+ * HostClientMessage is the envelope sent from Local Game Host to C&C Relay.
+ *
+ * @generated from message streamtanks.v1.HostClientMessage
+ */
+export type HostClientMessage = Message<"streamtanks.v1.HostClientMessage"> & {
+  /**
+   * @generated from oneof streamtanks.v1.HostClientMessage.payload
+   */
+  payload: {
+    /**
+     * @generated from field: streamtanks.v1.ViewerState state = 1;
+     */
+    value: ViewerState;
+    case: "state";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PingMessage ping = 2;
+     */
+    value: PingMessage;
+    case: "ping";
+  } | {
+    /**
+     * @generated from field: streamtanks.v1.PongMessage pong = 3;
+     */
+    value: PongMessage;
+    case: "pong";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message streamtanks.v1.HostClientMessage.
+ * Use `create(HostClientMessageSchema)` to create a new message.
+ */
+export const HostClientMessageSchema: GenMessage<HostClientMessage> = /*@__PURE__*/
+  messageDesc(file_streamtanks_v1_game, 20);
 

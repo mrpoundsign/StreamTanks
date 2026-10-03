@@ -67,7 +67,7 @@ func (x MoveAction_Direction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MoveAction_Direction.Descriptor instead.
 func (MoveAction_Direction) EnumDescriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{6, 0}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{8, 0}
 }
 
 // TankState represents the visual and gameplay state of an individual tank.
@@ -352,6 +352,96 @@ func (x *ViewerState) GetTanks() []*TankState {
 	return nil
 }
 
+// PingMessage is sent as a heartbeat keepalive frame.
+type PingMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Timestamp     int64                  `protobuf:"varint,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingMessage) Reset() {
+	*x = PingMessage{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingMessage) ProtoMessage() {}
+
+func (x *PingMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingMessage.ProtoReflect.Descriptor instead.
+func (*PingMessage) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PingMessage) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+// PongMessage is sent in response to a PingMessage.
+type PongMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Timestamp     int64                  `protobuf:"varint,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PongMessage) Reset() {
+	*x = PongMessage{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PongMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PongMessage) ProtoMessage() {}
+
+func (x *PongMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PongMessage.ProtoReflect.Descriptor instead.
+func (*PongMessage) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PongMessage) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
 // ViewerContext provides viewer identity metadata returned upon authentication.
 type ViewerContext struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -359,13 +449,14 @@ type ViewerContext struct {
 	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
 	OpaqueUserId  string                 `protobuf:"bytes,3,opt,name=opaque_user_id,json=opaqueUserId,proto3" json:"opaque_user_id,omitempty"`
 	TwitchUserId  string                 `protobuf:"bytes,4,opt,name=twitch_user_id,json=twitchUserId,proto3" json:"twitch_user_id,omitempty"`
+	Role          string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ViewerContext) Reset() {
 	*x = ViewerContext{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[2]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -377,7 +468,7 @@ func (x *ViewerContext) String() string {
 func (*ViewerContext) ProtoMessage() {}
 
 func (x *ViewerContext) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[2]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -390,7 +481,7 @@ func (x *ViewerContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ViewerContext.ProtoReflect.Descriptor instead.
 func (*ViewerContext) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{2}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ViewerContext) GetUsername() string {
@@ -421,6 +512,13 @@ func (x *ViewerContext) GetTwitchUserId() string {
 	return ""
 }
 
+func (x *ViewerContext) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
 // ViewerServerMessage is the top-level envelope sent from server to viewer.
 type ViewerServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -428,6 +526,8 @@ type ViewerServerMessage struct {
 	//
 	//	*ViewerServerMessage_State
 	//	*ViewerServerMessage_Context
+	//	*ViewerServerMessage_Ping
+	//	*ViewerServerMessage_Pong
 	Payload       isViewerServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -435,7 +535,7 @@ type ViewerServerMessage struct {
 
 func (x *ViewerServerMessage) Reset() {
 	*x = ViewerServerMessage{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[3]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -447,7 +547,7 @@ func (x *ViewerServerMessage) String() string {
 func (*ViewerServerMessage) ProtoMessage() {}
 
 func (x *ViewerServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[3]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -460,7 +560,7 @@ func (x *ViewerServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ViewerServerMessage.ProtoReflect.Descriptor instead.
 func (*ViewerServerMessage) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{3}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ViewerServerMessage) GetPayload() isViewerServerMessage_Payload {
@@ -488,6 +588,24 @@ func (x *ViewerServerMessage) GetContext() *ViewerContext {
 	return nil
 }
 
+func (x *ViewerServerMessage) GetPing() *PingMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*ViewerServerMessage_Ping); ok {
+			return x.Ping
+		}
+	}
+	return nil
+}
+
+func (x *ViewerServerMessage) GetPong() *PongMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*ViewerServerMessage_Pong); ok {
+			return x.Pong
+		}
+	}
+	return nil
+}
+
 type isViewerServerMessage_Payload interface {
 	isViewerServerMessage_Payload()
 }
@@ -500,9 +618,21 @@ type ViewerServerMessage_Context struct {
 	Context *ViewerContext `protobuf:"bytes,2,opt,name=context,proto3,oneof"`
 }
 
+type ViewerServerMessage_Ping struct {
+	Ping *PingMessage `protobuf:"bytes,3,opt,name=ping,proto3,oneof"`
+}
+
+type ViewerServerMessage_Pong struct {
+	Pong *PongMessage `protobuf:"bytes,4,opt,name=pong,proto3,oneof"`
+}
+
 func (*ViewerServerMessage_State) isViewerServerMessage_Payload() {}
 
 func (*ViewerServerMessage_Context) isViewerServerMessage_Payload() {}
+
+func (*ViewerServerMessage_Ping) isViewerServerMessage_Payload() {}
+
+func (*ViewerServerMessage_Pong) isViewerServerMessage_Payload() {}
 
 // ViewerAuthMessage sends authentication credentials from client to server.
 type ViewerAuthMessage struct {
@@ -514,7 +644,7 @@ type ViewerAuthMessage struct {
 
 func (x *ViewerAuthMessage) Reset() {
 	*x = ViewerAuthMessage{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[4]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +656,7 @@ func (x *ViewerAuthMessage) String() string {
 func (*ViewerAuthMessage) ProtoMessage() {}
 
 func (x *ViewerAuthMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[4]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +669,7 @@ func (x *ViewerAuthMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ViewerAuthMessage.ProtoReflect.Descriptor instead.
 func (*ViewerAuthMessage) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{4}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ViewerAuthMessage) GetJwt() string {
@@ -560,7 +690,7 @@ type FireAction struct {
 
 func (x *FireAction) Reset() {
 	*x = FireAction{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[5]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -572,7 +702,7 @@ func (x *FireAction) String() string {
 func (*FireAction) ProtoMessage() {}
 
 func (x *FireAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[5]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -585,7 +715,7 @@ func (x *FireAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FireAction.ProtoReflect.Descriptor instead.
 func (*FireAction) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{5}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *FireAction) GetAngle() float32 {
@@ -612,7 +742,7 @@ type MoveAction struct {
 
 func (x *MoveAction) Reset() {
 	*x = MoveAction{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[6]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +754,7 @@ func (x *MoveAction) String() string {
 func (*MoveAction) ProtoMessage() {}
 
 func (x *MoveAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[6]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +767,7 @@ func (x *MoveAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveAction.ProtoReflect.Descriptor instead.
 func (*MoveAction) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{6}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *MoveAction) GetDirection() MoveAction_Direction {
@@ -656,7 +786,7 @@ type ShieldAction struct {
 
 func (x *ShieldAction) Reset() {
 	*x = ShieldAction{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[7]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +798,7 @@ func (x *ShieldAction) String() string {
 func (*ShieldAction) ProtoMessage() {}
 
 func (x *ShieldAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[7]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +811,7 @@ func (x *ShieldAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShieldAction.ProtoReflect.Descriptor instead.
 func (*ShieldAction) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{7}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{9}
 }
 
 // JoinAction parameters.
@@ -694,7 +824,7 @@ type JoinAction struct {
 
 func (x *JoinAction) Reset() {
 	*x = JoinAction{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[8]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -706,7 +836,7 @@ func (x *JoinAction) String() string {
 func (*JoinAction) ProtoMessage() {}
 
 func (x *JoinAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[8]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +849,7 @@ func (x *JoinAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinAction.ProtoReflect.Descriptor instead.
 func (*JoinAction) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{8}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *JoinAction) GetEmote() string {
@@ -738,7 +868,7 @@ type LeaveAction struct {
 
 func (x *LeaveAction) Reset() {
 	*x = LeaveAction{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[9]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -750,7 +880,7 @@ func (x *LeaveAction) String() string {
 func (*LeaveAction) ProtoMessage() {}
 
 func (x *LeaveAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[9]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -763,7 +893,7 @@ func (x *LeaveAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveAction.ProtoReflect.Descriptor instead.
 func (*LeaveAction) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{9}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{11}
 }
 
 // StartMatchAction parameters.
@@ -775,7 +905,7 @@ type StartMatchAction struct {
 
 func (x *StartMatchAction) Reset() {
 	*x = StartMatchAction{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[10]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -787,7 +917,7 @@ func (x *StartMatchAction) String() string {
 func (*StartMatchAction) ProtoMessage() {}
 
 func (x *StartMatchAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[10]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -800,7 +930,7 @@ func (x *StartMatchAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartMatchAction.ProtoReflect.Descriptor instead.
 func (*StartMatchAction) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{10}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{12}
 }
 
 // ViewerActionMessage is the top-level envelope for actions submitted by viewers.
@@ -814,6 +944,8 @@ type ViewerActionMessage struct {
 	//	*ViewerActionMessage_Join
 	//	*ViewerActionMessage_Leave
 	//	*ViewerActionMessage_StartMatch
+	//	*ViewerActionMessage_Ping
+	//	*ViewerActionMessage_Pong
 	Action        isViewerActionMessage_Action `protobuf_oneof:"action"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -821,7 +953,7 @@ type ViewerActionMessage struct {
 
 func (x *ViewerActionMessage) Reset() {
 	*x = ViewerActionMessage{}
-	mi := &file_streamtanks_v1_game_proto_msgTypes[11]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -833,7 +965,7 @@ func (x *ViewerActionMessage) String() string {
 func (*ViewerActionMessage) ProtoMessage() {}
 
 func (x *ViewerActionMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_streamtanks_v1_game_proto_msgTypes[11]
+	mi := &file_streamtanks_v1_game_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -846,7 +978,7 @@ func (x *ViewerActionMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ViewerActionMessage.ProtoReflect.Descriptor instead.
 func (*ViewerActionMessage) Descriptor() ([]byte, []int) {
-	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{11}
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ViewerActionMessage) GetAction() isViewerActionMessage_Action {
@@ -910,6 +1042,24 @@ func (x *ViewerActionMessage) GetStartMatch() *StartMatchAction {
 	return nil
 }
 
+func (x *ViewerActionMessage) GetPing() *PingMessage {
+	if x != nil {
+		if x, ok := x.Action.(*ViewerActionMessage_Ping); ok {
+			return x.Ping
+		}
+	}
+	return nil
+}
+
+func (x *ViewerActionMessage) GetPong() *PongMessage {
+	if x != nil {
+		if x, ok := x.Action.(*ViewerActionMessage_Pong); ok {
+			return x.Pong
+		}
+	}
+	return nil
+}
+
 type isViewerActionMessage_Action interface {
 	isViewerActionMessage_Action()
 }
@@ -938,6 +1088,14 @@ type ViewerActionMessage_StartMatch struct {
 	StartMatch *StartMatchAction `protobuf:"bytes,6,opt,name=start_match,json=startMatch,proto3,oneof"`
 }
 
+type ViewerActionMessage_Ping struct {
+	Ping *PingMessage `protobuf:"bytes,7,opt,name=ping,proto3,oneof"`
+}
+
+type ViewerActionMessage_Pong struct {
+	Pong *PongMessage `protobuf:"bytes,8,opt,name=pong,proto3,oneof"`
+}
+
 func (*ViewerActionMessage_Fire) isViewerActionMessage_Action() {}
 
 func (*ViewerActionMessage_Move) isViewerActionMessage_Action() {}
@@ -949,6 +1107,569 @@ func (*ViewerActionMessage_Join) isViewerActionMessage_Action() {}
 func (*ViewerActionMessage_Leave) isViewerActionMessage_Action() {}
 
 func (*ViewerActionMessage_StartMatch) isViewerActionMessage_Action() {}
+
+func (*ViewerActionMessage_Ping) isViewerActionMessage_Action() {}
+
+func (*ViewerActionMessage_Pong) isViewerActionMessage_Action() {}
+
+// HostAuthChallenge initiates in-chat channel claim verification.
+type HostAuthChallenge struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Code          string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	Command       string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
+	ExpiresIn     int32                  `protobuf:"varint,4,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostAuthChallenge) Reset() {
+	*x = HostAuthChallenge{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostAuthChallenge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostAuthChallenge) ProtoMessage() {}
+
+func (x *HostAuthChallenge) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostAuthChallenge.ProtoReflect.Descriptor instead.
+func (*HostAuthChallenge) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *HostAuthChallenge) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *HostAuthChallenge) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *HostAuthChallenge) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *HostAuthChallenge) GetExpiresIn() int32 {
+	if x != nil {
+		return x.ExpiresIn
+	}
+	return 0
+}
+
+// HostAuthSuccess confirms channel authorization and optionally provides a persistent host token.
+type HostAuthSuccess struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostAuthSuccess) Reset() {
+	*x = HostAuthSuccess{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostAuthSuccess) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostAuthSuccess) ProtoMessage() {}
+
+func (x *HostAuthSuccess) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostAuthSuccess.ProtoReflect.Descriptor instead.
+func (*HostAuthSuccess) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *HostAuthSuccess) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *HostAuthSuccess) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+// HostWarning notifies the host of security alerts or conflicting claims.
+type HostWarning struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Event         string                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	Channel       string                 `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostWarning) Reset() {
+	*x = HostWarning{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostWarning) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostWarning) ProtoMessage() {}
+
+func (x *HostWarning) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostWarning.ProtoReflect.Descriptor instead.
+func (*HostWarning) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *HostWarning) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *HostWarning) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *HostWarning) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// HostAuthError notifies the host of authentication or connection rejection.
+type HostAuthError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostAuthError) Reset() {
+	*x = HostAuthError{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostAuthError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostAuthError) ProtoMessage() {}
+
+func (x *HostAuthError) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostAuthError.ProtoReflect.Descriptor instead.
+func (*HostAuthError) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *HostAuthError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// HostCommand forwards viewer actions as canonical chat commands to the host engine.
+type HostCommand struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          string                 `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	TwitchUserId  string                 `protobuf:"bytes,2,opt,name=twitch_user_id,json=twitchUserId,proto3" json:"twitch_user_id,omitempty"`
+	Command       string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
+	Action        *ViewerActionMessage   `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostCommand) Reset() {
+	*x = HostCommand{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostCommand) ProtoMessage() {}
+
+func (x *HostCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostCommand.ProtoReflect.Descriptor instead.
+func (*HostCommand) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *HostCommand) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *HostCommand) GetTwitchUserId() string {
+	if x != nil {
+		return x.TwitchUserId
+	}
+	return ""
+}
+
+func (x *HostCommand) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *HostCommand) GetAction() *ViewerActionMessage {
+	if x != nil {
+		return x.Action
+	}
+	return nil
+}
+
+// HostServerMessage is the envelope sent from C&C Relay to Local Game Host.
+type HostServerMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*HostServerMessage_Challenge
+	//	*HostServerMessage_Success
+	//	*HostServerMessage_Warning
+	//	*HostServerMessage_Error
+	//	*HostServerMessage_Command
+	//	*HostServerMessage_Ping
+	//	*HostServerMessage_Pong
+	Payload       isHostServerMessage_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostServerMessage) Reset() {
+	*x = HostServerMessage{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostServerMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostServerMessage) ProtoMessage() {}
+
+func (x *HostServerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostServerMessage.ProtoReflect.Descriptor instead.
+func (*HostServerMessage) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *HostServerMessage) GetPayload() isHostServerMessage_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetChallenge() *HostAuthChallenge {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Challenge); ok {
+			return x.Challenge
+		}
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetSuccess() *HostAuthSuccess {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Success); ok {
+			return x.Success
+		}
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetWarning() *HostWarning {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Warning); ok {
+			return x.Warning
+		}
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetError() *HostAuthError {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Error); ok {
+			return x.Error
+		}
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetCommand() *HostCommand {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Command); ok {
+			return x.Command
+		}
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetPing() *PingMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Ping); ok {
+			return x.Ping
+		}
+	}
+	return nil
+}
+
+func (x *HostServerMessage) GetPong() *PongMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*HostServerMessage_Pong); ok {
+			return x.Pong
+		}
+	}
+	return nil
+}
+
+type isHostServerMessage_Payload interface {
+	isHostServerMessage_Payload()
+}
+
+type HostServerMessage_Challenge struct {
+	Challenge *HostAuthChallenge `protobuf:"bytes,1,opt,name=challenge,proto3,oneof"`
+}
+
+type HostServerMessage_Success struct {
+	Success *HostAuthSuccess `protobuf:"bytes,2,opt,name=success,proto3,oneof"`
+}
+
+type HostServerMessage_Warning struct {
+	Warning *HostWarning `protobuf:"bytes,3,opt,name=warning,proto3,oneof"`
+}
+
+type HostServerMessage_Error struct {
+	Error *HostAuthError `protobuf:"bytes,4,opt,name=error,proto3,oneof"`
+}
+
+type HostServerMessage_Command struct {
+	Command *HostCommand `protobuf:"bytes,5,opt,name=command,proto3,oneof"`
+}
+
+type HostServerMessage_Ping struct {
+	Ping *PingMessage `protobuf:"bytes,6,opt,name=ping,proto3,oneof"`
+}
+
+type HostServerMessage_Pong struct {
+	Pong *PongMessage `protobuf:"bytes,7,opt,name=pong,proto3,oneof"`
+}
+
+func (*HostServerMessage_Challenge) isHostServerMessage_Payload() {}
+
+func (*HostServerMessage_Success) isHostServerMessage_Payload() {}
+
+func (*HostServerMessage_Warning) isHostServerMessage_Payload() {}
+
+func (*HostServerMessage_Error) isHostServerMessage_Payload() {}
+
+func (*HostServerMessage_Command) isHostServerMessage_Payload() {}
+
+func (*HostServerMessage_Ping) isHostServerMessage_Payload() {}
+
+func (*HostServerMessage_Pong) isHostServerMessage_Payload() {}
+
+// HostClientMessage is the envelope sent from Local Game Host to C&C Relay.
+type HostClientMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*HostClientMessage_State
+	//	*HostClientMessage_Ping
+	//	*HostClientMessage_Pong
+	Payload       isHostClientMessage_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostClientMessage) Reset() {
+	*x = HostClientMessage{}
+	mi := &file_streamtanks_v1_game_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostClientMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostClientMessage) ProtoMessage() {}
+
+func (x *HostClientMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_streamtanks_v1_game_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostClientMessage.ProtoReflect.Descriptor instead.
+func (*HostClientMessage) Descriptor() ([]byte, []int) {
+	return file_streamtanks_v1_game_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HostClientMessage) GetPayload() isHostClientMessage_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *HostClientMessage) GetState() *ViewerState {
+	if x != nil {
+		if x, ok := x.Payload.(*HostClientMessage_State); ok {
+			return x.State
+		}
+	}
+	return nil
+}
+
+func (x *HostClientMessage) GetPing() *PingMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*HostClientMessage_Ping); ok {
+			return x.Ping
+		}
+	}
+	return nil
+}
+
+func (x *HostClientMessage) GetPong() *PongMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*HostClientMessage_Pong); ok {
+			return x.Pong
+		}
+	}
+	return nil
+}
+
+type isHostClientMessage_Payload interface {
+	isHostClientMessage_Payload()
+}
+
+type HostClientMessage_State struct {
+	State *ViewerState `protobuf:"bytes,1,opt,name=state,proto3,oneof"`
+}
+
+type HostClientMessage_Ping struct {
+	Ping *PingMessage `protobuf:"bytes,2,opt,name=ping,proto3,oneof"`
+}
+
+type HostClientMessage_Pong struct {
+	Pong *PongMessage `protobuf:"bytes,3,opt,name=pong,proto3,oneof"`
+}
+
+func (*HostClientMessage_State) isHostClientMessage_Payload() {}
+
+func (*HostClientMessage_Ping) isHostClientMessage_Payload() {}
+
+func (*HostClientMessage_Pong) isHostClientMessage_Payload() {}
 
 var File_streamtanks_v1_game_proto protoreflect.FileDescriptor
 
@@ -986,16 +1707,23 @@ const file_streamtanks_v1_game_proto_rawDesc = "" +
 	"\x13shield_used_players\x18\r \x03(\tR\x11shieldUsedPlayers\x12)\n" +
 	"\x10shielded_players\x18\x0e \x03(\tR\x0fshieldedPlayers\x12\x1c\n" +
 	"\aterrain\x18\x0f \x03(\x05B\x02\x10\x01R\aterrain\x12/\n" +
-	"\x05tanks\x18\x10 \x03(\v2\x19.streamtanks.v1.TankStateR\x05tanks\"\x96\x01\n" +
+	"\x05tanks\x18\x10 \x03(\v2\x19.streamtanks.v1.TankStateR\x05tanks\"+\n" +
+	"\vPingMessage\x12\x1c\n" +
+	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp\"+\n" +
+	"\vPongMessage\x12\x1c\n" +
+	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp\"\xaa\x01\n" +
 	"\rViewerContext\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x02 \x01(\tR\tchannelId\x12$\n" +
 	"\x0eopaque_user_id\x18\x03 \x01(\tR\fopaqueUserId\x12$\n" +
-	"\x0etwitch_user_id\x18\x04 \x01(\tR\ftwitchUserId\"\x90\x01\n" +
+	"\x0etwitch_user_id\x18\x04 \x01(\tR\ftwitchUserId\x12\x12\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\"\xf6\x01\n" +
 	"\x13ViewerServerMessage\x123\n" +
 	"\x05state\x18\x01 \x01(\v2\x1b.streamtanks.v1.ViewerStateH\x00R\x05state\x129\n" +
-	"\acontext\x18\x02 \x01(\v2\x1d.streamtanks.v1.ViewerContextH\x00R\acontextB\t\n" +
+	"\acontext\x18\x02 \x01(\v2\x1d.streamtanks.v1.ViewerContextH\x00R\acontext\x121\n" +
+	"\x04ping\x18\x03 \x01(\v2\x1b.streamtanks.v1.PingMessageH\x00R\x04ping\x121\n" +
+	"\x04pong\x18\x04 \x01(\v2\x1b.streamtanks.v1.PongMessageH\x00R\x04pongB\t\n" +
 	"\apayload\"%\n" +
 	"\x11ViewerAuthMessage\x12\x10\n" +
 	"\x03jwt\x18\x01 \x01(\tR\x03jwt\"8\n" +
@@ -1015,7 +1743,7 @@ const file_streamtanks_v1_game_proto_rawDesc = "" +
 	"JoinAction\x12\x14\n" +
 	"\x05emote\x18\x01 \x01(\tR\x05emote\"\r\n" +
 	"\vLeaveAction\"\x12\n" +
-	"\x10StartMatchAction\"\xe7\x02\n" +
+	"\x10StartMatchAction\"\xcd\x03\n" +
 	"\x13ViewerActionMessage\x120\n" +
 	"\x04fire\x18\x01 \x01(\v2\x1a.streamtanks.v1.FireActionH\x00R\x04fire\x120\n" +
 	"\x04move\x18\x02 \x01(\v2\x1a.streamtanks.v1.MoveActionH\x00R\x04move\x126\n" +
@@ -1023,8 +1751,44 @@ const file_streamtanks_v1_game_proto_rawDesc = "" +
 	"\x04join\x18\x04 \x01(\v2\x1a.streamtanks.v1.JoinActionH\x00R\x04join\x123\n" +
 	"\x05leave\x18\x05 \x01(\v2\x1b.streamtanks.v1.LeaveActionH\x00R\x05leave\x12C\n" +
 	"\vstart_match\x18\x06 \x01(\v2 .streamtanks.v1.StartMatchActionH\x00R\n" +
-	"startMatchB\b\n" +
-	"\x06actionB;Z9streamtanks/internal/proto/streamtanks/v1;streamtankspbv1b\x06proto3"
+	"startMatch\x121\n" +
+	"\x04ping\x18\a \x01(\v2\x1b.streamtanks.v1.PingMessageH\x00R\x04ping\x121\n" +
+	"\x04pong\x18\b \x01(\v2\x1b.streamtanks.v1.PongMessageH\x00R\x04pongB\b\n" +
+	"\x06action\"z\n" +
+	"\x11HostAuthChallenge\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
+	"\acommand\x18\x03 \x01(\tR\acommand\x12\x1d\n" +
+	"\n" +
+	"expires_in\x18\x04 \x01(\x05R\texpiresIn\"A\n" +
+	"\x0fHostAuthSuccess\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"W\n" +
+	"\vHostWarning\x12\x14\n" +
+	"\x05event\x18\x01 \x01(\tR\x05event\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\tR\achannel\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\")\n" +
+	"\rHostAuthError\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\"\x9e\x01\n" +
+	"\vHostCommand\x12\x12\n" +
+	"\x04user\x18\x01 \x01(\tR\x04user\x12$\n" +
+	"\x0etwitch_user_id\x18\x02 \x01(\tR\ftwitchUserId\x12\x18\n" +
+	"\acommand\x18\x03 \x01(\tR\acommand\x12;\n" +
+	"\x06action\x18\x04 \x01(\v2#.streamtanks.v1.ViewerActionMessageR\x06action\"\xad\x03\n" +
+	"\x11HostServerMessage\x12A\n" +
+	"\tchallenge\x18\x01 \x01(\v2!.streamtanks.v1.HostAuthChallengeH\x00R\tchallenge\x12;\n" +
+	"\asuccess\x18\x02 \x01(\v2\x1f.streamtanks.v1.HostAuthSuccessH\x00R\asuccess\x127\n" +
+	"\awarning\x18\x03 \x01(\v2\x1b.streamtanks.v1.HostWarningH\x00R\awarning\x125\n" +
+	"\x05error\x18\x04 \x01(\v2\x1d.streamtanks.v1.HostAuthErrorH\x00R\x05error\x127\n" +
+	"\acommand\x18\x05 \x01(\v2\x1b.streamtanks.v1.HostCommandH\x00R\acommand\x121\n" +
+	"\x04ping\x18\x06 \x01(\v2\x1b.streamtanks.v1.PingMessageH\x00R\x04ping\x121\n" +
+	"\x04pong\x18\a \x01(\v2\x1b.streamtanks.v1.PongMessageH\x00R\x04pongB\t\n" +
+	"\apayload\"\xb9\x01\n" +
+	"\x11HostClientMessage\x123\n" +
+	"\x05state\x18\x01 \x01(\v2\x1b.streamtanks.v1.ViewerStateH\x00R\x05state\x121\n" +
+	"\x04ping\x18\x02 \x01(\v2\x1b.streamtanks.v1.PingMessageH\x00R\x04ping\x121\n" +
+	"\x04pong\x18\x03 \x01(\v2\x1b.streamtanks.v1.PongMessageH\x00R\x04pongB\t\n" +
+	"\apayloadB;Z9streamtanks/internal/proto/streamtanks/v1;streamtankspbv1b\x06proto3"
 
 var (
 	file_streamtanks_v1_game_proto_rawDescOnce sync.Once
@@ -1039,38 +1803,62 @@ func file_streamtanks_v1_game_proto_rawDescGZIP() []byte {
 }
 
 var file_streamtanks_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_streamtanks_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_streamtanks_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_streamtanks_v1_game_proto_goTypes = []any{
 	(MoveAction_Direction)(0),   // 0: streamtanks.v1.MoveAction.Direction
 	(*TankState)(nil),           // 1: streamtanks.v1.TankState
 	(*ViewerState)(nil),         // 2: streamtanks.v1.ViewerState
-	(*ViewerContext)(nil),       // 3: streamtanks.v1.ViewerContext
-	(*ViewerServerMessage)(nil), // 4: streamtanks.v1.ViewerServerMessage
-	(*ViewerAuthMessage)(nil),   // 5: streamtanks.v1.ViewerAuthMessage
-	(*FireAction)(nil),          // 6: streamtanks.v1.FireAction
-	(*MoveAction)(nil),          // 7: streamtanks.v1.MoveAction
-	(*ShieldAction)(nil),        // 8: streamtanks.v1.ShieldAction
-	(*JoinAction)(nil),          // 9: streamtanks.v1.JoinAction
-	(*LeaveAction)(nil),         // 10: streamtanks.v1.LeaveAction
-	(*StartMatchAction)(nil),    // 11: streamtanks.v1.StartMatchAction
-	(*ViewerActionMessage)(nil), // 12: streamtanks.v1.ViewerActionMessage
+	(*PingMessage)(nil),         // 3: streamtanks.v1.PingMessage
+	(*PongMessage)(nil),         // 4: streamtanks.v1.PongMessage
+	(*ViewerContext)(nil),       // 5: streamtanks.v1.ViewerContext
+	(*ViewerServerMessage)(nil), // 6: streamtanks.v1.ViewerServerMessage
+	(*ViewerAuthMessage)(nil),   // 7: streamtanks.v1.ViewerAuthMessage
+	(*FireAction)(nil),          // 8: streamtanks.v1.FireAction
+	(*MoveAction)(nil),          // 9: streamtanks.v1.MoveAction
+	(*ShieldAction)(nil),        // 10: streamtanks.v1.ShieldAction
+	(*JoinAction)(nil),          // 11: streamtanks.v1.JoinAction
+	(*LeaveAction)(nil),         // 12: streamtanks.v1.LeaveAction
+	(*StartMatchAction)(nil),    // 13: streamtanks.v1.StartMatchAction
+	(*ViewerActionMessage)(nil), // 14: streamtanks.v1.ViewerActionMessage
+	(*HostAuthChallenge)(nil),   // 15: streamtanks.v1.HostAuthChallenge
+	(*HostAuthSuccess)(nil),     // 16: streamtanks.v1.HostAuthSuccess
+	(*HostWarning)(nil),         // 17: streamtanks.v1.HostWarning
+	(*HostAuthError)(nil),       // 18: streamtanks.v1.HostAuthError
+	(*HostCommand)(nil),         // 19: streamtanks.v1.HostCommand
+	(*HostServerMessage)(nil),   // 20: streamtanks.v1.HostServerMessage
+	(*HostClientMessage)(nil),   // 21: streamtanks.v1.HostClientMessage
 }
 var file_streamtanks_v1_game_proto_depIdxs = []int32{
 	1,  // 0: streamtanks.v1.ViewerState.tanks:type_name -> streamtanks.v1.TankState
 	2,  // 1: streamtanks.v1.ViewerServerMessage.state:type_name -> streamtanks.v1.ViewerState
-	3,  // 2: streamtanks.v1.ViewerServerMessage.context:type_name -> streamtanks.v1.ViewerContext
-	0,  // 3: streamtanks.v1.MoveAction.direction:type_name -> streamtanks.v1.MoveAction.Direction
-	6,  // 4: streamtanks.v1.ViewerActionMessage.fire:type_name -> streamtanks.v1.FireAction
-	7,  // 5: streamtanks.v1.ViewerActionMessage.move:type_name -> streamtanks.v1.MoveAction
-	8,  // 6: streamtanks.v1.ViewerActionMessage.shield:type_name -> streamtanks.v1.ShieldAction
-	9,  // 7: streamtanks.v1.ViewerActionMessage.join:type_name -> streamtanks.v1.JoinAction
-	10, // 8: streamtanks.v1.ViewerActionMessage.leave:type_name -> streamtanks.v1.LeaveAction
-	11, // 9: streamtanks.v1.ViewerActionMessage.start_match:type_name -> streamtanks.v1.StartMatchAction
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 2: streamtanks.v1.ViewerServerMessage.context:type_name -> streamtanks.v1.ViewerContext
+	3,  // 3: streamtanks.v1.ViewerServerMessage.ping:type_name -> streamtanks.v1.PingMessage
+	4,  // 4: streamtanks.v1.ViewerServerMessage.pong:type_name -> streamtanks.v1.PongMessage
+	0,  // 5: streamtanks.v1.MoveAction.direction:type_name -> streamtanks.v1.MoveAction.Direction
+	8,  // 6: streamtanks.v1.ViewerActionMessage.fire:type_name -> streamtanks.v1.FireAction
+	9,  // 7: streamtanks.v1.ViewerActionMessage.move:type_name -> streamtanks.v1.MoveAction
+	10, // 8: streamtanks.v1.ViewerActionMessage.shield:type_name -> streamtanks.v1.ShieldAction
+	11, // 9: streamtanks.v1.ViewerActionMessage.join:type_name -> streamtanks.v1.JoinAction
+	12, // 10: streamtanks.v1.ViewerActionMessage.leave:type_name -> streamtanks.v1.LeaveAction
+	13, // 11: streamtanks.v1.ViewerActionMessage.start_match:type_name -> streamtanks.v1.StartMatchAction
+	3,  // 12: streamtanks.v1.ViewerActionMessage.ping:type_name -> streamtanks.v1.PingMessage
+	4,  // 13: streamtanks.v1.ViewerActionMessage.pong:type_name -> streamtanks.v1.PongMessage
+	14, // 14: streamtanks.v1.HostCommand.action:type_name -> streamtanks.v1.ViewerActionMessage
+	15, // 15: streamtanks.v1.HostServerMessage.challenge:type_name -> streamtanks.v1.HostAuthChallenge
+	16, // 16: streamtanks.v1.HostServerMessage.success:type_name -> streamtanks.v1.HostAuthSuccess
+	17, // 17: streamtanks.v1.HostServerMessage.warning:type_name -> streamtanks.v1.HostWarning
+	18, // 18: streamtanks.v1.HostServerMessage.error:type_name -> streamtanks.v1.HostAuthError
+	19, // 19: streamtanks.v1.HostServerMessage.command:type_name -> streamtanks.v1.HostCommand
+	3,  // 20: streamtanks.v1.HostServerMessage.ping:type_name -> streamtanks.v1.PingMessage
+	4,  // 21: streamtanks.v1.HostServerMessage.pong:type_name -> streamtanks.v1.PongMessage
+	2,  // 22: streamtanks.v1.HostClientMessage.state:type_name -> streamtanks.v1.ViewerState
+	3,  // 23: streamtanks.v1.HostClientMessage.ping:type_name -> streamtanks.v1.PingMessage
+	4,  // 24: streamtanks.v1.HostClientMessage.pong:type_name -> streamtanks.v1.PongMessage
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_streamtanks_v1_game_proto_init() }
@@ -1078,17 +1866,35 @@ func file_streamtanks_v1_game_proto_init() {
 	if File_streamtanks_v1_game_proto != nil {
 		return
 	}
-	file_streamtanks_v1_game_proto_msgTypes[3].OneofWrappers = []any{
+	file_streamtanks_v1_game_proto_msgTypes[5].OneofWrappers = []any{
 		(*ViewerServerMessage_State)(nil),
 		(*ViewerServerMessage_Context)(nil),
+		(*ViewerServerMessage_Ping)(nil),
+		(*ViewerServerMessage_Pong)(nil),
 	}
-	file_streamtanks_v1_game_proto_msgTypes[11].OneofWrappers = []any{
+	file_streamtanks_v1_game_proto_msgTypes[13].OneofWrappers = []any{
 		(*ViewerActionMessage_Fire)(nil),
 		(*ViewerActionMessage_Move)(nil),
 		(*ViewerActionMessage_Shield)(nil),
 		(*ViewerActionMessage_Join)(nil),
 		(*ViewerActionMessage_Leave)(nil),
 		(*ViewerActionMessage_StartMatch)(nil),
+		(*ViewerActionMessage_Ping)(nil),
+		(*ViewerActionMessage_Pong)(nil),
+	}
+	file_streamtanks_v1_game_proto_msgTypes[19].OneofWrappers = []any{
+		(*HostServerMessage_Challenge)(nil),
+		(*HostServerMessage_Success)(nil),
+		(*HostServerMessage_Warning)(nil),
+		(*HostServerMessage_Error)(nil),
+		(*HostServerMessage_Command)(nil),
+		(*HostServerMessage_Ping)(nil),
+		(*HostServerMessage_Pong)(nil),
+	}
+	file_streamtanks_v1_game_proto_msgTypes[20].OneofWrappers = []any{
+		(*HostClientMessage_State)(nil),
+		(*HostClientMessage_Ping)(nil),
+		(*HostClientMessage_Pong)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1096,7 +1902,7 @@ func file_streamtanks_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_streamtanks_v1_game_proto_rawDesc), len(file_streamtanks_v1_game_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   12,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

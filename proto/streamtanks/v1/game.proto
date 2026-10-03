@@ -38,12 +38,23 @@ message ViewerState {
   repeated TankState tanks = 16;
 }
 
+// PingMessage is sent as a heartbeat keepalive frame.
+message PingMessage {
+  int64 timestamp = 1;
+}
+
+// PongMessage is sent in response to a PingMessage.
+message PongMessage {
+  int64 timestamp = 1;
+}
+
 // ViewerContext provides viewer identity metadata returned upon authentication.
 message ViewerContext {
   string username = 1;
   string channel_id = 2;
   string opaque_user_id = 3;
   string twitch_user_id = 4;
+  string role = 5;
 }
 
 // ViewerServerMessage is the top-level envelope sent from server to viewer.
@@ -51,6 +62,8 @@ message ViewerServerMessage {
   oneof payload {
     ViewerState state = 1;
     ViewerContext context = 2;
+    PingMessage ping = 3;
+    PongMessage pong = 4;
   }
 }
 
@@ -98,5 +111,63 @@ message ViewerActionMessage {
     JoinAction join = 4;
     LeaveAction leave = 5;
     StartMatchAction start_match = 6;
+    PingMessage ping = 7;
+    PongMessage pong = 8;
+  }
+}
+
+// HostAuthChallenge initiates in-chat channel claim verification.
+message HostAuthChallenge {
+  string channel = 1;
+  string code = 2;
+  string command = 3;
+  int32 expires_in = 4;
+}
+
+// HostAuthSuccess confirms channel authorization and optionally provides a persistent host token.
+message HostAuthSuccess {
+  string channel = 1;
+  string token = 2;
+}
+
+// HostWarning notifies the host of security alerts or conflicting claims.
+message HostWarning {
+  string event = 1;
+  string channel = 2;
+  string message = 3;
+}
+
+// HostAuthError notifies the host of authentication or connection rejection.
+message HostAuthError {
+  string message = 1;
+}
+
+// HostCommand forwards viewer actions as canonical chat commands to the host engine.
+message HostCommand {
+  string user = 1;
+  string twitch_user_id = 2;
+  string command = 3;
+  ViewerActionMessage action = 4;
+}
+
+// HostServerMessage is the envelope sent from C&C Relay to Local Game Host.
+message HostServerMessage {
+  oneof payload {
+    HostAuthChallenge challenge = 1;
+    HostAuthSuccess success = 2;
+    HostWarning warning = 3;
+    HostAuthError error = 4;
+    HostCommand command = 5;
+    PingMessage ping = 6;
+    PongMessage pong = 7;
+  }
+}
+
+// HostClientMessage is the envelope sent from Local Game Host to C&C Relay.
+message HostClientMessage {
+  oneof payload {
+    ViewerState state = 1;
+    PingMessage ping = 2;
+    PongMessage pong = 3;
   }
 }

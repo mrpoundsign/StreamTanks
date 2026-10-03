@@ -118,12 +118,6 @@ func (gc *GameClient) readPump() {
 			return
 		}
 
-		// Handle text PING heartbeat from C&C relay
-		if strings.Contains(string(data), `"type":"PING"`) {
-			_ = websocket.Message.Send(gc.ws, []byte(`{"type":"PONG"}`))
-			continue
-		}
-
 		var srvMsg streamtankspbv1.ViewerServerMessage
 		if err := proto.Unmarshal(data, &srvMsg); err != nil {
 			preview := string(data)
@@ -135,8 +129,16 @@ func (gc *GameClient) readPump() {
 		}
 
 		switch p := srvMsg.Payload.(type) {
+		case *streamtankspbv1.ViewerServerMessage_Ping:
+			_ = gc.sendAction(&streamtankspbv1.ViewerActionMessage{
+				Action: &streamtankspbv1.ViewerActionMessage_Pong{
+					Pong: &streamtankspbv1.PongMessage{Timestamp: p.Ping.Timestamp},
+				},
+			})
+		case *streamtankspbv1.ViewerServerMessage_Pong:
+			// Keepalive pong received
 		case *streamtankspbv1.ViewerServerMessage_Context:
-			log.Printf("[GameClient] Received ViewerContext: username=%q channel=%q", p.Context.Username, p.Context.ChannelId)
+			log.Printf("[GameClient] Received ViewerContext: username=%q channel=%q role=%q", p.Context.Username, p.Context.ChannelId, p.Context.Role)
 			if gc.OnContextUpdate != nil {
 				gc.OnContextUpdate(p.Context)
 			}
