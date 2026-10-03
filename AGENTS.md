@@ -185,12 +185,12 @@ All commands default to the `%` prefix (configurable via `%prefix`):
 - **WebSockets over TCP (Port 443)**: Binary Protocol Buffers frames run over standard `wss://`.
 - **Why QUIC / UDP Was Rejected**: Standard Cloudflare reverse-proxy ("Orange Cloud") proxies TCP HTTP/WSS on port 443, but drops raw UDP (e.g. port 4433) unless paying for Enterprise Spectrum. WebTransport to custom origin servers is not supported on standard plans. Standard WSS leverages Cloudflare's SSL termination, DDoS protection, and global CDN without custom TLS cert maintenance.
 
-### Dual-Compatibility & Legacy Server Rules
+### Pure Protocol Buffers WebSocket Architecture
 > [!IMPORTANT]
-> **Zero Breakage for Legacy Servers**: `cmd/ccserver` must always maintain bidirectional backward compatibility for older StreamTanks hosts running previous JSON versions:
-> 1. **Old Host -> Modern Viewer**: `jsonStateToProtoBytes` in `cmd/ccserver/hub.go` dynamically converts legacy JSON `GAME_STATE` into binary Protobuf `ViewerServerMessage` frames.
-> 2. **Modern Viewer -> Old Host**: `cmd/ccserver/viewer.go` unpacks Protobuf `ViewerActionMessage` frames and converts them into canonical JSON `EXTENSION_COMMAND` envelopes (`{"type": "CHAT_COMMAND", "payload": "%fire 45 60"}`) that older servers natively parse and execute.
-> 3. **Frame Discrimination**: `golang.org/x/net/websocket` does NOT update `ws.PayloadType` during reads. Always use `wsFrame` and `frameCodec` in `cmd/ccserver` to inspect the actual WebSocket frame opcode (`0x01` Text vs `0x02` Binary).
+> **Pure Binary Protocol Buffers**: All WebSocket communication across C&C Relay (`cmd/ccserver`), Local Game Host (`internal/app/cc_client.go`), Twitch Extension (`ext-web`), and Native Client (`cmd/stclient`) operates strictly with binary Protocol Buffers frames:
+> 1. **Host $\leftrightarrow$ C&C Relay**: Uses `HostClientMessage` (state snapshots, keepalive pings/pongs) and `HostServerMessage` (challenges, claims, warnings, commands, keepalive pongs). Pings are handled at the session layer and never cached or leaked to viewers.
+> 2. **C&C Relay $\leftrightarrow$ Viewers**: Uses `ViewerServerMessage` (state, identity context, pings/pongs) and `ViewerActionMessage` (aiming, firing, moving, shield, join, leave, start match, pings/pongs).
+> 3. **Zero JSON Overhead**: All legacy JSON conversion bridges, fallback channels, and JSON text frames have been completely eliminated from the C&C relay and client stacks.
 
 ### Detailed Architecture Reference
 For the complete networking architecture, claim flow, and schema specifications, refer to [docs/cc_architecture.md](docs/cc_architecture.md).

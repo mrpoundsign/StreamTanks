@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
@@ -24,19 +23,13 @@ var (
 
 	ccConnMu        sync.Mutex
 	ccConn          *websocket.Conn
-	ccConnIsProto   bool
 	lastViewerState ViewerState
 )
 
 func setCCConn(conn *websocket.Conn) {
-	setCCConnProto(conn, false)
-}
-
-func setCCConnProto(conn *websocket.Conn, isProto bool) {
 	ccConnMu.Lock()
 	defer ccConnMu.Unlock()
 	ccConn = conn
-	ccConnIsProto = isProto
 	if conn == nil {
 		lastViewerState = ViewerState{}
 	}
@@ -47,7 +40,6 @@ func setCCConnProto(conn *websocket.Conn, isProto bool) {
 func BroadcastViewerState() {
 	ccConnMu.Lock()
 	conn := ccConn
-	isProto := ccConnIsProto
 	if conn == nil {
 		ccConnMu.Unlock()
 		return
@@ -146,50 +138,39 @@ func BroadcastViewerState() {
 	lastViewerState = vs
 	ccConnMu.Unlock()
 
-	if isProto {
-		vsProto := &streamtankspbv1.ViewerState{
-			Phase:             vs.Phase,
-			TimerRemaining:    int32(vs.TimerRemaining),
-			RoundId:           int64(vs.RoundID),
-			Winner:            vs.Winner,
-			PlayersCount:      int32(vs.PlayersCount),
-			Players:           vs.Players,
-			ProtractorX:       int32(vs.ProtractorX),
-			ProtractorY:       int32(vs.ProtractorY),
-			CanStart:          vs.CanStart,
-			CanJoin:           vs.CanJoin,
-			JoinedPlayers:     vs.JoinedPlayers,
-			LeavingPlayers:    vs.LeavingPlayers,
-			ShieldUsedPlayers: vs.ShieldUsedPlayers,
-			ShieldedPlayers:   vs.ShieldedPlayers,
-			Terrain:           terrainHeights,
-			Tanks:             tanks,
-		}
+	vsProto := &streamtankspbv1.ViewerState{
+		Phase:             vs.Phase,
+		TimerRemaining:    int32(vs.TimerRemaining),
+		RoundId:           int64(vs.RoundID),
+		Winner:            vs.Winner,
+		PlayersCount:      int32(vs.PlayersCount),
+		Players:           vs.Players,
+		ProtractorX:       int32(vs.ProtractorX),
+		ProtractorY:       int32(vs.ProtractorY),
+		CanStart:          vs.CanStart,
+		CanJoin:           vs.CanJoin,
+		JoinedPlayers:     vs.JoinedPlayers,
+		LeavingPlayers:    vs.LeavingPlayers,
+		ShieldUsedPlayers: vs.ShieldUsedPlayers,
+		ShieldedPlayers:   vs.ShieldedPlayers,
+		Terrain:           terrainHeights,
+		Tanks:             tanks,
+	}
 
-		serverMsg := &streamtankspbv1.ViewerServerMessage{
-			Payload: &streamtankspbv1.ViewerServerMessage_State{
-				State: vsProto,
-			},
-		}
+	clientMsg := &streamtankspbv1.HostClientMessage{
+		Payload: &streamtankspbv1.HostClientMessage_State{
+			State: vsProto,
+		},
+	}
 
-		protoBytes, err := proto.Marshal(serverMsg)
-		if err != nil {
-			log.Printf("[C&C] Failed to marshal viewer state proto: %v", err)
-			return
-		}
+	protoBytes, err := proto.Marshal(clientMsg)
+	if err != nil {
+		log.Printf("[C&C] Failed to marshal host client state proto: %v", err)
+		return
+	}
 
-		if err := websocket.Message.Send(conn, protoBytes); err != nil {
-			log.Printf("[C&C] Failed to send viewer state update: %v", err)
-		}
-	} else {
-		msg := WSMessage{
-			Type:    "GAME_STATE",
-			Payload: vs,
-		}
-
-		if err := websocket.JSON.Send(conn, msg); err != nil {
-			log.Printf("[C&C] Failed to send viewer state update: %v", err)
-		}
+	if err := websocket.Message.Send(conn, protoBytes); err != nil {
+		log.Printf("[C&C] Failed to send viewer state update: %v", err)
 	}
 }
 
@@ -279,7 +260,7 @@ func runCCClientLoop(ctx context.Context, baseURL, channel string) {
 
 func runCCClient(ctx context.Context, baseURL, channel string) error {
 	token := getSetting("cc_host_token")
-	connectURL := fmt.Sprintf("%s/ws/host?channel=%s&format=proto", baseURL, url.QueryEscape(channel))
+	connectURL := fmt.Sprintf("%s/ws/host?channel=%s", baseURL, url.QueryEscape(channel))
 	if token != "" {
 		connectURL += "&token=" + url.QueryEscape(token)
 	}
@@ -311,7 +292,7 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 		broadcast(msgStateUpdate, &gameState)
 	}()
 
-	// Ping keepalive loop
+	// Ping keepalive loop sending binary Protobuf HostClientMessage.Ping
 	go func() {
 		ticker := time.NewTicker(45 * time.Second)
 		defer ticker.Stop()
@@ -320,8 +301,18 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := websocket.JSON.Send(ws, map[string]string{"type": "PING"}); err != nil {
-					return
+				pingMsg := &streamtankspbv1.HostClientMessage{
+					Payload: &streamtankspbv1.HostClientMessage_Ping{
+						Ping: &streamtankspbv1.PingMessage{
+							Timestamp: time.Now().UnixMilli(),
+						},
+					},
+				}
+				pingBytes, err := proto.Marshal(pingMsg)
+				if err == nil {
+					if err := websocket.Message.Send(ws, pingBytes); err != nil {
+						return
+					}
 				}
 			}
 		}
@@ -333,8 +324,8 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 
 	go func() {
 		for {
-			var raw json.RawMessage
-			if err := websocket.JSON.Receive(ws, &raw); err != nil {
+			var raw []byte
+			if err := websocket.Message.Receive(ws, &raw); err != nil {
 				errChan <- err
 				return
 			}
@@ -351,78 +342,51 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 			return fmt.Errorf("read failed: %w", readErr)
 
 		case data := <-msgChan:
-			var env struct {
-				Type    string          `json:"type"`
-				Payload json.RawMessage `json:"payload"`
-			}
-			if err := json.Unmarshal(data, &env); err != nil {
+			var srvMsg streamtankspbv1.HostServerMessage
+			if err := proto.Unmarshal(data, &srvMsg); err != nil {
+				log.Printf("[C&C] Failed to unmarshal HostServerMessage: %v", err)
 				continue
 			}
 
-			switch env.Type {
-			case "AUTH_CHALLENGE":
-				var challenge struct {
-					Channel   string `json:"channel"`
-					Code      string `json:"code"`
-					Command   string `json:"command"`
-					ExpiresIn int    `json:"expires_in"`
-				}
-				if err := json.Unmarshal(env.Payload, &challenge); err == nil {
-					log.Printf("\n"+
-						"========================================================================\n"+
-						"[C&C] CHANNEL CLAIM REQUIRED FOR: %s\n"+
-						"[C&C] To authorize this host, type this into your Twitch chat:\n"+
-						"      %%claim %s\n"+
-						"========================================================================\n", challenge.Channel, challenge.Code)
+			switch p := srvMsg.Payload.(type) {
+			case *streamtankspbv1.HostServerMessage_Challenge:
+				challenge := p.Challenge
+				log.Printf("\n"+
+					"========================================================================\n"+
+					"[C&C] CHANNEL CLAIM REQUIRED FOR: %s\n"+
+					"[C&C] To authorize this host, type this into your Twitch chat:\n"+
+					"      %%claim %s\n"+
+					"========================================================================\n", challenge.Channel, challenge.Code)
 
-					gameState.mu.Lock()
-					gameState.CCStatus = "pending_claim"
-					gameState.ClaimCode = challenge.Code
-					gameState.mu.Unlock()
-					broadcast(msgStateUpdate, &gameState)
-				}
+				gameState.mu.Lock()
+				gameState.CCStatus = "pending_claim"
+				gameState.ClaimCode = challenge.Code
+				gameState.mu.Unlock()
+				broadcast(msgStateUpdate, &gameState)
 
-			case "AUTH_SUCCESS":
-				var success struct {
-					Channel string `json:"channel"`
-					Token   string `json:"token"`
-				}
-				if err := json.Unmarshal(env.Payload, &success); err == nil {
-					if success.Token != "" {
-						saveSetting("cc_host_token", success.Token)
-						log.Println("[C&C] Channel authorization confirmed! Token securely saved to database.")
-					} else {
-						log.Printf("[C&C] Channel '%s' authorization confirmed via existing host token.", channel)
-					}
-
-					gameState.mu.Lock()
-					gameState.CCStatus = "connected"
-					gameState.ClaimCode = ""
-					gameState.mu.Unlock()
-
-					setCCConnProto(ws, true)
-					broadcast(msgStateUpdate, &gameState)
-					BroadcastViewerState()
-				}
-
-			case "HOST_WARNING":
-				var warning struct {
-					Event   string `json:"event"`
-					Channel string `json:"channel"`
-					Message string `json:"message"`
-				}
-				if err := json.Unmarshal(env.Payload, &warning); err == nil {
-					log.Printf("[C&C Security Alert] %s (channel: %s)", warning.Message, warning.Channel)
+			case *streamtankspbv1.HostServerMessage_Success:
+				success := p.Success
+				if success.Token != "" {
+					saveSetting("cc_host_token", success.Token)
+					log.Println("[C&C] Channel authorization confirmed! Token securely saved to database.")
 				} else {
-					var rawMsg string
-					if err := json.Unmarshal(env.Payload, &rawMsg); err == nil {
-						log.Printf("[C&C Security Alert] %s", rawMsg)
-					}
+					log.Printf("[C&C] Channel '%s' authorization confirmed via existing host token.", channel)
 				}
 
-			case "AUTH_ERROR":
-				var errMsg string
-				_ = json.Unmarshal(env.Payload, &errMsg)
+				gameState.mu.Lock()
+				gameState.CCStatus = "connected"
+				gameState.ClaimCode = ""
+				gameState.mu.Unlock()
+
+				setCCConn(ws)
+				broadcast(msgStateUpdate, &gameState)
+				BroadcastViewerState()
+
+			case *streamtankspbv1.HostServerMessage_Warning:
+				log.Printf("[C&C Security Alert] %s (channel: %s)", p.Warning.Message, p.Warning.Channel)
+
+			case *streamtankspbv1.HostServerMessage_Error:
+				errMsg := p.Error.Message
 				log.Printf("[C&C] Authentication error: %s", errMsg)
 
 				lowerErr := strings.ToLower(errMsg)
@@ -442,35 +406,13 @@ func runCCClient(ctx context.Context, baseURL, channel string) error {
 				gameState.mu.Unlock()
 				broadcast(msgStateUpdate, &gameState)
 
-			case "EXTENSION_COMMAND":
-				var extCmd struct {
-					User    string `json:"user"`
-					Command any    `json:"command"`
-				}
-				if err := json.Unmarshal(env.Payload, &extCmd); err != nil {
-					continue
-				}
+			case *streamtankspbv1.HostServerMessage_Command:
+				cmd := p.Command
+				log.Printf("[C&C] Command from %s: %s", cmd.User, cmd.Command)
+				processCommand(cmd.User, cmd.Command, nil, nil)
 
-				cmdBytes, err := json.Marshal(extCmd.Command)
-				if err != nil {
-					continue
-				}
-
-				var wsMsg WSMessage
-				if err := json.Unmarshal(cmdBytes, &wsMsg); err != nil {
-					continue
-				}
-
-				if wsMsg.Type == msgChatCommand {
-					payloadBytes, err := json.Marshal(wsMsg.Payload)
-					if err == nil {
-						var cmdStr string
-						if err := json.Unmarshal(payloadBytes, &cmdStr); err == nil {
-							log.Printf("[C&C] Command from %s: %s", extCmd.User, cmdStr)
-							processCommand(extCmd.User, cmdStr, nil, nil)
-						}
-					}
-				}
+			case *streamtankspbv1.HostServerMessage_Pong:
+				// Keepalive pong received
 			}
 		}
 	}

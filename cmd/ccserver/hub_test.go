@@ -14,6 +14,54 @@ import (
 	streamtankspbv1 "streamtanks/internal/proto/streamtanks/v1"
 )
 
+func receiveHostServerMsg(t *testing.T, ws *websocket.Conn) *streamtankspbv1.HostServerMessage {
+	t.Helper()
+	var data []byte
+	if err := websocket.Message.Receive(ws, &data); err != nil {
+		t.Fatalf("Failed to receive host server message: %v", err)
+	}
+	var msg streamtankspbv1.HostServerMessage
+	if err := proto.Unmarshal(data, &msg); err != nil {
+		t.Fatalf("Failed to unmarshal HostServerMessage: %v", err)
+	}
+	return &msg
+}
+
+func sendHostClientMsg(t *testing.T, ws *websocket.Conn, msg *streamtankspbv1.HostClientMessage) {
+	t.Helper()
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Failed to marshal HostClientMessage: %v", err)
+	}
+	if err := websocket.Message.Send(ws, data); err != nil {
+		t.Fatalf("Failed to send HostClientMessage: %v", err)
+	}
+}
+
+func receiveViewerServerMsg(t *testing.T, ws *websocket.Conn) *streamtankspbv1.ViewerServerMessage {
+	t.Helper()
+	var data []byte
+	if err := websocket.Message.Receive(ws, &data); err != nil {
+		t.Fatalf("Failed to receive viewer server message: %v", err)
+	}
+	var msg streamtankspbv1.ViewerServerMessage
+	if err := proto.Unmarshal(data, &msg); err != nil {
+		t.Fatalf("Failed to unmarshal ViewerServerMessage: %v", err)
+	}
+	return &msg
+}
+
+func sendViewerActionMsg(t *testing.T, ws *websocket.Conn, msg *streamtankspbv1.ViewerActionMessage) {
+	t.Helper()
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Failed to marshal ViewerActionMessage: %v", err)
+	}
+	if err := websocket.Message.Send(ws, data); err != nil {
+		t.Fatalf("Failed to send ViewerActionMessage: %v", err)
+	}
+}
+
 func TestHubRegistration(t *testing.T) {
 	hub := NewHub()
 
@@ -91,12 +139,9 @@ func TestHandleHostRejectWhenActivelyHosted(t *testing.T) {
 	}
 	defer func() { _ = ws1.Close() }()
 
-	var resp1 map[string]any
-	if err := websocket.JSON.Receive(ws1, &resp1); err != nil {
-		t.Fatalf("Failed to receive auth response for host 1: %v", err)
-	}
-	if resp1["type"] != "AUTH_SUCCESS" {
-		t.Fatalf("Expected AUTH_SUCCESS for host 1, got: %v", resp1)
+	resp1 := receiveHostServerMsg(t, ws1)
+	if resp1.GetSuccess() == nil {
+		t.Fatalf("Expected Success for host 1, got: %+v", resp1)
 	}
 
 	// Allow goroutine to complete RegisterHost
@@ -118,24 +163,21 @@ func TestHandleHostRejectWhenActivelyHosted(t *testing.T) {
 	}
 	defer func() { _ = ws2.Close() }()
 
-	var resp2 map[string]any
-	if err := websocket.JSON.Receive(ws2, &resp2); err != nil {
-		t.Fatalf("Failed to receive auth response for host 2: %v", err)
+	resp2 := receiveHostServerMsg(t, ws2)
+	if resp2.GetError() == nil {
+		t.Fatalf("Expected Error for unauthenticated request on active channel, got: %+v", resp2)
 	}
-	if resp2["type"] != "AUTH_ERROR" {
-		t.Fatalf("Expected AUTH_ERROR for unauthenticated request on active channel, got: %v", resp2)
-	}
-	if resp2["payload"] != "channel is actively hosted" {
-		t.Fatalf("Expected payload 'channel is actively hosted', got: %v", resp2["payload"])
+	if resp2.GetError().Message != "channel is actively hosted" {
+		t.Fatalf("Expected error message 'channel is actively hosted', got: %v", resp2.GetError().Message)
 	}
 
 	// 3. Verify Host 1 receives HOST_WARNING notifying of the rejected attempt
-	var warningMsg map[string]any
-	if err := websocket.JSON.Receive(ws1, &warningMsg); err != nil {
-		t.Fatalf("Failed to receive HOST_WARNING on host 1: %v", err)
+	warningMsg := receiveHostServerMsg(t, ws1)
+	if warningMsg.GetWarning() == nil {
+		t.Fatalf("Expected Warning on host 1, got: %+v", warningMsg)
 	}
-	if warningMsg["type"] != "HOST_WARNING" {
-		t.Fatalf("Expected HOST_WARNING on host 1, got: %v", warningMsg)
+	if warningMsg.GetWarning().Event != "unauthorized_claim_attempt" {
+		t.Errorf("Expected event unauthorized_claim_attempt, got: %s", warningMsg.GetWarning().Event)
 	}
 }
 
@@ -164,16 +206,23 @@ func TestHubStateCachingAndViewerSync(t *testing.T) {
 	hub := NewHub()
 	channel := "mrpoundsign"
 
-	// Broadcast payload before any viewer connects
-	statePayload := map[string]any{
-		"type": "GAME_STATE",
-		"payload": map[string]any{
-			"phase":           "INPUT",
-			"timer_remaining": float64(15),
-			"round_id":        float64(2),
+	vsProto := &streamtankspbv1.ViewerState{
+		Phase:          "INPUT",
+		TimerRemaining: 15,
+		RoundId:        2,
+	}
+	serverMsg := &streamtankspbv1.ViewerServerMessage{
+		Payload: &streamtankspbv1.ViewerServerMessage_State{
+			State: vsProto,
 		},
 	}
-	hub.BroadcastToViewers(channel, statePayload)
+	protoBytes, err := proto.Marshal(serverMsg)
+	if err != nil {
+		t.Fatalf("Failed to marshal state proto: %v", err)
+	}
+
+	// Broadcast payload before any viewer connects
+	hub.BroadcastToViewers(channel, protoBytes)
 
 	// Verify cached state in hub
 	hub.mu.RLock()
@@ -183,11 +232,11 @@ func TestHubStateCachingAndViewerSync(t *testing.T) {
 		t.Fatalf("Expected state to be cached for channel %s, but got nil", channel)
 	}
 
-	// Create a mock server that receives initial message from RegisterViewer
-	msgChan := make(chan map[string]any, 1)
+	// Create a mock viewer server that receives initial message from RegisterViewer
+	msgChan := make(chan []byte, 1)
 	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		var received map[string]any
-		if err := websocket.JSON.Receive(ws, &received); err == nil {
+		var received []byte
+		if err := websocket.Message.Receive(ws, &received); err == nil {
 			msgChan <- received
 		}
 	}))
@@ -203,136 +252,22 @@ func TestHubStateCachingAndViewerSync(t *testing.T) {
 	hub.RegisterViewer(channel, viewerWs)
 
 	select {
-	case msg := <-msgChan:
-		if msg["type"] != "GAME_STATE" {
-			t.Errorf("Expected message type 'GAME_STATE', got '%v'", msg["type"])
+	case data := <-msgChan:
+		var decoded streamtankspbv1.ViewerServerMessage
+		if err := proto.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("Failed to unmarshal delivered state: %v", err)
+		}
+		if decoded.GetState() == nil || decoded.GetState().Phase != "INPUT" {
+			t.Errorf("Unexpected cached state delivered: %+v", decoded.GetState())
 		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("Timed out waiting for initial cached state delivery to new viewer")
 	}
 }
 
-func TestHubProtobufViewerSync(t *testing.T) {
+func TestEndToEnd_HostAndViewerProtobuf(t *testing.T) {
 	hub := NewHub()
-	channel := "testproto"
-
-	vsProto := &streamtankspbv1.ViewerState{
-		Phase:          "INPUT",
-		TimerRemaining: 15,
-		RoundId:        10,
-		Terrain:        []int32{100, 200, 300},
-	}
-	serverMsg := &streamtankspbv1.ViewerServerMessage{
-		Payload: &streamtankspbv1.ViewerServerMessage_State{
-			State: vsProto,
-		},
-	}
-	protoBytes, err := proto.Marshal(serverMsg)
-	if err != nil {
-		t.Fatalf("failed to marshal proto: %v", err)
-	}
-
-	protoChan := make(chan []byte, 1)
-	protoServer := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		var raw []byte
-		if err := websocket.Message.Receive(ws, &raw); err == nil {
-			protoChan <- raw
-		}
-	}))
-	defer protoServer.Close()
-
-	viewerWs, err := websocket.Dial("ws://"+protoServer.Listener.Addr().String(), "", "http://localhost/")
-	if err != nil {
-		t.Fatalf("Failed to dial proto mock server: %v", err)
-	}
-	defer func() { _ = viewerWs.Close() }()
-
-	// Register proto viewer
-	hub.RegisterViewer(channel, viewerWs, true)
-
-	// Broadcast proto bytes
-	hub.BroadcastToViewers(channel, protoBytes)
-
-	select {
-	case receivedBytes := <-protoChan:
-		var decodedMsg streamtankspbv1.ViewerServerMessage
-		if err := proto.Unmarshal(receivedBytes, &decodedMsg); err != nil {
-			t.Fatalf("failed to unmarshal received proto bytes: %v", err)
-		}
-		if decodedMsg.GetState() == nil || decodedMsg.GetState().Phase != "INPUT" {
-			t.Errorf("unexpected decoded state: %+v", decodedMsg.GetState())
-		}
-		if len(decodedMsg.GetState().Terrain) != 3 {
-			t.Errorf("expected 3 terrain points, got %d", len(decodedMsg.GetState().Terrain))
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for proto broadcast")
-	}
-}
-
-func TestHubLegacyJSONServerToProtoViewer(t *testing.T) {
-	hub := NewHub()
-	channel := "testlegacy"
-
-	// Legacy server JSON payload
-	legacyJSONPayload := map[string]any{
-		"type": "GAME_STATE",
-		"payload": map[string]any{
-			"phase":           "INPUT",
-			"timer_remaining": float64(12),
-			"round_id":        float64(5),
-			"players_count":   float64(2),
-			"players":         []any{"alice", "bob"},
-			"can_start":       false,
-			"can_join":        true,
-		},
-	}
-
-	protoChan := make(chan []byte, 1)
-	protoServer := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		var raw []byte
-		if err := websocket.Message.Receive(ws, &raw); err == nil {
-			protoChan <- raw
-		}
-	}))
-	defer protoServer.Close()
-
-	viewerWs, err := websocket.Dial("ws://"+protoServer.Listener.Addr().String(), "", "http://localhost/")
-	if err != nil {
-		t.Fatalf("Failed to dial proto mock server: %v", err)
-	}
-	defer func() { _ = viewerWs.Close() }()
-
-	// Modern extension registers as proto viewer
-	hub.RegisterViewer(channel, viewerWs, true)
-
-	// Old server broadcasts JSON
-	hub.BroadcastToViewers(channel, legacyJSONPayload)
-
-	select {
-	case receivedBytes := <-protoChan:
-		var decodedMsg streamtankspbv1.ViewerServerMessage
-		if err := proto.Unmarshal(receivedBytes, &decodedMsg); err != nil {
-			t.Fatalf("failed to unmarshal converted proto bytes: %v", err)
-		}
-		st := decodedMsg.GetState()
-		if st == nil {
-			t.Fatalf("expected State payload in ViewerServerMessage, got nil")
-		}
-		if st.Phase != "INPUT" || st.TimerRemaining != 12 || st.RoundId != 5 || st.PlayersCount != 2 {
-			t.Errorf("unexpected converted ViewerState: %+v", st)
-		}
-		if len(st.Players) != 2 || st.Players[0] != "alice" || st.Players[1] != "bob" {
-			t.Errorf("unexpected converted players: %+v", st.Players)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for converted proto broadcast")
-	}
-}
-
-func TestEndToEnd_LegacyHostAndProtoViewer(t *testing.T) {
-	hub := NewHub()
-	channel := "legacychan"
+	channel := "testprotochan"
 	rawSecret := []byte("secret12345678901234567890123456")
 	b64Secret := base64.StdEncoding.EncodeToString(rawSecret)
 
@@ -343,33 +278,29 @@ func TestEndToEnd_LegacyHostAndProtoViewer(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	// 1. Connect Legacy Host (No &format=proto query, sends/receives standard JSON)
+	// 1. Connect Host
 	hostWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/host?channel="+channel, "", "http://localhost/")
 	if err != nil {
 		t.Fatalf("Failed to dial host: %v", err)
 	}
 	defer func() { _ = hostWS.Close() }()
 
-	// Read AUTH_SUCCESS from host WS
-	var hostAuthSuccess map[string]any
-	if err := websocket.JSON.Receive(hostWS, &hostAuthSuccess); err != nil {
-		t.Fatalf("Failed to receive host auth response: %v", err)
-	}
-	if hostAuthSuccess["type"] != "AUTH_SUCCESS" {
-		t.Fatalf("Expected AUTH_SUCCESS for host, got: %+v", hostAuthSuccess)
+	hostAuthSuccess := receiveHostServerMsg(t, hostWS)
+	if hostAuthSuccess.GetSuccess() == nil || hostAuthSuccess.GetSuccess().Channel != channel {
+		t.Fatalf("Expected Success for host, got: %+v", hostAuthSuccess)
 	}
 
-	// 2. Connect Modern Viewer (With &format=proto, sends/receives Protobuf binary frames)
-	viewerWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/viewer?format=proto", "", "http://localhost/")
+	// 2. Connect Viewer
+	viewerWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/viewer", "", "http://localhost/")
 	if err != nil {
 		t.Fatalf("Failed to dial viewer: %v", err)
 	}
 	defer func() { _ = viewerWS.Close() }()
 
-	// Generate valid viewer token
+	// Generate viewer JWT
 	claims := &ViewerClaims{
 		OpaqueUserID: "U999",
-		UserID:       "viewer1",
+		UserID:       "alice",
 		ChannelID:    channel,
 		Role:         "viewer",
 	}
@@ -379,6 +310,7 @@ func TestEndToEnd_LegacyHostAndProtoViewer(t *testing.T) {
 		t.Fatalf("Failed to sign viewer JWT: %v", err)
 	}
 
+	// Send ViewerAuthMessage
 	authMsg := &streamtankspbv1.ViewerAuthMessage{Jwt: tokenStr}
 	authBytes, _ := proto.Marshal(authMsg)
 	if err := websocket.Message.Send(viewerWS, authBytes); err != nil {
@@ -386,87 +318,57 @@ func TestEndToEnd_LegacyHostAndProtoViewer(t *testing.T) {
 	}
 
 	// Viewer receives Context message
-	var ctxRaw []byte
-	if err := websocket.Message.Receive(viewerWS, &ctxRaw); err != nil {
-		t.Fatalf("Failed to receive viewer context: %v", err)
-	}
-	var ctxMsg streamtankspbv1.ViewerServerMessage
-	if err := proto.Unmarshal(ctxRaw, &ctxMsg); err != nil || ctxMsg.GetContext() == nil {
-		t.Fatalf("Expected Context ViewerServerMessage, got error: %v or nil payload", err)
-	}
-	if ctxMsg.GetContext().TwitchUserId != "viewer1" || ctxMsg.GetContext().ChannelId != channel {
-		t.Errorf("Unexpected context received: %+v", ctxMsg.GetContext())
+	ctxMsg := receiveViewerServerMsg(t, viewerWS)
+	if ctxMsg.GetContext() == nil || ctxMsg.GetContext().TwitchUserId != "alice" {
+		t.Fatalf("Expected Context message with TwitchUserId 'alice', got: %+v", ctxMsg)
 	}
 
-	// 3. Legacy Host broadcasts JSON state (using standard websocket.JSON.Send)
-	legacyState := map[string]any{
-		"type": "GAME_STATE",
-		"payload": map[string]any{
-			"phase":           "INPUT",
-			"timer_remaining": float64(15),
-			"round_id":        float64(42),
-			"players_count":   float64(1),
-			"players":         []any{"alice"},
-			"can_start":       false,
-			"can_join":        true,
+	// 3. Host broadcasts state using HostClientMessage
+	sendHostClientMsg(t, hostWS, &streamtankspbv1.HostClientMessage{
+		Payload: &streamtankspbv1.HostClientMessage_State{
+			State: &streamtankspbv1.ViewerState{
+				Phase:          "INPUT",
+				TimerRemaining: 15,
+				RoundId:        42,
+				PlayersCount:   1,
+				Players:        []string{"alice"},
+				CanStart:       false,
+				CanJoin:        true,
+			},
 		},
-	}
-	if err := websocket.JSON.Send(hostWS, legacyState); err != nil {
-		t.Fatalf("Failed to send legacy state from host: %v", err)
-	}
+	})
 
-	// Viewer receives State message converted to Protobuf
-	var stateRaw []byte
-	if err := websocket.Message.Receive(viewerWS, &stateRaw); err != nil {
-		t.Fatalf("Failed to receive converted state on viewer: %v", err)
-	}
-	var stateMsg streamtankspbv1.ViewerServerMessage
-	if err := proto.Unmarshal(stateRaw, &stateMsg); err != nil || stateMsg.GetState() == nil {
-		t.Fatalf("Expected State ViewerServerMessage on viewer, got error: %v or nil", err)
-	}
+	// Viewer receives State message
+	stateMsg := receiveViewerServerMsg(t, viewerWS)
 	vs := stateMsg.GetState()
-	if vs.Phase != "INPUT" || vs.TimerRemaining != 15 || vs.RoundId != 42 {
-		t.Errorf("Unexpected converted ViewerState: %+v", vs)
+	if vs == nil || vs.Phase != "INPUT" || vs.TimerRemaining != 15 || vs.RoundId != 42 {
+		t.Fatalf("Expected ViewerState on viewer, got: %+v", vs)
 	}
 
-	// 4. Viewer sends Protobuf Action message (e.g. Fire angle=45, power=60)
-	actionMsg := &streamtankspbv1.ViewerActionMessage{
+	// 4. Viewer sends Protobuf Action message (Fire angle=45, power=60)
+	sendViewerActionMsg(t, viewerWS, &streamtankspbv1.ViewerActionMessage{
 		Action: &streamtankspbv1.ViewerActionMessage_Fire{
 			Fire: &streamtankspbv1.FireAction{
 				Angle: 45,
 				Power: 60,
 			},
 		},
-	}
-	actionBytes, _ := proto.Marshal(actionMsg)
-	if err := websocket.Message.Send(viewerWS, actionBytes); err != nil {
-		t.Fatalf("Failed to send action proto from viewer: %v", err)
-	}
+	})
 
-	// Host receives canonical JSON EXTENSION_COMMAND envelope
-	var hostCmd map[string]any
-	if err := websocket.JSON.Receive(hostWS, &hostCmd); err != nil {
-		t.Fatalf("Failed to receive action on legacy host: %v", err)
+	// Host receives HostCommand message
+	hostCmd := receiveHostServerMsg(t, hostWS)
+	if hostCmd.GetCommand() == nil {
+		t.Fatalf("Expected Command on host, got: %+v", hostCmd)
 	}
-	if hostCmd["type"] != "EXTENSION_COMMAND" {
-		t.Fatalf("Expected type EXTENSION_COMMAND on host, got: %v", hostCmd["type"])
-	}
-	pMap, ok := hostCmd["payload"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected payload map on host message, got: %v", hostCmd["payload"])
-	}
-	cmdMap, ok := pMap["command"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected command map on host message, got: %v", pMap["command"])
-	}
-	if cmdMap["type"] != "CHAT_COMMAND" || cmdMap["payload"] != "%fire 45 60" {
-		t.Errorf("Unexpected routed command on host: %+v", cmdMap)
+	cmd := hostCmd.GetCommand()
+	if cmd.User != "alice" || cmd.Command != "%fire 45 60" {
+		t.Errorf("Unexpected Command on host: %+v", cmd)
 	}
 }
 
-func TestEndToEnd_ProtoHostAndLegacyViewer(t *testing.T) {
+func TestHostHeartbeatDoesNotBroadcastToViewers(t *testing.T) {
 	hub := NewHub()
-	channel := "protochan"
+	channel := "pingchan"
 	rawSecret := []byte("secret12345678901234567890123456")
 	b64Secret := base64.StdEncoding.EncodeToString(rawSecret)
 
@@ -477,119 +379,119 @@ func TestEndToEnd_ProtoHostAndLegacyViewer(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	// 1. Connect Modern Host (with &format=proto, sends binary Protobuf frames)
-	hostWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/host?channel="+channel+"&format=proto", "", "http://localhost/")
+	// 1. Host connects
+	hostWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/host?channel="+channel, "", "http://localhost/")
 	if err != nil {
 		t.Fatalf("Failed to dial host: %v", err)
 	}
 	defer func() { _ = hostWS.Close() }()
+	_ = receiveHostServerMsg(t, hostWS) // Read Success
 
-	// Read AUTH_SUCCESS from host WS
-	var hostAuthSuccess map[string]any
-	if err := websocket.JSON.Receive(hostWS, &hostAuthSuccess); err != nil {
-		t.Fatalf("Failed to receive host auth response: %v", err)
-	}
-	if hostAuthSuccess["type"] != "AUTH_SUCCESS" {
-		t.Fatalf("Expected AUTH_SUCCESS for host, got: %+v", hostAuthSuccess)
+	// 2. Host broadcasts initial game state
+	sendHostClientMsg(t, hostWS, &streamtankspbv1.HostClientMessage{
+		Payload: &streamtankspbv1.HostClientMessage_State{
+			State: &streamtankspbv1.ViewerState{
+				Phase:          "INPUT",
+				TimerRemaining: 20,
+				RoundId:        1,
+			},
+		},
+	})
+
+	// Allow broadcast to cache
+	time.Sleep(50 * time.Millisecond)
+
+	// 3. Host sends keepalive ping
+	pingTimestamp := time.Now().UnixMilli()
+	sendHostClientMsg(t, hostWS, &streamtankspbv1.HostClientMessage{
+		Payload: &streamtankspbv1.HostClientMessage_Ping{
+			Ping: &streamtankspbv1.PingMessage{
+				Timestamp: pingTimestamp,
+			},
+		},
+	})
+
+	// 4. Host should receive Pong back directly
+	hostPong := receiveHostServerMsg(t, hostWS)
+	if hostPong.GetPong() == nil || hostPong.GetPong().Timestamp != pingTimestamp {
+		t.Fatalf("Expected Pong with timestamp %d, got: %+v", pingTimestamp, hostPong)
 	}
 
-	// 2. Connect Legacy Viewer (without &format=proto, sends/receives standard JSON)
+	// 5. Connect new Viewer and verify it receives the GAME STATE, NOT the PING!
 	viewerWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/viewer", "", "http://localhost/")
 	if err != nil {
 		t.Fatalf("Failed to dial viewer: %v", err)
 	}
 	defer func() { _ = viewerWS.Close() }()
 
-	// Generate valid viewer token
 	claims := &ViewerClaims{
-		OpaqueUserID: "U888",
-		UserID:       "legacyviewer",
+		OpaqueUserID: "U111",
+		UserID:       "bob",
 		ChannelID:    channel,
 		Role:         "viewer",
 	}
 	jwtObj := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, err := jwtObj.SignedString(rawSecret)
+	tokenStr, _ := jwtObj.SignedString(rawSecret)
+
+	authMsg := &streamtankspbv1.ViewerAuthMessage{Jwt: tokenStr}
+	authBytes, _ := proto.Marshal(authMsg)
+	_ = websocket.Message.Send(viewerWS, authBytes)
+
+	// Viewer receives Context
+	_ = receiveViewerServerMsg(t, viewerWS)
+
+	// Viewer receives State (must NOT be a ping or corrupted data)
+	stateMsg := receiveViewerServerMsg(t, viewerWS)
+	if stateMsg.GetState() == nil || stateMsg.GetState().Phase != "INPUT" || stateMsg.GetState().TimerRemaining != 20 {
+		t.Fatalf("Expected valid cached ViewerState delivered to viewer, got: %+v", stateMsg)
+	}
+}
+
+func TestViewerHeartbeat(t *testing.T) {
+	hub := NewHub()
+	channel := "viewerpingchan"
+	rawSecret := []byte("secret12345678901234567890123456")
+	b64Secret := base64.StdEncoding.EncodeToString(rawSecret)
+
+	mux := http.NewServeMux()
+	mux.Handle("/ws/viewer", HandleViewer(hub, b64Secret, nil))
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	viewerWS, err := websocket.Dial("ws://"+server.Listener.Addr().String()+"/ws/viewer", "", "http://localhost/")
 	if err != nil {
-		t.Fatalf("Failed to sign viewer JWT: %v", err)
+		t.Fatalf("Failed to dial viewer: %v", err)
 	}
+	defer func() { _ = viewerWS.Close() }()
 
-	// Send JSON auth
-	if err := websocket.JSON.Send(viewerWS, map[string]string{"jwt": tokenStr}); err != nil {
-		t.Fatalf("Failed to send legacy viewer auth: %v", err)
+	claims := &ViewerClaims{
+		OpaqueUserID: "U222",
+		UserID:       "charlie",
+		ChannelID:    channel,
+		Role:         "viewer",
 	}
+	jwtObj := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, _ := jwtObj.SignedString(rawSecret)
 
-	// Viewer receives VIEWER_INFO JSON
-	var viewerInfo map[string]any
-	if err := websocket.JSON.Receive(viewerWS, &viewerInfo); err != nil {
-		t.Fatalf("Failed to receive viewer info: %v", err)
-	}
-	if viewerInfo["type"] != "VIEWER_INFO" {
-		t.Fatalf("Expected VIEWER_INFO for legacy viewer, got: %+v", viewerInfo)
-	}
+	authMsg := &streamtankspbv1.ViewerAuthMessage{Jwt: tokenStr}
+	authBytes, _ := proto.Marshal(authMsg)
+	_ = websocket.Message.Send(viewerWS, authBytes)
 
-	// 3. Modern Host broadcasts Protobuf binary state
-	vsProto := &streamtankspbv1.ViewerState{
-		Phase:          "INPUT",
-		TimerRemaining: 20,
-		RoundId:        99,
-		Players:        []string{"bob"},
-		Terrain:        []int32{150, 250},
-	}
-	serverMsg := &streamtankspbv1.ViewerServerMessage{
-		Payload: &streamtankspbv1.ViewerServerMessage_State{
-			State: vsProto,
+	// Receive Context
+	_ = receiveViewerServerMsg(t, viewerWS)
+
+	// Send Viewer Ping
+	pingTime := time.Now().UnixMilli()
+	sendViewerActionMsg(t, viewerWS, &streamtankspbv1.ViewerActionMessage{
+		Action: &streamtankspbv1.ViewerActionMessage_Ping{
+			Ping: &streamtankspbv1.PingMessage{Timestamp: pingTime},
 		},
-	}
-	protoBytes, err := proto.Marshal(serverMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal proto state: %v", err)
-	}
-	if err := websocket.Message.Send(hostWS, protoBytes); err != nil {
-		t.Fatalf("Failed to send binary proto state from host: %v", err)
-	}
+	})
 
-	// Legacy Viewer receives converted JSON state
-	var viewerStateMsg map[string]any
-	if err := websocket.JSON.Receive(viewerWS, &viewerStateMsg); err != nil {
-		t.Fatalf("Failed to receive json state on legacy viewer: %v", err)
-	}
-	if viewerStateMsg["type"] != "GAME_STATE" {
-		t.Fatalf("Expected type GAME_STATE on legacy viewer, got: %v", viewerStateMsg["type"])
-	}
-	pMap, ok := viewerStateMsg["payload"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected payload map on viewer state, got: %v", viewerStateMsg["payload"])
-	}
-	if pMap["phase"] != "INPUT" || pMap["timer_remaining"] != float64(20) && pMap["timerRemaining"] != float64(20) {
-		t.Errorf("Unexpected converted state on legacy viewer: %+v", pMap)
-	}
-
-	// 4. Legacy Viewer sends JSON chat command
-	legacyCmd := map[string]any{
-		"type":    "CHAT_COMMAND",
-		"payload": "%left",
-	}
-	if err := websocket.JSON.Send(viewerWS, legacyCmd); err != nil {
-		t.Fatalf("Failed to send legacy chat command: %v", err)
-	}
-
-	// Host receives canonical JSON EXTENSION_COMMAND envelope
-	var hostCmd map[string]any
-	if err := websocket.JSON.Receive(hostWS, &hostCmd); err != nil {
-		t.Fatalf("Failed to receive command on host: %v", err)
-	}
-	if hostCmd["type"] != "EXTENSION_COMMAND" {
-		t.Fatalf("Expected type EXTENSION_COMMAND on host, got: %v", hostCmd["type"])
-	}
-	hostPayload, ok := hostCmd["payload"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected payload map on host message, got: %v", hostCmd["payload"])
-	}
-	cmdPayload, ok := hostPayload["command"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected command map on host message, got: %v", hostPayload["command"])
-	}
-	if cmdPayload["type"] != "CHAT_COMMAND" || cmdPayload["payload"] != "%left" {
-		t.Errorf("Unexpected routed command on host: %+v", cmdPayload)
+	// Receive Viewer Pong
+	pongMsg := receiveViewerServerMsg(t, viewerWS)
+	if pongMsg.GetPong() == nil || pongMsg.GetPong().Timestamp != pingTime {
+		t.Fatalf("Expected Pong with timestamp %d, got: %+v", pingTime, pongMsg)
 	}
 }

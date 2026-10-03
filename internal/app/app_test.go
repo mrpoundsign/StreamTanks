@@ -2657,12 +2657,15 @@ func TestCCCommandsAndStorage(t *testing.T) {
 func TestBroadcastViewerState(t *testing.T) {
 	resetGameStateForTest()
 
-	msgChan := make(chan WSMessage, 10)
+	msgChan := make(chan *streamtankspbv1.ViewerState, 10)
 	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
 		for {
-			var m WSMessage
-			if err := websocket.JSON.Receive(ws, &m); err == nil {
-				msgChan <- m
+			var raw []byte
+			if err := websocket.Message.Receive(ws, &raw); err == nil {
+				var clientMsg streamtankspbv1.HostClientMessage
+				if err := proto.Unmarshal(raw, &clientMsg); err == nil && clientMsg.GetState() != nil {
+					msgChan <- clientMsg.GetState()
+				}
 			} else {
 				return
 			}
@@ -2689,16 +2692,8 @@ func TestBroadcastViewerState(t *testing.T) {
 	BroadcastViewerState()
 
 	select {
-	case msg := <-msgChan:
-		if msg.Type != "GAME_STATE" {
-			t.Fatalf("expected message type GAME_STATE, got %s", msg.Type)
-		}
-		payloadBytes, _ := json.Marshal(msg.Payload)
-		var vs ViewerState
-		if err := json.Unmarshal(payloadBytes, &vs); err != nil {
-			t.Fatalf("failed to unmarshal ViewerState: %v", err)
-		}
-		if vs.Phase != phaseInput || vs.RoundID != 1 || vs.TimerRemaining != 15 {
+	case vs := <-msgChan:
+		if vs.Phase != phaseInput || vs.RoundId != 1 || vs.TimerRemaining != 15 {
 			t.Errorf("unexpected ViewerState: %+v", vs)
 		}
 	case <-time.After(2 * time.Second):
@@ -2725,10 +2720,7 @@ func TestBroadcastViewerState(t *testing.T) {
 
 	BroadcastViewerState()
 	select {
-	case msg := <-msgChan:
-		payloadBytes, _ := json.Marshal(msg.Payload)
-		var vs ViewerState
-		_ = json.Unmarshal(payloadBytes, &vs)
+	case vs := <-msgChan:
 		if vs.TimerRemaining != 14 {
 			t.Errorf("expected updated TimerRemaining 14, got %d", vs.TimerRemaining)
 		}
@@ -2749,10 +2741,7 @@ func TestBroadcastViewerState(t *testing.T) {
 
 	BroadcastViewerState()
 	select {
-	case msg := <-msgChan:
-		payloadBytes, _ := json.Marshal(msg.Payload)
-		var vs ViewerState
-		_ = json.Unmarshal(payloadBytes, &vs)
+	case vs := <-msgChan:
 		if len(vs.Players) != 2 || vs.Players[0] != "alice" || vs.Players[1] != "charlie" {
 			t.Errorf("expected alive players [alice, charlie], got %+v", vs.Players)
 		}
@@ -2774,10 +2763,7 @@ func TestBroadcastViewerState(t *testing.T) {
 
 	BroadcastViewerState()
 	select {
-	case msg := <-msgChan:
-		payloadBytes, _ := json.Marshal(msg.Payload)
-		var vs ViewerState
-		_ = json.Unmarshal(payloadBytes, &vs)
+	case vs := <-msgChan:
 		if !vs.CanStart {
 			t.Errorf("expected CanStart to be true when joined human present in IDLE")
 		}
@@ -2804,13 +2790,20 @@ func TestCCClientAuthErrorHandling(t *testing.T) {
 	}
 	defer closeDB()
 
+	// Helper to send HostServerMessage
+	sendMockHostServerMsg := func(ws *websocket.Conn, msg *streamtankspbv1.HostServerMessage) {
+		data, _ := proto.Marshal(msg)
+		_ = websocket.Message.Send(ws, data)
+	}
+
 	// 1. "channel already claimed" preserves stored cc_host_token
 	saveSetting("cc_host_token", "sample.valid.token.1")
 
 	server1 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		_ = websocket.JSON.Send(ws, map[string]any{
-			"type":    "AUTH_ERROR",
-			"payload": "channel already claimed",
+		sendMockHostServerMsg(ws, &streamtankspbv1.HostServerMessage{
+			Payload: &streamtankspbv1.HostServerMessage_Error{
+				Error: &streamtankspbv1.HostAuthError{Message: "channel already claimed"},
+			},
 		})
 		_ = ws.Close()
 	}))
@@ -2829,9 +2822,10 @@ func TestCCClientAuthErrorHandling(t *testing.T) {
 	saveSetting("cc_host_token", "sample.valid.token.2")
 
 	server2 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		_ = websocket.JSON.Send(ws, map[string]any{
-			"type":    "AUTH_ERROR",
-			"payload": "channel is actively hosted",
+		sendMockHostServerMsg(ws, &streamtankspbv1.HostServerMessage{
+			Payload: &streamtankspbv1.HostServerMessage_Error{
+				Error: &streamtankspbv1.HostAuthError{Message: "channel is actively hosted"},
+			},
 		})
 		_ = ws.Close()
 	}))
@@ -2850,9 +2844,10 @@ func TestCCClientAuthErrorHandling(t *testing.T) {
 	saveSetting("cc_host_token", "sample.invalid.token.3")
 
 	server3 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		_ = websocket.JSON.Send(ws, map[string]any{
-			"type":    "AUTH_ERROR",
-			"payload": "invalid authentication token",
+		sendMockHostServerMsg(ws, &streamtankspbv1.HostServerMessage{
+			Payload: &streamtankspbv1.HostServerMessage_Error{
+				Error: &streamtankspbv1.HostAuthError{Message: "invalid authentication token"},
+			},
 		})
 		_ = ws.Close()
 	}))
@@ -2871,12 +2866,13 @@ func TestCCClientAuthErrorHandling(t *testing.T) {
 	saveSetting("cc_host_token", "sample.valid.token.4")
 
 	server4 := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
-		_ = websocket.JSON.Send(ws, map[string]any{
-			"type": "HOST_WARNING",
-			"payload": map[string]any{
-				"event":   "unauthorized_claim_attempt",
-				"channel": "mrpoundsign",
-				"message": "An unauthenticated connection attempted to claim this channel, but was blocked.",
+		sendMockHostServerMsg(ws, &streamtankspbv1.HostServerMessage{
+			Payload: &streamtankspbv1.HostServerMessage_Warning{
+				Warning: &streamtankspbv1.HostWarning{
+					Event:   "unauthorized_claim_attempt",
+					Channel: "mrpoundsign",
+					Message: "An unauthenticated connection attempted to claim this channel, but was blocked.",
+				},
 			},
 		})
 		_ = ws.Close()
@@ -2918,8 +2914,8 @@ func TestBroadcastViewerState_Protobuf(t *testing.T) {
 	}
 	defer func() { _ = clientWS.Close() }()
 
-	setCCConnProto(clientWS, true)
-	defer setCCConnProto(nil, false)
+	setCCConn(clientWS)
+	defer setCCConn(nil)
 
 	gameState.mu.Lock()
 	gameState.Phase = phaseInput
@@ -2945,13 +2941,13 @@ func TestBroadcastViewerState_Protobuf(t *testing.T) {
 
 	select {
 	case data := <-msgChan:
-		var serverMsg streamtankspbv1.ViewerServerMessage
-		if err := proto.Unmarshal(data, &serverMsg); err != nil {
-			t.Fatalf("failed to unmarshal ViewerServerMessage: %v", err)
+		var clientMsg streamtankspbv1.HostClientMessage
+		if err := proto.Unmarshal(data, &clientMsg); err != nil {
+			t.Fatalf("failed to unmarshal HostClientMessage: %v", err)
 		}
-		vs := serverMsg.GetState()
+		vs := clientMsg.GetState()
 		if vs == nil {
-			t.Fatalf("expected State payload in ViewerServerMessage, got nil")
+			t.Fatalf("expected State payload in HostClientMessage, got nil")
 		}
 		if vs.Phase != phaseInput || vs.RoundId != 42 || vs.TimerRemaining != 15 {
 			t.Errorf("unexpected ViewerState fields: %+v", vs)
@@ -4100,12 +4096,15 @@ func TestShield_ProjectileAbsorption(t *testing.T) {
 func TestShield_BroadcastViewerState(t *testing.T) {
 	resetGameStateForTest()
 
-	msgChan := make(chan WSMessage, 10)
+	msgChan := make(chan *streamtankspbv1.ViewerState, 10)
 	server := httptest.NewServer(websocket.Handler(func(ws *websocket.Conn) {
 		for {
-			var m WSMessage
-			if err := websocket.JSON.Receive(ws, &m); err == nil {
-				msgChan <- m
+			var raw []byte
+			if err := websocket.Message.Receive(ws, &raw); err == nil {
+				var clientMsg streamtankspbv1.HostClientMessage
+				if err := proto.Unmarshal(raw, &clientMsg); err == nil && clientMsg.GetState() != nil {
+					msgChan <- clientMsg.GetState()
+				}
 			} else {
 				return
 			}
@@ -4131,18 +4130,12 @@ func TestShield_BroadcastViewerState(t *testing.T) {
 	found := false
 	for !found {
 		select {
-		case msg := <-msgChan:
-			if msg.Type == "GAME_STATE" {
-				payloadBytes, _ := json.Marshal(msg.Payload)
-				var vs ViewerState
-				if err := json.Unmarshal(payloadBytes, &vs); err == nil {
-					if slices.Contains(vs.ShieldUsedPlayers, "alice") && slices.Contains(vs.ShieldedPlayers, "alice") {
-						found = true
-					}
-				}
+		case vs := <-msgChan:
+			if slices.Contains(vs.ShieldUsedPlayers, "alice") && slices.Contains(vs.ShieldedPlayers, "alice") {
+				found = true
 			}
 		case <-timeout:
-			t.Fatal("timed out waiting for GAME_STATE broadcast with alice in ShieldUsedPlayers and ShieldedPlayers")
+			t.Fatal("timed out waiting for HostClientMessage broadcast with alice in ShieldUsedPlayers and ShieldedPlayers")
 		}
 	}
 }

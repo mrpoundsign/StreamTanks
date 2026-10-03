@@ -7,6 +7,7 @@ require (
 	github.com/benbjohnson/clock v1.3.5
 	github.com/gempir/go-twitch-irc/v4 v4.4.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	golang.org/x/image v0.24.0
 	golang.org/x/net v0.59.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.58.0
@@ -47,7 +48,6 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
-	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
