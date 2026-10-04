@@ -2,8 +2,13 @@ name: Release StreamTanks
 
 on:
   push:
+    branches:
+      - ci/build-refactor
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -123,11 +128,15 @@ jobs:
 
           echo "Building Linux amd64 GUI package..."
           fyne package -os linux -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
-          mv StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
+          LINUX_PKG=$(find . -name "StreamTanksGameClient.tar.xz" | head -n 1)
+          test -n "$LINUX_PKG" || (echo "Linux package not found" && exit 1)
+          mv "$LINUX_PKG" "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
 
           echo "Cross-compiling Windows amd64 GUI binary..."
           CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 fyne package -os windows -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
-          mv StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.exe"
+          WIN_EXE=$(find . -name "StreamTanksGameClient.exe" | head -n 1)
+          test -n "$WIN_EXE" || (echo "Windows exe not found" && exit 1)
+          mv "$WIN_EXE" "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.exe"
 
       - name: Upload GUI Artifacts
         uses: actions/upload-artifact@v4
@@ -220,13 +229,18 @@ jobs:
           path: gui-dist
           merge-multiple: true
 
-      - name: Update Checksums and Attach GUI to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update and Consolidate Checksums
         run: |
           cd gui-dist
           sha256sum * >> ../dist/checksums.txt
           cd ..
           sort -k2 -o dist/checksums.txt dist/checksums.txt
+          echo "=== Final Consolidated dist/checksums.txt ==="
+          cat dist/checksums.txt
+
+      - name: Attach GUI to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
           gh release upload ${{ github.ref_name }} gui-dist/* dist/checksums.txt --clobber
