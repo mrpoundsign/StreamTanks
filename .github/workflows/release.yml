@@ -58,8 +58,8 @@ jobs:
           version: '~> v2'
           args: check
 
-  build-web:
-    name: Build Web & Extension
+  build-extension:
+    name: Build Twitch Extension
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -74,22 +74,14 @@ jobs:
       - name: Install Node Dependencies
         run: npm ci
 
-      - name: Build Web Bundle & Package Extension
-        run: |
-          npm run build:prod
-          npm run package:ext
+      - name: Package Twitch Extension
+        run: npm run package:ext
 
       - name: Upload Extension Artifact
         uses: actions/upload-artifact@v4
         with:
           name: extension
           path: extension.zip
-
-      - name: Upload Web Assets Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-assets
-          path: web/public/
 
   build-gui-linux-windows:
     name: Build Desktop GUI (Linux & Windows)
@@ -178,7 +170,7 @@ jobs:
 
   release:
     name: Release Binaries (GoReleaser + Client)
-    needs: [test, build-web, build-gui-linux-windows, build-gui-macos]
+    needs: [test, build-extension, build-gui-linux-windows, build-gui-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -205,11 +197,10 @@ jobs:
           fi
           test -f extension.zip || (echo "extension.zip not found" && exit 1)
 
-      - name: Download Web Assets Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: web-assets
-          path: web/public/
+      - name: Verify Clean Git State
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)" || (echo "Dirty git state detected:" && git status && exit 1)
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
