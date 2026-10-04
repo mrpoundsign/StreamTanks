@@ -110,7 +110,7 @@ jobs:
             libxxf86vm-dev libwayland-dev libxkbcommon-dev fonts-dejavu-core
 
       - name: Install Fyne CLI
-        run: go install fyne.io/fyne/v2/cmd/fyne@v2.8.1
+        run: go install fyne.io/tools/cmd/fyne@v1.7.3
 
       - name: Compile Linux and Windows GUI
         run: |
@@ -149,7 +149,7 @@ jobs:
           cache: true
 
       - name: Install Fyne CLI
-        run: go install fyne.io/fyne/v2/cmd/fyne@v2.8.1
+        run: go install fyne.io/tools/cmd/fyne@v1.7.3
 
       - name: Build macOS GUI
         run: |
