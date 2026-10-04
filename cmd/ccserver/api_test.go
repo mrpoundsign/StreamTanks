@@ -325,13 +325,19 @@ func TestUniversalClient_ViewerConnect(t *testing.T) {
 		t.Errorf("expected twitch_user_id 777888, got %s", ctxPayload.TwitchUserId)
 	}
 
-	// Verify hub registered the viewer under channel "streamtanks"
-	hub.mu.RLock()
-	viewers := hub.viewers["streamtanks"]
-	hub.mu.RUnlock()
+	// Verify hub registered the viewer under channel "streamtanks" (poll for async registration)
+	var viewersCount int
+	for start := time.Now(); time.Since(start) < 500*time.Millisecond; time.Sleep(5 * time.Millisecond) {
+		hub.mu.RLock()
+		viewersCount = len(hub.viewers["streamtanks"])
+		hub.mu.RUnlock()
+		if viewersCount == 1 {
+			break
+		}
+	}
 
-	if len(viewers) != 1 {
-		t.Errorf("expected 1 registered viewer for streamtanks, got %d", len(viewers))
+	if viewersCount != 1 {
+		t.Errorf("expected 1 registered viewer for streamtanks, got %d", viewersCount)
 	}
 }
 
