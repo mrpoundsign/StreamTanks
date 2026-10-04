@@ -122,11 +122,11 @@ jobs:
           fi
 
           echo "Building Linux amd64 GUI package..."
-          fyne package -os linux -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon assets/icon.png -src ./cmd/stclient
+          fyne package -os linux -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
           mv StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
 
           echo "Cross-compiling Windows amd64 GUI binary..."
-          CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 fyne package -os windows -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon assets/icon.png -src ./cmd/stclient
+          CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 fyne package -os windows -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
           mv StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.exe"
 
       - name: Upload GUI Artifacts
