@@ -2,8 +2,6 @@ name: Release StreamTanks
 
 on:
   push:
-    branches:
-      - ci/build-refactor
     tags:
       - 'v*'
   pull_request:
