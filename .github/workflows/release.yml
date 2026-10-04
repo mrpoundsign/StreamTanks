@@ -119,8 +119,10 @@ jobs:
             TAG="snapshot"
           fi
           if [ "${{ matrix.target }}" = "windows" ]; then
-            cp fyne-cross/dist/windows-amd64/StreamTanksGameClient.exe.zip "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.zip"
-            cp fyne-cross/dist/windows-arm64/StreamTanksGameClient.exe.zip "gui-dist/StreamTanksGameClient_${TAG}_windows_arm64.zip"
+            unzip -q -o fyne-cross/dist/windows-amd64/StreamTanksGameClient.zip -d /tmp/win-amd64
+            mv /tmp/win-amd64/StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.exe"
+            unzip -q -o fyne-cross/dist/windows-arm64/StreamTanksGameClient.zip -d /tmp/win-arm64
+            mv /tmp/win-arm64/StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_arm64.exe"
           elif [ "${{ matrix.target }}" = "linux" ]; then
             cp fyne-cross/dist/linux-amd64/StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
             cp fyne-cross/dist/linux-arm64/StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_arm64.tar.xz"
