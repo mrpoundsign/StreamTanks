@@ -3,6 +3,7 @@
 *.db-journal
 leaderboard.json
 dist/
+gui-dist/
 node_modules/
 *.map
 *~

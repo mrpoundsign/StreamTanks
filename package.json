@@ -11,7 +11,7 @@
     "build:sim": "esbuild web/src/simulation.ts --bundle --format=esm --outfile=web/dist/simulation.mjs",
     "build:lab": "esbuild lab-web/src/lab.ts --bundle --outfile=lab-web/public/lab.js --sourcemap",
     "build:all": "npm run build && npm run build:sim && npm run build:lab",
-    "package:ext": "npm run build && powershell -Command \"Compress-Archive -Path ext-web/public/* -DestinationPath extension.zip -Force\"",
+    "package:ext": "npm run build && node scripts/package_ext.js",
     "watch": "esbuild web/src/game.ts --bundle --outfile=web/public/game.js --sourcemap --watch & esbuild ext-web/src/ext.ts --bundle --outfile=ext-web/public/ext.js --sourcemap --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

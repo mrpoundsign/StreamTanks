@@ -23,17 +23,6 @@ jobs:
           go-version: '1.27'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Build TypeScript Frontend
-        run: |
-          npm ci
-          npm run build:prod
-
       - name: Install Linux GUI & Font Dependencies
         run: |
           sudo apt-get update -qq
@@ -45,6 +34,20 @@ jobs:
       - name: Run Full Test Suite
         run: go test -v ./...
 
+      - name: Check Go Modernization
+        run: |
+          diff=$(go fix -diff ./...)
+          if [ -n "$diff" ]; then
+            echo "Go modernization diff found:"
+            echo "$diff"
+            exit 1
+          fi
+
+      - name: Run golangci-lint (v2)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.2
+
       - name: Validate GoReleaser Config
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -52,20 +55,42 @@ jobs:
           version: '~> v2'
           args: check
 
-  build-gui:
-    name: Build Desktop GUI (${{ matrix.target }})
-    needs: test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: windows
-            os: ubuntu-latest
-          - target: linux
-            os: ubuntu-latest
-          - target: macos
-            os: macos-latest
+  build-web:
+    name: Build Web & Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Build Web Bundle & Package Extension
+        run: |
+          npm run build:prod
+          npm run package:ext
+
+      - name: Upload Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: extension.zip
+
+      - name: Upload Web Assets Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-assets
+          path: web/public/
+
+  build-gui-linux-windows:
+    name: Build Desktop GUI (Linux & Windows)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -76,69 +101,77 @@ jobs:
           go-version: '1.27'
           cache: true
 
-      - name: Cache fyne-cross binary
-        if: matrix.target != 'macos'
-        id: cache-fyne-cross
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/fyne-cross
-          key: ${{ runner.os }}-fyne-cross-bin-v2
-
-      - name: Install fyne-cross
-        if: matrix.target != 'macos' && steps.cache-fyne-cross.outputs.cache-hit != 'true'
-        run: go install github.com/fyne-io/fyne-cross@latest
-
-      - name: Cache fyne-cross build cache
-        if: matrix.target != 'macos'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/fyne-cross
-          key: ${{ runner.os }}-fyne-cross-build-${{ matrix.target }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-fyne-cross-build-${{ matrix.target }}-
-
-      - name: Cross-Compile Desktop GUI for ${{ matrix.target }}
-        if: matrix.target != 'macos'
+      - name: Install Linux GUI & MinGW Toolchain
         run: |
-          ~/go/bin/fyne-cross ${{ matrix.target }} -arch=amd64,arm64 -app-id=com.poundsigndesign.streamtanks.client -name=StreamTanksGameClient -icon=./assets/icon.png -env GOTOOLCHAIN=auto ./cmd/stclient
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            gcc-mingw-w64 gcc libgl1-mesa-dev xorg-dev \
+            libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev \
+            libxxf86vm-dev libwayland-dev libxkbcommon-dev fonts-dejavu-core
 
-      - name: Install fyne (macOS)
-        if: matrix.target == 'macos'
-        run: go install fyne.io/tools/cmd/fyne@latest
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@v2.8.1
 
-      - name: Build macOS GUI
-        if: matrix.target == 'macos'
+      - name: Compile Linux and Windows GUI
         run: |
-          ~/go/bin/fyne package -os darwin -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
-
-      - name: Prepare GUI Packages
-        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
           mkdir -p gui-dist
           TAG="${{ github.ref_name }}"
           if [ -z "$TAG" ] || [[ ! "$TAG" =~ ^v ]]; then
             TAG="snapshot"
           fi
-          if [ "${{ matrix.target }}" = "windows" ]; then
-            unzip -q -o fyne-cross/dist/windows-amd64/StreamTanksGameClient.zip -d /tmp/win-amd64
-            mv /tmp/win-amd64/StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.exe"
-            unzip -q -o fyne-cross/dist/windows-arm64/StreamTanksGameClient.zip -d /tmp/win-arm64
-            mv /tmp/win-arm64/StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_arm64.exe"
-          elif [ "${{ matrix.target }}" = "linux" ]; then
-            cp fyne-cross/dist/linux-amd64/StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
-            cp fyne-cross/dist/linux-arm64/StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_arm64.tar.xz"
-          elif [ "${{ matrix.target }}" = "macos" ]; then
-            zip -r "gui-dist/StreamTanksGameClient_${TAG}_darwin_all.zip" StreamTanksGameClient.app
-          fi
+
+          echo "Building Linux amd64 GUI package..."
+          fyne package -os linux -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon assets/icon.png -src ./cmd/stclient
+          mv StreamTanksGameClient.tar.xz "gui-dist/StreamTanksGameClient_${TAG}_linux_amd64.tar.xz"
+
+          echo "Cross-compiling Windows amd64 GUI binary..."
+          CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 fyne package -os windows -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon assets/icon.png -src ./cmd/stclient
+          mv StreamTanksGameClient.exe "gui-dist/StreamTanksGameClient_${TAG}_windows_amd64.exe"
 
       - name: Upload GUI Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gui-dist-${{ matrix.target }}
+          name: gui-dist-linux-windows
+          path: gui-dist/
+
+  build-gui-macos:
+    name: Build Desktop GUI (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@v2.8.1
+
+      - name: Build macOS GUI
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          mkdir -p gui-dist
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [[ ! "$TAG" =~ ^v ]]; then
+            TAG="snapshot"
+          fi
+
+          fyne package -os darwin -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
+          zip -r "gui-dist/StreamTanksGameClient_${TAG}_darwin_all.zip" StreamTanksGameClient.app
+
+      - name: Upload GUI Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-dist-macos
           path: gui-dist/
 
   release:
     name: Release Binaries (GoReleaser + Client)
-    needs: [test, build-gui]
+    needs: [test, build-web, build-gui-linux-windows, build-gui-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -152,27 +185,24 @@ jobs:
           go-version: '1.27'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Build TypeScript Frontend
-        run: |
-          npm ci
-          npm run build:prod
-
-      - name: Package Twitch Extension
-        run: |
-          cd ext-web/public && zip -r ../../extension.zip *
-
-      - name: Download GUI Artifacts
+      - name: Download Twitch Extension Artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: gui-dist-*
-          path: gui-dist
-          merge-multiple: true
+          name: extension
+          path: .
+
+      - name: Ensure Extension Archive Placement
+        run: |
+          if [ -f extension/extension.zip ]; then
+            mv extension/extension.zip ./extension.zip
+          fi
+          test -f extension.zip || (echo "extension.zip not found" && exit 1)
+
+      - name: Download Web Assets Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: web/public/
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -182,6 +212,13 @@ jobs:
           args: ${{ startsWith(github.ref, 'refs/tags/v') && 'release --clean' || 'release --clean --snapshot' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download GUI Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gui-dist-*
+          path: gui-dist
+          merge-multiple: true
 
       - name: Update Checksums and Attach GUI to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')

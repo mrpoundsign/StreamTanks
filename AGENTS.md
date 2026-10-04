@@ -231,9 +231,9 @@ For the complete networking architecture, claim flow, and schema specifications,
 
 ### Multi-Platform CI/CD Pipeline (`.github/workflows/release.yml`)
 Because Fyne requires `CGO_ENABLED=1` for OpenGL and OS windowing bindings, multi-platform builds run via a dedicated matrix job alongside GoReleaser:
-1. **Windows & Linux** (`ubuntu-latest`): Cross-compiled with `fyne-cross` using containerized MinGW / GCC toolchains (`amd64` and `arm64`).
-2. **macOS** (`macos-latest`): Built natively using `fyne package` for Universal Apple Silicon / Intel apps (`StreamTanksGameClient.app`).
-3. **Artifact Attachments**: Packaged archives (`.zip` for Windows/macOS, `.tar.xz` for Linux) are SHA-256 hashed into `dist/checksums.txt` and uploaded alongside the server binaries via `gh release upload`.
+1. **Windows & Linux** (`ubuntu-latest`): Native Linux compilation (`amd64` `.tar.xz`) and MinGW-w64 cross-compiled Windows binaries (`amd64` `.exe`) on Ubuntu runners without Docker.
+2. **macOS** (`macos-latest`): Built natively using `fyne package` for Universal Apple Silicon / Intel apps (`StreamTanksGameClient.app` packaged as `.zip`).
+3. **Artifact Attachments**: Client packages (`.exe` for Windows, `.tar.xz` for Linux, `.zip` for macOS) are SHA-256 hashed and appended directly into `dist/checksums.txt`, then uploaded alongside the server binaries via `gh release upload`.
 
 ### Client Configuration & Session Storage
 The client persists Twitch session tokens, usernames, and recent settings using Fyne preferences stored per App ID (`com.poundsigndesign.streamtanks.client`):
