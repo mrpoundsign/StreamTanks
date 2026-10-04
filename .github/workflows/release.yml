@@ -100,7 +100,7 @@ jobs:
       - name: Cross-Compile Desktop GUI for ${{ matrix.target }}
         if: matrix.target != 'macos'
         run: |
-          ~/go/bin/fyne-cross ${{ matrix.target }} -arch=amd64,arm64 -app-id=com.poundsigndesign.streamtanks.client -name=StreamTanksGameClient -icon=./assets/icon.png ./cmd/stclient
+          ~/go/bin/fyne-cross ${{ matrix.target }} -arch=amd64,arm64 -app-id=com.poundsigndesign.streamtanks.client -name=StreamTanksGameClient -icon=./assets/icon.png -env GOTOOLCHAIN=auto ./cmd/stclient
 
       - name: Install fyne (macOS)
         if: matrix.target == 'macos'
@@ -109,7 +109,7 @@ jobs:
       - name: Build macOS GUI
         if: matrix.target == 'macos'
         run: |
-          ~/go/bin/fyne package -os darwin -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon ./assets/icon.png -src ./cmd/stclient
+          ~/go/bin/fyne package -os darwin -app-id com.poundsigndesign.streamtanks.client -name StreamTanksGameClient -icon "$PWD/assets/icon.png" -src ./cmd/stclient
 
       - name: Prepare GUI Packages
         run: |
